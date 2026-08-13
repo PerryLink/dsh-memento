@@ -135,21 +135,28 @@ test('F10：ask 策略下命令写无 answerer 时失败封闭；会话 never �
 })
 
 test('F11：memory_recall 合并记忆与近期会话历史（两段式）', async (t) => {
+  // rc.6 sessionQuery 形状：SessionRecord = {header:{id}}；filterEvents 返回元数据记录；readSession 返回整段日志。
   const fakeSessionQuery = {
     async filterSessions() {
-      return [{ id: 's-old-1' }, { id: 's-old-2' }]
+      return [{ header: { id: 's-old-1' } }, { header: { id: 's-old-2' } }]
     },
-    async filterEvents(sessionId, filters) {
+    async filterEvents(sessionId) {
       if (sessionId === 's-old-1') {
         return [
-          { type: 'user/message', data: { content: [{ type: 'text', text: '历史片段甲：曾讨论过验证饮料' }] } },
-          { type: 'assistant/message', data: { content: [{ type: 'text', text: '历史片段乙' }] } },
+          { seq: 0, type: 'user/message', time: 1, surface: 'current' },
+          { seq: 1, type: 'assistant/message', time: 2, surface: 'current' },
         ]
       }
       return []
     },
-    extractSessionEventText(event) {
-      return event.data.content.map((part) => part.text).join('\n')
+    async readSession(sessionId) {
+      return {
+        session: { id: sessionId },
+        events: [
+          { seq: 0, type: 'user/message', data: { content: [{ type: 'text', text: '历史片段甲：曾讨论过验证饮料' }] } },
+          { seq: 1, type: 'assistant/message', data: { content: [{ type: 'text', text: '历史片段乙' }] } },
+        ],
+      }
     },
   }
   const mounted = mount({ sessionQuery: fakeSessionQuery })

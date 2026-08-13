@@ -35,6 +35,7 @@ import { buildWriteReason, isMemoryWriteRequest, applyWritePolicy, normalizeWrit
 import { renderSnapshot, visibleEntries } from './lib/snapshot.mjs'
 import { openMemoryStore, resolveDbPath } from './lib/store.mjs'
 import { workspaceKeyOf } from './lib/workspace.mjs'
+import { extractEventText } from './lib/extract.mjs'
 
 export const name = 'memento'
 
@@ -1052,29 +1053,35 @@ export function makeMemoryRecallTool(service, ctx) {
   })
 }
 
-/** 近期会话历史召回（sessionQuery 可选；失败大声返回不可用，不吞错）。 */
+/** 近期会话历史召回（sessionQuery 可选；rc.6 记录形状 = {header:{id}}，事件为元数据记录）。 */
 async function recallHistory(ctx, query, limit, signal) {
   const sessionQuery = ctx.get('sessionQuery')
   if (sessionQuery === undefined || sessionQuery === null) {
     return { available: false, sessions: [] }
   }
   try {
-    const sessions = await sessionQuery.filterSessions([], signal)
-    const scanned = sessions.slice(0, limit)
+    const records = await sessionQuery.filterSessions([], signal)
     const results = []
-    for (const record of scanned) {
-      const events = await sessionQuery.filterEvents(record.id, [{ kind: 'text', text: query }])
-      if (events.length === 0) continue
+    for (const record of records.slice(0, limit)) {
+      const sessionId = record?.header?.id
+      if (typeof sessionId !== 'string' || sessionId.length === 0) continue
+      const matched = await sessionQuery.filterEvents(sessionId, [{ kind: 'text', text: query }])
+      if (matched.length === 0) continue
+      // 事件记录是元数据（seq/type/time），片段文本从整段日志按 seq 抽取。
       const snippets = []
-      for (const event of events.slice(0, 5)) {
-        const text = typeof sessionQuery.extractSessionEventText === 'function'
-          ? sessionQuery.extractSessionEventText(event)
-          : typeof event?.data === 'string' ? event.data : JSON.stringify(event?.data ?? event)
-        if (typeof text === 'string' && text.length > 0) {
-          snippets.push(text.length > 300 ? `${text.slice(0, 300)}…` : text)
+      try {
+        const snapshot = await sessionQuery.readSession(sessionId)
+        const bySeq = new Map(snapshot.events.map((event) => [event.seq, event]))
+        for (const hit of matched.slice(0, 5)) {
+          const event = bySeq.get(hit.seq)
+          if (event === undefined) continue
+          const text = extractEventText(event)
+          if (text.length > 0) snippets.push(text.length > 300 ? `${text.slice(0, 300)}…` : text)
         }
+      } catch {
+        // 片段提取失败不影响已确认的命中记录；空 catch 语义：只放弃片段装饰。
       }
-      results.push({ sessionId: record.id, matches: events.length, snippets })
+      results.push({ sessionId, matches: matched.length, snippets })
     }
     return { available: true, sessions: results }
   } catch (error) {

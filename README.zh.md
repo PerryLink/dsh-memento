@@ -20,6 +20,18 @@
 - **模型可见 ⟺ 落盘。** 每次写可从会话日志重建（`approval/asked` 携带完整载荷、`approval/decided` 记录结果）；注入的快照文本逐字进入 `request/header.system` 与插件 `audit` 表。
 - **冻结快照。** 快照在会话首个 prompt 组装时渲染一次，会话内不再变化——前缀缓存天然稳定。会话内变更只落盘 + 落审计。
 
+```
+Consumer: memory 工具           Consumer: 冻结快照（systemPrompt 段，顺序 -50）
+   add/replace/remove/query       按会话冻结（WeakMap），带用量头
+        │ 写（agent+callId）        │ 读（同步，session cwd）
+        ▼                           ▼
+Service Definition: ctx.memory —— budgets/add/replace/remove/query/seed
+   每次写：预算预检 → ctx.approval.request（审批 waterfall）→ 预算复审 → 落盘 → 审计
+        │
+        ▼
+Provider: lib/store.mjs —— node:sqlite（WAL，0600），条目表+审计表，唯一子串匹配
+```
+
 ## 定位：为什么还要一个记忆插件？
 
 | 插件 | 是什么 | dsh-memento 的差异 |

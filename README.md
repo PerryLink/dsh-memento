@@ -20,6 +20,18 @@ Other memory plugins sell a *warehouse*. dsh-memento sells a **capability seam**
 - **Model-visible ⟺ logged.** Every write is reconstructable from the session log (`approval/asked` carries the full payload, `approval/decided` the outcome); the injected snapshot text lands verbatim in `request/header.system` and in the plugin's `audit` table.
 - **Frozen snapshots.** The snapshot is rendered once per session at first prompt assembly and never changes mid-session — prefix-cache stable by construction. Session-internal changes persist to disk + audit only.
 
+```
+Consumer: memory tool          Consumer: frozen snapshot (systemPrompt section, order -50)
+   add/replace/remove/query       per-session freeze (WeakMap), budget-headed
+        │ writes (agent+callId)   │ reads (sync, session cwd)
+        ▼                          ▼
+Service Definition: ctx.memory — budgets/add/replace/remove/query/seed
+   every write: budget precheck → ctx.approval.request (approval waterfall) → budget recheck → persist → audit
+        │
+        ▼
+Provider: lib/store.mjs — node:sqlite (WAL, 0600), entries + audit tables, unique-substring match
+```
+
 ## Positioning: why another memory plugin?
 
 | Plugin | What it is | dsh-memento's difference |
