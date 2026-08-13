@@ -95,6 +95,21 @@ memory 工具(add)
 
 9. **V2 面板只读**：Web 面板（`dsh.client` 零构建抽屉）只做条目浏览/搜索/预算条/审计尾；审批与写操作一律发生在 DSH 内置审批 UI + `memory` 工具（否则会与内置审批呈现重复并产生分歧）。
 
+## V3 协同（F12/F13，接口已就位，文档对齐）
+
+### F12：seed 与 dsh-claude-move 的对接方式
+
+`ctx.memory.seed(entries, write)` 已在 V1 实现：一次 `ask` 审批整批、任一条超预算整批拒绝、逐条落审计（source 透传）。dsh-claude-move 接入时的对齐约定：
+
+- 把 Claude `memory/*.md` 解析为条目数组，每条 `{ track: 'agent', scope: 'workspace', text, source: 'claude', workspaceKey }`（workspaceKey 用会话 cwd 规范化键，缺省时取写方 agent 的会话 cwd）；
+- 以 `ctx.get('memory')` 可选依赖读取服务（dsh-claude-move 已有 `withService` 同款模式），服务缺失时优雅跳过——**不破坏其现有行为**；
+- seed 的 `write.agent` 必须存在（审批路由），dsh-claude-move 的导入命令/工具有 invocation/exec agent 可传入；
+- 预算吃紧时 seed 整批失败并返回结构化 `BUDGET_EXCEEDED`，由导入方拆分批次重试。
+
+### F13：auto-review hook 点（不实现第二模型）
+
+本插件暴露的接缝：`write.gate`（写上下文里的可选函数）。默认走 `ctx.approval.request`（turn 内、落审批审计对）；`/memory` 命令在 turn 外以 `makeCommandGate` 注入同一 waterfall 的无审计对变体。未来的 dsh-auto-review 若想接管记忆写审批，可在 `approval/request` 上注册自己的 answerer（先于/取代人类 answerer），无需改本插件一行——审批 answerer 链本身就是 hook 点；`writePolicy` 为 `ask` 时 `applyWritePolicy` 委托 `next()`，任何挂链的第二模型 answerer 都能接管。
+
 ## 配置面（无硬编码 tunable）
 
 全部字段可 cordis.yml 覆盖，schema 见 `index.mjs` 的 `Config`：`enabled` / `dbPath` / `budgets`（user/agent × userGlobal/workspace）/ `writePolicy` / `snapshotOrder` / `maxEntriesPerQuery`。非法值加载期响亮失败。
