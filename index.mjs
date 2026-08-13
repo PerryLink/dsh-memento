@@ -171,16 +171,33 @@ export class MemoryService {
   }
 
   /**
+   * 写路径审批门。默认走 ctx.approval.request（turn 内，落 approval/asked +
+   * approval/decided 审计对）。write.gate 为可选自定义传输（/memory 命令在
+   * turn 外使用：同一 approval/request waterfall + 同一 answerer 链裁决，
+   * 会话级 never 策略由调用方预检；审计落在插件审计表 + command/done）。
+   * @param {object} payload - {action, track, scope, text, count?}。
+   * @param {object} write - {agent, callId?, signal?, gate?}。
+   */
+  async #ask(payload, write) {
+    if (typeof write.gate === 'function') {
+      const outcome = await write.gate(payload, write)
+      this.#assertOutcome(outcome)
+      return
+    }
+    const outcome = await askApproval(this.approval, payload, write)
+    this.#assertOutcome(outcome)
+  }
+
+  /**
    * 新增条目（写：审批门 + 预算门）。
    * @param {object} input - {track, scope, text, source?, workspaceKey?}。
-   * @param {object} write - {agent, callId?, signal?}；agent 缺失即失败封闭。
+   * @param {object} write - {agent, callId?, signal?, gate?}；agent 缺失即失败封闭。
    * @returns {Promise<{entry: object, usage: object}>}。
    */
   async add(input, write) {
     const { track, scope, text } = this.#validateEntry(input, write)
     this.#assertBudget(track, scope, this.store.usage(track, scope), text.length)
-    const outcome = await askApproval(this.approval, { action: 'add', track, scope, text }, write)
-    this.#assertOutcome(outcome)
+    await this.#ask({ action: 'add', track, scope, text }, write)
     this.#throwIfAborted(write)
     // 审批等待期间用量可能变化：以此刻用量为权威复审。
     const now = this.store.usage(track, scope)
@@ -209,8 +226,7 @@ export class MemoryService {
     const previous = this.#resolveMatch(input, track, scope)
     const net = text.length - previous.text.length
     this.#assertBudget(track, scope, this.store.usage(track, scope), net)
-    const outcome = await askApproval(this.approval, { action: 'replace', track, scope, text }, write)
-    this.#assertOutcome(outcome)
+    await this.#ask({ action: 'replace', track, scope, text }, write)
     this.#throwIfAborted(write)
     this.#assertBudget(track, scope, this.store.usage(track, scope), net)
     // 事务内重新定位+更新：审批期间条目可能已被并发写移除（响亮报错，不静默）。
@@ -239,8 +255,7 @@ export class MemoryService {
     this.#assertMatch(input)
     // 审批前先定位：零/多命中在打扰用户之前就响亮失败。
     this.#resolveMatch(input, input.track, input.scope)
-    const outcome = await askApproval(this.approval, { action: 'remove', track: input.track, scope: input.scope, text: input.match }, write)
-    this.#assertOutcome(outcome)
+    await this.#ask({ action: 'remove', track: input.track, scope: input.scope, text: input.match }, write)
     this.#throwIfAborted(write)
     const removed = this.store.removeEntry({ track: input.track, scope: input.scope, match: input.match })
     this.#auditWrite('remove', input.track, input.scope, removed, write)
@@ -269,10 +284,9 @@ export class MemoryService {
       }
     })
     const summary = normalized.map((entry) => `${entry.track}/${entry.scope}: ${entry.text}`).join('\n')
-    const outcome = await askApproval(this.approval, {
+    await this.#ask({
       action: 'seed', track: 'batch', scope: 'batch', text: summary, count: normalized.length,
     }, write)
-    this.#assertOutcome(outcome)
     this.#throwIfAborted(write)
     // 全量预检（任意一条超限整批拒绝）；通过后同步插入，无 await 间隔。
     for (const [track, scope] of uniqueScopes(normalized)) {
@@ -768,6 +782,382 @@ export function apply(ctx, config = {}) {
       return frozen
     },
   })
+
+  // V2 观察面：/memory 命令（用户触发）、memory_recall 工具、面板 JSON 路由。
+  // commands/webServer 为可选服务，缺失（headless）自动跳过。
+  registerCommands(ctx, service)
+  ctx.tools.register(makeMemoryRecallTool(service, ctx))
+  registerWebRoutes(ctx, service)
+}
+
+// ── V2 观察面 ────────────────────────────────────────────────────────────────
+
+/**
+ * 可选服务就绪即调用（服务缺失时跳过，不保持 PENDING）。apply 时已存在则
+ * 立即调用；否则订阅 internal/service 事件，服务出现时再调用。
+ * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文。
+ * @param {string} serviceName - 服务名。
+ * @param {(service: unknown) => void} fn - 就绪回调。
+ */
+function withService(ctx, serviceName, fn) {
+  const existing = ctx.get(serviceName)
+  if (existing !== undefined && existing !== null) {
+    fn(existing)
+    return
+  }
+  const off = ctx.on('internal/service', (name) => {
+    if (name !== serviceName) return
+    const service = ctx.get(serviceName)
+    if (service !== undefined && service !== null) {
+      off()
+      fn(service)
+    }
+  })
+}
+
+/**
+ * turn 外的写审批门（/memory 命令用）。走同一 approval/request waterfall 与
+ * 同一 answerer 链（writePolicy 在此应用）；与 turn 内路径的差异：审批服务
+ * 的 approval/asked + approval/decided 审计对要求 open turn，turn 外无审计
+ * 对可落——审计由插件审计表 + command/done 承担。会话级 never 策略在派发前
+ * 由本函数按公开 API 预检（与审批服务同语义）。
+ * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文。
+ * @param {object} write - {agent}。
+ * @returns {(payload: object, write: object) => Promise<string>} gate 函数。
+ */
+function makeCommandGate(ctx, write) {
+  return async (payload) => {
+    const approval = ctx.approval
+    const session = write.agent?.session
+    const sessionPolicy = typeof approval?.overrideOf === 'function' && session !== undefined
+      ? approval.overrideOf(session)
+      : undefined
+    const effective = sessionPolicy ?? approval?.config?.policy ?? 'ask'
+    if (effective === 'never') {
+      return 'rejected' // 会话级 never 不可绕过（与审批服务同语义的预检）
+    }
+    return ctx.waterfall('approval/request', {
+      agent: write.agent,
+      toolName: TOOL_NAME,
+      reason: buildWriteReason(payload),
+    }, async () => 'unavailable')
+  }
+}
+
+/**
+ * 注册 /memory 命令（用户触发，非模型回合）。列出/查询/预算/审计直接读；
+ * add/remove 走 turn 外审批门（同一 waterfall + writePolicy）。命令缺失的
+ * profile（headless）自动跳过。
+ * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文。
+ * @param {MemoryService} service - ctx.memory。
+ */
+export function registerCommands(ctx, service) {
+  withService(ctx, 'commands', (commands) => {
+    if (typeof commands.register !== 'function') return
+    commands.register({
+      name: 'memory',
+      description: '查看/管理 dsh-memento 记忆：list | query <词> | add [--track=user|agent] [--scope=user-global|workspace] <文本> | remove <唯一子串> | budgets | audit',
+      input: { hint: 'list | query <词> | add <文本> | remove <唯一子串> | budgets | audit' },
+      handler: async (invocation) => handleMemoryCommand(ctx, service, invocation),
+    })
+  })
+}
+
+/**
+ * /memory 命令处理器（导出供测试；自身捕获领域错误，返回规范结果）。
+ * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文。
+ * @param {MemoryService} service - ctx.memory。
+ * @param {object} invocation - {rawInput, agent, signal}。
+ * @returns {Promise<{kind: 'success'|'error', text: string}>}。
+ */
+export async function handleMemoryCommand(ctx, service, invocation) {
+  try {
+    return await runMemoryCommand(ctx, service, invocation)
+  } catch (error) {
+    if (error instanceof MemoryError) return { kind: 'error', text: `memory ${String(error.code)}: ${error.message}` }
+    const message = error instanceof Error ? error.message : String(error)
+    return { kind: 'error', text: `memory 命令失败：${message}` }
+  }
+}
+
+/** handleMemoryCommand 的裸实现（错误由外层包装）。 */
+async function runMemoryCommand(ctx, service, invocation) {
+  const raw = String(invocation?.rawInput ?? '').trim()
+  const [verb, ...rest] = raw.split(/\s+/)
+  if (verb === undefined || verb.length === 0) {
+    return { kind: 'success', text: '用法：/memory list | query <词> | add <文本> | remove <唯一子串> | budgets | audit' }
+  }
+  switch (verb) {
+    case 'list': {
+      const { entries, total } = service.query({}, { sessionId: invocation?.agent?.session?.id })
+      if (total === 0) return { kind: 'success', text: '记忆为空。' }
+      return { kind: 'success', text: `记忆条目（${total} 条）：\n${entries.map(renderEntryLine).join('\n')}` }
+    }
+    case 'query': {
+      const text = rest.join(' ')
+      if (text.length === 0) return { kind: 'error', text: 'query 需要一个关键词：/memory query <词>' }
+      const { entries, total, truncated } = service.query({ text }, { sessionId: invocation?.agent?.session?.id })
+      if (total === 0) return { kind: 'success', text: `没有条目包含「${text}」。` }
+      return { kind: 'success', text: `命中 ${total} 条${truncated ? '（已截断）' : ''}：\n${entries.map(renderEntryLine).join('\n')}` }
+    }
+    case 'budgets': {
+      const rows = service.budgets()
+      return { kind: 'success', text: `预算用量：\n${rows.map((row) => `- ${row.track}/${row.scope}: ${row.used}/${row.limit}`).join('\n')}` }
+    }
+    case 'audit': {
+      const limit = 10
+      const rows = service.store.auditList(limit)
+      if (rows.length === 0) return { kind: 'success', text: '审计为空。' }
+      return { kind: 'success', text: `最近审计（${rows.length} 条）：\n${rows.map((row) => `- ${new Date(row.ts).toISOString()} ${row.action}${row.track ? ` ${row.track}/${row.scope}` : ''} ${row.outcome ?? ''} (${row.source ?? ''})`.trim()).join('\n')}` }
+    }
+    case 'add': {
+      const parsed = parseCommandWrite(rest, true)
+      if (parsed.kind === 'error') {
+        return { kind: 'error', text: 'add 需要文本：/memory add [--track=user|agent] [--scope=user-global|workspace] <文本>' }
+      }
+      const write = { agent: invocation?.agent, gate: makeCommandGate(ctx, invocation) }
+      const result = await service.add(
+        { track: parsed.track, scope: parsed.scope, text: parsed.text, source: 'command' },
+        write,
+      )
+      return { kind: 'success', text: `已添加（${parsed.track}/${parsed.scope}）：${result.entry.text}\n该层用量：${result.usage.used}/${result.usage.limit}` }
+    }
+    case 'remove': {
+      const parsed = parseCommandWrite(rest, true)
+      if (parsed.kind === 'error') return { kind: 'error', text: `remove 需要一个唯一子串：/memory remove [--track=user|agent] [--scope=user-global|workspace] <唯一子串>` }
+      const result = await service.remove(
+        { track: parsed.track, scope: parsed.scope, match: parsed.text },
+        { agent: invocation?.agent, gate: makeCommandGate(ctx, invocation) },
+      )
+      return { kind: 'success', text: `已删除（${parsed.track}/${parsed.scope}）：${result.entry.text}\n该层用量：${result.usage.used}/${result.usage.limit}` }
+    }
+    default:
+      return { kind: 'error', text: `未知子命令「${verb}」。用法：/memory list | query <词> | add <文本> | remove <唯一子串> | budgets | audit` }
+  }
+}
+
+/** 命令写参数解析：--track/--scope 可选（默认 user/workspace，与工具一致），余下为文本。 */
+function parseCommandWrite(args, requireText) {
+  let track = 'user'
+  let scope = 'workspace'
+  const textParts = []
+  for (const arg of args) {
+    const trackMatch = /^--track=(user|agent)$/.exec(arg)
+    if (trackMatch !== null) { track = trackMatch[1]; continue }
+    const scopeMatch = /^--scope=(user-global|workspace)$/.exec(arg)
+    if (scopeMatch !== null) { scope = scopeMatch[1]; continue }
+    textParts.push(arg)
+  }
+  const text = textParts.join(' ')
+  if (requireText === true && text.length === 0) {
+    return { kind: 'error', text: '需要文本参数' }
+  }
+  return { kind: 'ok', track, scope, text }
+}
+
+/** 条目渲染行（命令/面板共用格式）。 */
+function renderEntryLine(entry) {
+  return `- [${entry.track}/${entry.scope}${entry.scope === 'workspace' ? ` @${entry.workspaceKey}` : ''}] ${entry.text}`
+}
+
+/**
+ * memory_recall 工具（F11）：语义不明确时把记忆 query 与近期会话历史合并
+ * 返回两段式召回（"记忆 + 历史会话"）。sessionQuery 服务缺失时降级为纯记忆
+ * 结果（history 段为空，绝不报错）。
+ * @param {MemoryService} service - ctx.memory。
+ * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文（查 sessionQuery）。
+ * @returns {object} 工具定义。
+ */
+export function makeMemoryRecallTool(service, ctx) {
+  return defineTool({
+    name: 'memory_recall',
+    description: [
+      'Two-part recall over memory and session history: returns (1) bounded memory entries matching the query from the dsh-memento store, and (2) recent session-history matches via the session-query service.',
+      'Use when a memory query alone is ambiguous or when the answer may live in an earlier conversation rather than in memory. For plain memory lookup prefer the memory tool with action=query.',
+    ].join('\n'),
+    parameters: {
+      query: { type: 'string', required: true, description: 'Case-insensitive search terms for both sources.' },
+      memoryLimit: { type: 'integer', description: 'Max memory entries to return (default 10).' },
+      historyLimit: { type: 'integer', description: 'Max history sessions to scan (default 8).' },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          ok: { type: 'boolean', required: true },
+          memory: {
+            type: 'object',
+            additionalProperties: false,
+            required: true,
+            properties: {
+              entries: {
+                type: 'array',
+                required: true,
+                items: {
+                  type: 'object',
+                  additionalProperties: false,
+                  properties: {
+                    id: { type: 'string', required: true },
+                    track: { type: 'string', required: true },
+                    scope: { type: 'string', required: true },
+                    text: { type: 'string', required: true },
+                  },
+                },
+              },
+              total: { type: 'integer', required: true },
+              truncated: { type: 'boolean', required: true },
+            },
+          },
+          history: {
+            type: 'object',
+            additionalProperties: false,
+            required: true,
+            properties: {
+              available: { type: 'boolean', required: true },
+              error: { type: 'string' },
+              sessions: {
+                type: 'array',
+                required: true,
+                items: {
+                  type: 'object',
+                  additionalProperties: false,
+                  properties: {
+                    sessionId: { type: 'string', required: true },
+                    matches: { type: 'integer', required: true },
+                    snippets: { type: 'array', required: true, items: { type: 'string' } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      render: renderMemoryRecallResult,
+    },
+    async execute(args, exec) {
+      exec.signal.throwIfAborted()
+      const memory = service.query({ text: args.query, limit: args.memoryLimit ?? 10 }, { sessionId: exec.agent?.session?.id })
+      const history = await recallHistory(ctx, args.query, args.historyLimit ?? 8, exec.signal)
+      return {
+        ok: true,
+        memory: {
+          entries: memory.entries.map(publicEntry),
+          total: memory.total,
+          truncated: memory.truncated,
+        },
+        history,
+      }
+    },
+  })
+}
+
+/** 近期会话历史召回（sessionQuery 可选；失败大声返回不可用，不吞错）。 */
+async function recallHistory(ctx, query, limit, signal) {
+  const sessionQuery = ctx.get('sessionQuery')
+  if (sessionQuery === undefined || sessionQuery === null) {
+    return { available: false, sessions: [] }
+  }
+  try {
+    const sessions = await sessionQuery.filterSessions([], signal)
+    const scanned = sessions.slice(0, limit)
+    const results = []
+    for (const record of scanned) {
+      const events = await sessionQuery.filterEvents(record.id, [{ kind: 'text', text: query }])
+      if (events.length === 0) continue
+      const snippets = []
+      for (const event of events.slice(0, 5)) {
+        const text = typeof sessionQuery.extractSessionEventText === 'function'
+          ? sessionQuery.extractSessionEventText(event)
+          : typeof event?.data === 'string' ? event.data : JSON.stringify(event?.data ?? event)
+        if (typeof text === 'string' && text.length > 0) {
+          snippets.push(text.length > 300 ? `${text.slice(0, 300)}…` : text)
+        }
+      }
+      results.push({ sessionId: record.id, matches: events.length, snippets })
+    }
+    return { available: true, sessions: results }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { available: false, sessions: [], error: message }
+  }
+}
+
+/**
+ * memory_recall 结果渲染（纯函数）。
+ * @param {object} _args - 调用参数（未用）。
+ * @param {object} value - 规范 JSON 结果。
+ * @returns {Array<{type: 'text', text: string}>} 模型可见文本。
+ */
+export function renderMemoryRecallResult(_args, value) {
+  const memoryLine = value.memory.total === 0
+    ? 'memory: no entries matched'
+    : `memory: ${value.memory.entries.length} match${value.memory.entries.length === 1 ? '' : 'es'}${value.memory.truncated ? ` (of ${value.memory.total})` : ''}\n${value.memory.entries.map((entry) => `- [${entry.track}/${entry.scope}] ${entry.text}`).join('\n')}`
+  const historyLines = []
+  if (!value.history.available) {
+    historyLines.push(value.history.error === undefined
+      ? 'history: session-query unavailable in this profile'
+      : `history: session-query failed (${value.history.error})`)
+  } else if (value.history.sessions.length === 0) {
+    historyLines.push('history: no matching sessions')
+  } else {
+    for (const session of value.history.sessions) {
+      historyLines.push(`- session ${session.sessionId}: ${session.matches} event match${session.matches === 1 ? '' : 'es'}`)
+      for (const snippet of session.snippets) historyLines.push(`    ${snippet.replaceAll('\n', ' ')}`)
+    }
+  }
+  return [{ type: 'text', text: `${memoryLine}\n\n${historyLines.join('\n')}` }]
+}
+
+/**
+ * 注册面板 JSON 路由（F9，只读；webServer 缺失的 profile 自动跳过）。
+ * 写操作（含审批）不进面板路由：审批在 DSH 内置审批 UI 完成，面板只做
+ * 条目浏览/搜索/预算条/审计尾。路由随插件生命周期自动撤销。
+ * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文。
+ * @param {MemoryService} service - ctx.memory。
+ */
+export function registerWebRoutes(ctx, service) {
+  withService(ctx, 'webServer', (webServer) => {
+    if (typeof webServer.register !== 'function') return
+    webServer.register({
+      kind: 'exact',
+      path: '/api/memento/entries',
+      handler: async (req, res) => {
+        try {
+          const url = new URL(req.url ?? '', 'http://localhost')
+          const filter = {
+            ...(url.searchParams.get('text') ? { text: url.searchParams.get('text') } : {}),
+            ...(url.searchParams.get('track') ? { track: url.searchParams.get('track') } : {}),
+            ...(url.searchParams.get('scope') ? { scope: url.searchParams.get('scope') } : {}),
+          }
+          const { entries, total, truncated } = service.query(filter)
+          sendPanelJson(res, 200, { entries, total, truncated, budgets: service.budgets() })
+        } catch (error) {
+          sendPanelJson(res, 500, { error: error instanceof Error ? error.message : String(error) })
+        }
+      },
+    })
+    webServer.register({
+      kind: 'exact',
+      path: '/api/memento/audit',
+      handler: async (req, res) => {
+        try {
+          const url = new URL(req.url ?? '', 'http://localhost')
+          const raw = Number(url.searchParams.get('limit') ?? '20')
+          const limit = Number.isInteger(raw) && raw > 0 && raw <= 200 ? raw : 20
+          sendPanelJson(res, 200, { rows: service.store.auditList(limit) })
+        } catch (error) {
+          sendPanelJson(res, 500, { error: error instanceof Error ? error.message : String(error) })
+        }
+      },
+    })
+  })
+}
+
+/** 面板 JSON 响应（node:http）。 */
+function sendPanelJson(res, status, value) {
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
+  res.end(JSON.stringify(value))
 }
 
 export { MemoryError, InvalidInputError, BudgetExceededError, EntryNotFoundError, AmbiguousMatchError, WriteDeniedError, NoAgentError }

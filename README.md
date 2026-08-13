@@ -86,6 +86,12 @@ Example (profile `cordis.patch.yml`):
 - Writes that exceed a budget return a structured error with usage and limit; the model removes/consolidates entries and retries.
 - Anything that reaches the model is reconstructable from the session log: `request/header.system` (snapshot text), `approval/asked` (full write payload), `tool/call` + `tool/result` (canonical outcomes), plus the `audit` table in the database.
 
+## Observation surfaces (V2)
+
+- **`/memory` command** (user-triggered, outside model turns): `list` · `query <word>` · `add [--track=user|agent] [--scope=user-global|workspace] <text>` · `remove [flags] <unique substring>` · `budgets` · `audit`. Command writes ride the same approval waterfall + `writePolicy` (session-level `never` still pre-empts); audit lands in the plugin audit table + `command/done` (the approval service's turn-enclosed audit pair cannot exist outside a turn — see [ARCHITECTURE.md](ARCHITECTURE.md) decision 8).
+- **`memory_recall` tool**: two-part recall — bounded memory matches plus recent session-history matches via `ctx.sessionQuery` (degrades to memory-only where the service is absent).
+- **Web panel** (zero-build `dsh.client` drawer): browse entries by track/layer, search, budget bars, audit tail. Read-only by design: writes and approval happen through the `memory` tool and the built-in approval UI.
+
 ## Security boundaries
 
 - **Public services only** (`tools`, `systemPrompt`, the approval seam). No engine / agent-loop / apiproxy / official-UI changes.
@@ -98,7 +104,7 @@ Example (profile `cordis.patch.yml`):
 
 ```sh
 npm install
-npm test    # node --test: 51 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants included)
+npm test    # node --test: 62 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel
 ```
 
 `lib/` is zero-DSH-dependency (node: builtins only); DSH imports exist only in `index.mjs`. See [AGENTS.md](AGENTS.md) for the full discipline.

@@ -1,0 +1,80 @@
+﻿TAP version 13
+# (node:18272) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: F10：/memory 命令注册；list/query/budgets/audit 直接读
+ok 1 - F10：/memory 命令注册；list/query/budgets/audit 直接读
+  ---
+  duration_ms: 32.2707
+  type: 'test'
+  ...
+# Subtest: F10：命令 add/remove 走 turn 外审批门（同一 waterfall + writePolicy）
+not ok 2 - F10：命令 add/remove 走 turn 外审批门（同一 waterfall + writePolicy）
+  ---
+  duration_ms: 34.2685
+  type: 'test'
+  location: 'D:\\deepseek-harness\\Project\\Plugins\\dsh-memento\\test\\v2.test.mjs:81:1'
+  failureType: 'testCodeFailure'
+  error: 'memory write requires an owning agent session to route approval through; refuse rather than write unapproved'
+  code: 'WRITE_REQUIRES_AGENT'
+  name: 'NoAgentError'
+  stack: |-
+    #assertAgent (file:///D:/deepseek-harness/Project/Plugins/dsh-memento/index.mjs:317:13)
+    #validateEntry (file:///D:/deepseek-harness/Project/Plugins/dsh-memento/index.mjs:337:22)
+    MemoryService.add (file:///D:/deepseek-harness/Project/Plugins/dsh-memento/index.mjs:198:55)
+    handleMemoryCommand (file:///D:/deepseek-harness/Project/Plugins/dsh-memento/index.mjs:916:36)
+    TestContext.<anonymous> (file:///D:/deepseek-harness/Project/Plugins/dsh-memento/test/v2.test.mjs:103:25)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: F10：ask 策略下命令写无 answerer 时失败封闭；会话 never 策略拒绝且不派发
+not ok 3 - F10：ask 策略下命令写无 answerer 时失败封闭；会话 never 策略拒绝且不派发
+  ---
+  duration_ms: 33.0693
+  type: 'test'
+  location: 'D:\\deepseek-harness\\Project\\Plugins\\dsh-memento\\test\\v2.test.mjs:109:1'
+  failureType: 'testCodeFailure'
+  error: 'memory write not approved (approval outcome: unavailable); nothing was written'
+  code: 'WRITE_DENIED'
+  name: 'WriteDeniedError'
+  stack: |-
+    #assertOutcome (file:///D:/deepseek-harness/Project/Plugins/dsh-memento/index.mjs:370:43)
+    #ask (file:///D:/deepseek-harness/Project/Plugins/dsh-memento/index.mjs:184:26)
+    async MemoryService.add (file:///D:/deepseek-harness/Project/Plugins/dsh-memento/index.mjs:200:5)
+    async handleMemoryCommand (file:///D:/deepseek-harness/Project/Plugins/dsh-memento/index.mjs:916:22)
+    async TestContext.<anonymous> (file:///D:/deepseek-harness/Project/Plugins/dsh-memento/test/v2.test.mjs:114:18)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: F11：memory_recall 合并记忆与近期会话历史（两段式）
+ok 4 - F11：memory_recall 合并记忆与近期会话历史（两段式）
+  ---
+  duration_ms: 28.385
+  type: 'test'
+  ...
+# Subtest: F11：sessionQuery 缺失时 memory_recall 降级为纯记忆结果（不报错）
+ok 5 - F11：sessionQuery 缺失时 memory_recall 降级为纯记忆结果（不报错）
+  ---
+  duration_ms: 31.351
+  type: 'test'
+  ...
+# Subtest: F9：面板路由只读——entries（含预算）与 audit（上限钳制）
+ok 6 - F9：面板路由只读——entries（含预算）与 audit（上限钳制）
+  ---
+  duration_ms: 28.2425
+  type: 'test'
+  ...
+# Subtest: S3：enabled:false 时 V2 观察面一并消失
+ok 7 - S3：enabled:false 时 V2 观察面一并消失
+  ---
+  duration_ms: 1.5596
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 5
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 339.3657

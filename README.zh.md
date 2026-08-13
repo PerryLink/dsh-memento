@@ -86,6 +86,12 @@ dsh plugin --profile <name> remove dsh-memento
 - 超预算的写返回结构化错误（用量与上限），模型删除/整合条目后重试。
 - 进入模型的一切都可自会话日志重建：`request/header.system`（快照文本）、`approval/asked`（完整写载荷）、`tool/call` + `tool/result`（规范结果），外加数据库里的 `audit` 表。
 
+## V2 观察面
+
+- **`/memory` 命令**（用户触发，非模型回合）：`list` · `query <词>` · `add [--track=user|agent] [--scope=user-global|workspace] <文本>` · `remove [选项] <唯一子串>` · `budgets` · `audit`。命令写走同一审批 waterfall 与 `writePolicy`（会话级 `never` 依旧优先）；审计落在插件审计表 + `command/done`（turn 外不存在审批服务的审计对，见 [ARCHITECTURE.md](ARCHITECTURE.md) 决策 8）。
+- **`memory_recall` 工具**：两段式召回——有界记忆匹配 + 经 `ctx.sessionQuery` 的近期会话历史匹配（服务缺失时降级为纯记忆结果）。
+- **Web 面板**（零构建 `dsh.client` 抽屉）：按轨/层浏览条目、搜索、预算用量条、审计尾。设计上只读：写与审批一律走 `memory` 工具与 DSH 内置审批 UI。
+
 ## 安全边界
 
 - **只消费公开服务**（`tools`、`systemPrompt`、审批 seam）。不修改引擎 / agent-loop / apiproxy / 官方 UI 包。
@@ -98,7 +104,7 @@ dsh plugin --profile <name> remove dsh-memento
 
 ```sh
 npm install
-npm test    # node --test：51 个测试——预算、唯一子串、审批策略、store、快照、mock ctx 集成（含 S2 可重建 / S3 不可绕过不变量）
+npm test    # node --test：62 个测试——预算、唯一子串、审批策略、store、快照、mock ctx 集成（含 S2 可重建 / S3 不可绕过不变量）、V2 命令/召回/面板
 ```
 
 `lib/` 零 DSH 依赖（仅 node: 内置模块）；DSH 依赖只出现在 `index.mjs`。完整纪律见 [AGENTS.md](AGENTS.md)。

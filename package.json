@@ -8,6 +8,7 @@
   "types": "./types.d.ts",
   "exports": {
     ".": "./index.mjs",
+    "./client": "./client/client.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
@@ -15,6 +16,7 @@
     "index.mjs",
     "types.d.ts",
     "lib",
+    "client",
     "cordis.patch.yml",
     "README.md",
     "README.zh.md",
@@ -25,6 +27,10 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
     }
   },
   "peerDependencies": {
