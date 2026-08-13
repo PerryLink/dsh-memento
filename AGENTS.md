@@ -19,8 +19,8 @@ lib/workspace.mjs    工作区键规范化（Windows 大小写不敏感，零依
 lib/store.mjs        node:sqlite Provider：条目表+审计账本+迁移（零依赖）
 cordis.patch.yml     bundle 声明（insert memento）
 package.json         npm 元数据；files 白名单 = 发布内容
-README.md            英文主介绍（GitHub 默认页）
-README.zh.md         中文介绍（顶部互链，与英文同 commit 更新）
+README.md            英文主介绍（GitHub 默认页；五语源文）
+README.{zh,es,pt,hi}.md   中/西/葡/印地语介绍（顶部互链，与英文同 commit 更新）
 ARCHITECTURE.md      三角色 seam 架构图与全部设计决策
 LICENSE / THIRD_PARTY_NOTICES.md   Apache-2.0 + 复用出处标注
 test/                单测 + mock ctx 集成测试（进 GitHub，不进 npm 包）
@@ -28,7 +28,7 @@ dev/                 ❌ 本地工程面：冒烟脚本、夹具、演示——�
 ```
 
 - 新增被 `index.mjs` import 的模块必须同步加进 `package.json` 的 `files`。
-- **行为变更需同步双语 README**：以 README.md（英文）为源，README.zh.md 同 commit 更新。
+- **行为变更需同步五语 README**：以 README.md（英文）为源，中/西/葡/印地四语同 commit 更新；顶部互链行与 Topics 行保持五语一致。
 - **永不提交**：`dev/`、`node_modules/`、真实用户记忆库（含敏感内容）、任何凭据/密钥。
 
 ## 命令
@@ -45,7 +45,7 @@ npm test      # node --test 跑 test/*.test.mjs
 - conventional commit 前缀：`feat:` / `fix:` / `refactor:` / `chore:` / `docs:` / `test:`，中文描述。
 - 一个逻辑变更一个 commit；每完成一个 F 需求模块跑 `npm test` 后提交。
 - 提交前必过：`npm test` 全绿；`git status` 无杂物；`git diff --cached --check` 无空白错误。
-- 行为变更同 commit 更新测试与双语 README。
+- 行为变更同 commit 更新测试与五语 README。
 
 ## DSH 插件约束（红线）
 

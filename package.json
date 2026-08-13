@@ -20,6 +20,9 @@
     "cordis.patch.yml",
     "README.md",
     "README.zh.md",
+    "README.es.md",
+    "README.pt.md",
+    "README.hi.md",
     "ARCHITECTURE.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md"
@@ -49,12 +52,16 @@
     "test": "node --test \"test/*.test.mjs\""
   },
   "keywords": [
-    "deepseek-harness",
+    "dsh",
     "dsh-plugin",
+    "deepseek-harness",
     "memory",
+    "agent-memory",
     "approval",
     "audit",
-    "sqlite"
+    "sqlite",
+    "cordis",
+    "llm"
   ],
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
