@@ -4,3 +4,4 @@ dev/
 *.db
 *.db-wal
 *.db-shm
+dev-*.txt
