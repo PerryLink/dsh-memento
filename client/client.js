@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 // client/client.js — dsh-memento 浏览器观察面板（F9，零构建 vanilla）。
 //
 // host 端 dsh.client 扫描把本文件作为 classic script 注入 __DSH_BOOT__ 图，

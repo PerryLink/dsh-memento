@@ -123,4 +123,4 @@ npm test    # node --test：62 个测试——预算、唯一子串、审批策�
 
 ## 许可证
 
-MIT——见 [LICENSE](LICENSE)。不分发任何第三方代码；见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+Apache License 2.0——见 [LICENSE](LICENSE)。不分发任何第三方代码；见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

@@ -123,4 +123,4 @@ npm test    # node --test: 62 tests — budget, unique-substring, gate policy, s
 
 ## License
 
-MIT — see [LICENSE](LICENSE). No third-party code is redistributed; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Apache License 2.0 — see [LICENSE](LICENSE). No third-party code is redistributed; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

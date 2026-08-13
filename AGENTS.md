@@ -22,7 +22,7 @@ package.json         npm 元数据；files 白名单 = 发布内容
 README.md            英文主介绍（GitHub 默认页）
 README.zh.md         中文介绍（顶部互链，与英文同 commit 更新）
 ARCHITECTURE.md      三角色 seam 架构图与全部设计决策
-LICENSE / THIRD_PARTY_NOTICES.md   MIT + 复用出处标注
+LICENSE / THIRD_PARTY_NOTICES.md   Apache-2.0 + 复用出处标注
 test/                单测 + mock ctx 集成测试（进 GitHub，不进 npm 包）
 dev/                 ❌ 本地工程面：冒烟脚本、夹具、演示——永不提交
 ```
