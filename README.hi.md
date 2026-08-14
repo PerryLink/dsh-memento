@@ -85,6 +85,7 @@ dsh plugin --profile <name> remove dsh-memento       # uninstall: DB + session l
 | `budgets.agent.userGlobal` / `budgets.agent.workspace` | `4000` / `4000` | agent ट्रैक की हर लेयर का कठोर वर्ण बजट |
 | `writePolicy` | `'ask'` | `'ask'` = उपयोगकर्ता अनुमोदन; `'auto'` = अनुमति दें (अनुमोदन स्रोत रिकॉर्ड किया गया); `'off'` = अस्वीकार करें। मॉडल-अदृश्य |
 | `writePolicies` | `{}` | प्रति-ट्रैक/स्कोप या प्रति-स्रोत ओवरराइड: कुंजियाँ `user/workspace`, `agent/user-global`, `source:claude`, … → `ask`/`auto`/`off`; बेमेल `writePolicy` पर गिरता है |
+| `language` | `'en'` | मॉडल-दृश्य पाठ और कमांड आउटपुट की भाषा: `'en'` (डिफ़ॉल्ट) या `'zh'` — टूल विवरण, फ्रोज़न स्नैपशॉट, `/memory` कमांड और वेब पैनल सभी इसका अनुसरण करते हैं |
 | `snapshotOrder` | `-50` | स्नैपशॉट सेक्शन क्रम: harness आइडेंटिटी (`-100`) के बाद, persona (`0`) से पहले |
 | `maxEntriesPerQuery` | `20` | प्रति-क्वेरी परिणाम की डिफ़ॉल्ट सीमा (स्पष्ट `limit` अनुमत, कठोर सीमा 1000) |
 | `commandListLimit` | `50` | प्रति `/memory list` / `query` कमांड दिखाई गई प्रविष्टियाँ |
@@ -99,9 +100,23 @@ dsh plugin --profile <name> remove dsh-memento       # uninstall: DB + session l
 
 - **`memory`** — विवरण में अंतर्निहित Save/Skip मार्गदर्शन के साथ add/replace/remove/consolidate/query (उपयोगकर्ता प्राथमिकताएँ, सुधार, पर्यावरण तथ्य, परंपराएँ, सबक सहेजें; तुच्छ बातें, पुनः-व्युत्पन्न तथ्य, डंप, एक-बार के पथ छोड़ें)। लेखन अनुमोदन द्वार से गुज़रते हैं; पठन निःशुल्क हैं; replace/remove एक **यूनीक सबस्ट्रिंग** को लक्षित करते हैं (अस्पष्ट मिलान उम्मीदवार सूची के साथ विफल होते हैं); consolidate एक अनुमोदन और एक परमाणु लेखन से 1..20 प्रविष्टियों को एक में मिलाता है।
 - **`memory_recall`** — दो-भाग रिकॉल: परिबद्ध मेमोरी मिलान **और साथ में** `ctx.sessionQuery` के माध्यम से हाल के सेशन-इतिहास मिलान (जहाँ सेवा अनुपस्थित हो वहाँ केवल-मेमोरी पर सहजता से गिरता है)।
-- **`/memory`** — उपयोगकर्ता-ट्रिगर कमांड (मॉडल टर्न नहीं): `list` · `query <word>` · `add [--track=user|agent] [--scope=user-global|workspace] <text>` · `remove [flags] <substring>` · `consolidate [flags] <substring...> => <text>` · `proposals [approve|dismiss <id>]` · `budgets` · `audit`। कमांड लेखन उसी वॉटरफॉल + नीति से गुज़रते हैं; ऑडिट प्लगइन ऑडिट टेबल + `command/done` में दर्ज होता है।
+- **`/memory`** — उपयोगकर्ता-ट्रिगर कमांड (मॉडल टर्न नहीं): `list` · `query <word>` · `add [--track=user|agent] [--scope=user-global|workspace] <text>` · `remove [flags] <substring>` · `consolidate [flags] <substring...> => <text>` · `proposals [approve|dismiss <id>]` · `budgets` · `audit` · `export`। कमांड लेखन उसी वॉटरफॉल + नीति से गुज़रते हैं; ऑडिट प्लगइन ऑडिट टेबल + `command/done` में दर्ज होता है। `export` रीड-ओनली है और सभी प्रविष्टियाँ + बजट एक JSON दस्तावेज़ के रूप में निकालता है (बैकअप / माइग्रेशन)।
 - **ऑटो-कैप्चर प्रस्ताव** — सफल सेशन कॉम्पैक्शन के बाद सारांश एक लंबित मेमोरी प्रस्ताव (`agent/workspace`) बन जाता है; approve उसे अनुमोदन द्वार से लिखता है, dismiss उसे हटाता है। लंबित प्रस्ताव फ्रोज़न स्नैपशॉट और पैनल में दिखते हैं।
 - **Web पैनल** — शून्य-बिल्ड `dsh.client` ड्रॉअर: ट्रैक/लेयर के अनुसार एंट्री ब्राउज़ करें, खोजें, बजट बार, ऑडिट टेल। डिज़ाइन से रीड-ओनली: लेखन और अनुमोदन `memory` टूल और बिल्ट-इन अनुमोदन UI के माध्यम से होते हैं।
+
+## 🎓 टर्मिनल मेमोरियों से हमने क्या सीखा
+
+dsh-memento Claude Code, Codex या Hermes का पोर्ट नहीं है — पर इसके डिज़ाइन ने जान-बूझकर उनका सही हिस्सा आत्मसात किया और नुकसानदेह हिस्सों को ठुकराया:
+
+| टर्मिनल मेमोरी | उसने क्या सही किया | dsh-memento ने क्या अपनाया |
+| --- | --- | --- |
+| **Claude Code** — `CLAUDE.md` | पदानुक्रमित **सादा-पाठ मेमोरी फ़ाइलें** (उपयोगकर्ता स्तर → प्रोजेक्ट स्तर), जिन्हें इंसान पढ़-संपादित कर सकता है, और हर सेशन में अपने-आप मर्ज होती हैं — ऐसी मेमोरी जिसे आप खुद पढ़ और ठीक कर सकते हैं | सादा-पाठ प्रविष्टियाँ; प्रति सेशन मर्ज होने वाली `user-global` / `workspace` लेयरें; एक स्टोर जिसे आप ब्राउज़, `export` और ऑडिट कर सकते हैं — पारदर्शिता ही फ़ीचर है |
+| **Codex** — `AGENTS.md` | **प्रति-निर्देशिका स्कोप्ड निर्देश** अपने-आप खोजे और बिना किसी मॉडल-घर्षण के इंजेक्ट होते हैं — स्थानीयता मात्रा से बड़ी चीज़ है; मेमोरी "लोड" करने के लिए कोई टूल-कॉल नहीं चाहिए | सेशन के cwd से बँधी `workspace` लेयर (Windows में केस-इनसेंसिटिव); फ्रोज़न स्नैपशॉट सेशन शुरू होते ही अपने-आप इंजेक्ट होता है |
+| **Hermes** — `memory.md` | **सक्रिय मेमोरी सेव** (save/update/delete) और [issue #48181](https://github.com/NousResearch/hermes-agent/issues/48181) की सुरक्षा सीख: केवल टूल लेयर पर लगाया गया द्वार देर से हुए टूल-इंजेक्शन से बायपास हो सकता है — द्वार वहाँ लगाओ जहाँ हर लेखन पथ मिलता है | स्पष्ट Save/Skip मार्गदर्शन वाला `memory` टूल + अनुमोदन-द्वारित ऑटो-कैप्चर प्रस्ताव; अनुमोदन द्वार **`ctx.memory` के लेखन मेथड्स के अंदर** रहता है, टूल लेयर में नहीं |
+
+स्रोत: [Claude Code मेमोरी](https://code.claude.com/docs/en/memory) · [Codex AGENTS.md](https://developers.openai.com/codex/cli/agents-md) · [Hermes मेमोरी](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/memory.md) · [Hermes #48181](https://github.com/NousResearch/hermes-agent/issues/48181)।
+
+और जिन हिस्सों को हमने जान-बूझकर ठुकराया: मॉडल के निजी स्टेट में छिपी ऑटो-समरीकरण (यहाँ कॉम्पैक्शन सारांश **लंबित प्रस्ताव** बनते हैं जो इंसानी approve/dismiss की प्रतीक्षा करते हैं), वेयरहाउस/वेक्टर-स्टोर महत्वाकांक्षाएँ, और ऐसा कोई भी लेखन जिसमें इंसान को दिखने वाला अनुमोदन या ऑडिट-ट्रेल न हो। साथ ही Hermes की दस्तावेज़ित चेतावनी अपनाई: एक ही home निर्देशिका साझा करने वाले दो प्रोसेस एक ही मेमोरी फ़ाइल लिखते हैं — सुरक्षा सीमाएँ देखें।
 
 ## 🆚 यह कैसे अलग है
 
@@ -134,7 +149,7 @@ dsh plugin --profile <name> remove dsh-memento       # uninstall: DB + session l
 
 ```sh
 npm install
-npm test                # node --test: 74 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel
+npm test                # node --test: 103 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel
 npm run typecheck       # index.mjs / lib / scripts पर tsc --checkJs द्वार
 npm run check:coverage  # लाइन-कवरेज द्वार: lib ≥90%, index.mjs ≥85%, सभी ≥90%
 npm run check:readmes   # पाँच-भाषा README संगति द्वार

@@ -49,6 +49,7 @@ function mount(opts = {}) {
     budgets: opts.budgets ?? DEFAULT_BUDGETS,
     writePolicy: opts.writePolicy ?? 'ask',
     writePolicies: opts.writePolicies ?? {},
+    language: opts.language ?? 'en',
     snapshotOrder: opts.snapshotOrder ?? -50,
     maxEntriesPerQuery: opts.maxEntriesPerQuery ?? 20,
   }
@@ -66,12 +67,18 @@ test('Config schema：默认值齐备，覆盖生效（F4）', () => {
   assert.equal(normalized.enabled, true)
   assert.equal(normalized.dbPath, '')
   assert.equal(normalized.writePolicy, 'ask')
+  assert.equal(normalized.language, 'en')
   assert.equal(normalized.snapshotOrder, -50)
   assert.equal(normalized.maxEntriesPerQuery, 20)
   assert.deepEqual(normalized.budgets, DEFAULT_BUDGETS)
   const overridden = Config({ writePolicy: 'off', budgets: { user: { userGlobal: 100, workspace: 100 }, agent: { userGlobal: 100, workspace: 100 } } })
   assert.equal(overridden.writePolicy, 'off')
   assert.equal(overridden.budgets.user.userGlobal, 100)
+})
+
+test('Config schema：language 仅 en/zh，非法值加载期响亮失败', () => {
+  assert.equal(Config({ language: 'zh' }).language, 'zh')
+  assert.throws(() => Config({ language: 'fr' }), '非法 language 在 schema 层被拒绝')
 })
 
 test('F1/F5/F6 注册面：ctx.memory 服务、memory 工具、快照段、审批 answerer 齐备', (t) => {
@@ -87,6 +94,39 @@ test('F1/F5/F6 注册面：ctx.memory 服务、memory 工具、快照段、审�
   assert.equal(answerers.length, 1)
   // 无 agent 的裸 assemble 不产快照（不报错）
   assert.equal(section.text({}), '')
+})
+
+test('F1/F5/F6 语言面：language 控制工具描述与快照文案；apply 直调非法值响亮失败', (t) => {
+  const zh = mount({ language: 'zh' })
+  t.after(() => teardown(zh))
+  const zhTool = zh.mock.tools.find((tool) => tool.name === 'memory')
+  assert.ok(zhTool.description.includes('读写有界、分层、带审批门'), 'zh 工具描述')
+  assert.ok(zhTool.description.includes('应存（SAVE）'), 'zh Save/Skip 指引')
+  const en = mount()
+  t.after(() => teardown(en))
+  const enTool = en.mock.tools.find((tool) => tool.name === 'memory')
+  assert.ok(enTool.description.includes('Read and write the bounded, layered, approval-gated'), '默认 en 工具描述')
+  assert.ok(enTool.description.includes('SAVE:'), 'en Save/Skip 指引')
+  // 快照文案随语言
+  const zhService = zh.mock.services.get('memory')
+  zhService.store.insertEntry({ track: 'user', scope: 'user-global', text: '偏好中文' })
+  const zhSection = zh.mock.sections.find((s) => s.name === 'dsh-memento:memory')
+  const zhText = zhSection.text({ agent: { session: makeSession() } })
+  assert.ok(zhText.includes('冻结记忆快照'), 'zh 快照头')
+  assert.ok(zhText.includes('用户画像（全局偏好'), 'zh 分组标题')
+  assert.ok(zhText.includes('已用字符'), 'zh 用量后缀')
+  assert.ok(zhText.includes('- 偏好中文'))
+  const enSection = en.mock.sections.find((s) => s.name === 'dsh-memento:memory')
+  assert.equal(enSection.text({ agent: { session: makeSession() } }), '', '空库 en 快照为空')
+  // apply 直调非法 language 响亮失败（不经 cordis schema 的路径）
+  const dir2 = mkdtempSync(path.join(tmpdir(), 'dsh-memento-lang-'))
+  const bad = createMockCtx()
+  assert.throws(
+    () => apply(bad.ctx, { dbPath: path.join(dir2, 'memory.db'), language: 'fr' }),
+    (error) => error instanceof InvalidInputError && /language/.test(error.message),
+  )
+  bad.dispose()
+  rmSync(dir2, { recursive: true, force: true })
 })
 
 test('S3：直接调 ctx.memory 服务（不经工具）仍被审批门拦截——off 策略拒绝且零落盘', async (t) => {

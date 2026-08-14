@@ -44,6 +44,7 @@ function mount(opts = {}) {
     maxEntriesPerQuery: 20,
     commandListLimit: 50,
     commandAuditLimit: 10,
+    language: 'zh',
     recall: { historyLimitDefault: 8, snippetCap: 5, snippetChars: 300 },
     panelEntriesLimit: 200,
     panelAuditLimit: 20,
@@ -124,7 +125,7 @@ test('快照包含 pending 提案块（模型可见 ⟺ 随快照文本进入 re
   emitCompaction(mock.ctx, makeSession({ id: 's-src' }), '跨会话建议')
   const section = mock.sections.find((s) => s.name === 'dsh-memento:memory')
   const text = section.text({ agent: { session: makeSession({ id: 's-view' }) } })
-  assert.ok(text.includes('Pending memory proposals'), '提案块进入冻结快照')
+  assert.ok(text.includes('待审批记忆提案'), '提案块进入冻结快照')
   assert.ok(text.includes('跨会话建议'))
   // 冻结语义：同一会话第二次 assemble 逐字一致
   const frozenSession = makeSession({ id: 's-view' })

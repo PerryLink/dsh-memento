@@ -6,6 +6,7 @@
 // 面板只读：条目浏览/搜索/预算条/审计尾，全部走本插件自注册的
 // /api/memento/* JSON 路由（只走公开 API）。写与审批在 DSH 内置审批 UI 完成，
 // 面板不产生任何模型可见内容、不做任何审批决策。
+// 面板文案随 Config.language（en/zh）切换，语言来自 entries 路由响应。
 
 (function () {
   'use strict'
@@ -24,8 +25,47 @@
 
 const PANEL_ID = 'dsh-memento-panel'
 
+/** 面板文案（en 源文 / zh 译文；语言来自 /api/memento/entries 响应的 language 字段，缺省 en）。 */
+const STRINGS = {
+  en: {
+    open: '🧠 Memory',
+    title: 'dsh-memento memory',
+    refresh: 'Refresh',
+    close: 'Close',
+    filter: 'Filter entries by text…',
+    empty: 'Memory is empty (or nothing matches the filter). Use the memory tool to write (approval happens in the built-in approval UI).',
+    truncated: (shown, total) => `Showing the first ${shown} of ${total} entries — narrow the filter to see more.`,
+    groupCount: (n) => `(${n})`,
+    budgets: 'Budget usage',
+    audit: 'Recent audit',
+    loading: 'Loading…',
+    auditEmpty: 'Audit is empty',
+    proposals: 'Pending proposals',
+    proposalsEmpty: 'No pending proposals (generated after session compaction; decide via /memory proposals approve|dismiss)',
+    loadFailed: (message) => `Load failed: ${message} (panel is read-only; make sure the Web profile has dsh-memento loaded)`,
+  },
+  zh: {
+    open: '🧠 记忆',
+    title: 'dsh-memento 记忆',
+    refresh: '刷新',
+    close: '关闭',
+    filter: '按文本过滤条目…',
+    empty: '记忆为空（或没有匹配当前过滤）。写操作请用 memory 工具（审批在 DS 内置审批 UI 完成）。',
+    truncated: (shown, total) => `仅显示前 ${shown} 条，共 ${total} 条——用过滤框缩小范围。`,
+    groupCount: (n) => `（${n} 条）`,
+    budgets: '预算用量',
+    audit: '最近审计',
+    loading: '加载中…',
+    auditEmpty: '审计为空',
+    proposals: '待审批提案',
+    proposalsEmpty: '暂无待审批提案（会话压缩后自动生成；用 /memory proposals approve|dismiss 处理）',
+    loadFailed: (message) => `加载失败：${message}（面板只读；请确认 Web profile 已装载 dsh-memento）`,
+  },
+}
+
 function installPanel() {
   if (document.getElementById(PANEL_ID)) return
+  let S = STRINGS.en
 
   const style = document.createElement('style')
   style.textContent = `
@@ -54,7 +94,7 @@ function installPanel() {
 
   const openBtn = document.createElement('button')
   openBtn.id = 'mem-open'
-  openBtn.textContent = '🧠 记忆'
+  openBtn.textContent = S.open
 
   const root = document.createElement('div')
   root.id = PANEL_ID
@@ -62,11 +102,11 @@ function installPanel() {
   drawer.id = 'mem-drawer'
   drawer.style.display = 'none'
   drawer.innerHTML = `
-    <div id="mem-head"><b>dsh-memento 记忆</b>
-      <button id="mem-refresh" title="刷新">刷新</button>
-      <button id="mem-close" title="关闭">✕</button>
+    <div id="mem-head"><b id="mem-title">${S.title}</b>
+      <button id="mem-refresh" title="${S.refresh}">${S.refresh}</button>
+      <button id="mem-close" title="${S.close}">✕</button>
     </div>
-    <input id="mem-filter" placeholder="按文本过滤条目…" />
+    <input id="mem-filter" placeholder="${S.filter}" />
     <div id="mem-body"></div>
   `
   root.appendChild(openBtn)
@@ -76,6 +116,22 @@ function installPanel() {
 
   const body = document.getElementById('mem-body')
   const filter = document.getElementById('mem-filter')
+  const titleLabel = document.getElementById('mem-title')
+  const refreshBtn = document.getElementById('mem-refresh')
+  const closeBtn = document.getElementById('mem-close')
+  const filterInput = document.getElementById('mem-filter')
+
+  /** 按服务端 language 切换文案并刷新静态标签（语言随配置，运行期不变）。 */
+  const applyLanguage = (language) => {
+    S = STRINGS[language] ?? STRINGS.en
+    openBtn.textContent = S.open
+    titleLabel.textContent = S.title
+    refreshBtn.title = S.refresh
+    refreshBtn.textContent = S.refresh
+    closeBtn.title = S.close
+    filterInput.placeholder = S.filter
+  }
+
   let entries = []
   let lastFilter = ''
   let lastTotal = 0
@@ -91,14 +147,14 @@ function installPanel() {
       else list.push(entry)
     }
     if (visible.length === 0) {
-      body.innerHTML = '<div class="mem-empty">记忆为空（或没有匹配当前过滤）。写操作请用 memory 工具（审批在 DS 内置审批 UI 完成）。</div>'
+      body.innerHTML = `<div class="mem-empty">${S.empty}</div>`
       return
     }
     let html = lastTruncated
-      ? `<div class="mem-empty">仅显示前 ${entries.length} 条，共 ${lastTotal} 条——用过滤框缩小范围。</div>`
+      ? `<div class="mem-empty">${S.truncated(entries.length, lastTotal)}</div>`
       : ''
     for (const [key, list] of groups) {
-      html += `<div class="mem-group">${key}（${list.length} 条）</div>`
+      html += `<div class="mem-group">${key}${S.groupCount(list.length)}</div>`
       for (const entry of list) {
         html += `<div class="mem-entry"><span class="t">${escapeHtml(entry.text)}</span><span class="m">${escapeHtml(entry.source)} · ${new Date(entry.createdAt).toLocaleString()}</span></div>`
       }
@@ -108,15 +164,15 @@ function installPanel() {
 
   const renderBudget = (budgets) => {
     if (!Array.isArray(budgets) || budgets.length === 0) return
-    let html = '<div class="mem-group">预算用量</div>'
+    let html = `<div class="mem-group">${S.budgets}</div>`
     for (const row of budgets) {
       const pct = row.limit > 0 ? Math.min(100, Math.round((row.used / row.limit) * 100)) : 0
       html += `<div class="mem-row">${row.track}/${row.scope}: ${row.used}/${row.limit}<div class="mem-bar"><i style="width:${pct}%"></i></div></div>`
     }
-    html += '<div class="mem-group">最近审计</div>'
-    html += '<div id="mem-audit-slot"><div class="mem-empty">加载中…</div></div>'
-    html += '<div class="mem-group">待审批提案</div>'
-    html += '<div id="mem-proposal-slot"><div class="mem-empty">加载中…</div></div>'
+    html += `<div class="mem-group">${S.audit}</div>`
+    html += `<div id="mem-audit-slot"><div class="mem-empty">${S.loading}</div></div>`
+    html += `<div class="mem-group">${S.proposals}</div>`
+    html += `<div id="mem-proposal-slot"><div class="mem-empty">${S.loading}</div></div>`
     body.insertAdjacentHTML('beforeend', html)
   }
 
@@ -124,7 +180,7 @@ function installPanel() {
     const slot = document.getElementById('mem-audit-slot')
     if (slot === null) return
     if (!Array.isArray(rows) || rows.length === 0) {
-      slot.innerHTML = '<div class="mem-empty">审计为空</div>'
+      slot.innerHTML = `<div class="mem-empty">${S.auditEmpty}</div>`
       return
     }
     slot.innerHTML = rows.map((row) =>
@@ -135,7 +191,7 @@ function installPanel() {
     const slot = document.getElementById('mem-proposal-slot')
     if (slot === null) return
     if (!Array.isArray(proposals) || proposals.length === 0) {
-      slot.innerHTML = '<div class="mem-empty">暂无待审批提案（会话压缩后自动生成；用 /memory proposals approve|dismiss 处理）</div>'
+      slot.innerHTML = `<div class="mem-empty">${S.proposalsEmpty}</div>`
       return
     }
     slot.innerHTML = proposals.map((proposal) =>
@@ -148,6 +204,7 @@ function installPanel() {
       if (!response.ok) throw new Error(`entries ${response.status}`)
       const data = await response.json()
       if (data.error !== undefined) throw new Error(data.error)
+      applyLanguage(data.language)
       entries = Array.isArray(data.entries) ? data.entries : []
       lastTotal = Number.isInteger(data.total) ? data.total : entries.length
       lastTruncated = data.truncated === true
@@ -162,7 +219,7 @@ function installPanel() {
         .then((data) => renderProposals(data.proposals))
         .catch(() => renderProposals([]))
     } catch (error) {
-      body.innerHTML = `<div class="mem-empty">加载失败：${escapeHtml(String(error && error.message ? error.message : error))}（面板只读；请确认 Web profile 已装载 dsh-memento）</div>`
+      body.innerHTML = `<div class="mem-empty">${S.loadFailed(String(error && error.message ? error.message : error))}</div>`
     }
   }
 
@@ -170,8 +227,8 @@ function installPanel() {
     drawer.style.display = drawer.style.display === 'none' ? 'flex' : 'none'
     if (drawer.style.display !== 'none') void refresh()
   })
-  document.getElementById('mem-close').addEventListener('click', () => { drawer.style.display = 'none' })
-  document.getElementById('mem-refresh').addEventListener('click', () => void refresh())
+  closeBtn.addEventListener('click', () => { drawer.style.display = 'none' })
+  refreshBtn.addEventListener('click', () => void refresh())
   filter.addEventListener('input', () => {
     lastFilter = filter.value
     render()

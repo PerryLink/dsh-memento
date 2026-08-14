@@ -108,6 +108,9 @@ export interface MemoryUsage {
 
 /** ctx.memory 服务：写方法内部强制过审批门，读方法无审批。 */
 export interface MemoryService {
+  /** 模型可见文案与命令输出的语言（Config.language，'en' | 'zh'）。 */
+  language: 'en' | 'zh'
+
   /** 每轨每层当前用量与上限。 */
   budgets(): MemoryBudgetRow[]
 

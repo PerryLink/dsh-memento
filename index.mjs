@@ -70,6 +70,7 @@ import { extractEventText } from './lib/extract.mjs'
  * @property {number} maxEntriesPerQuery
  * @property {number} commandListLimit
  * @property {number} commandAuditLimit
+ * @property {'en'|'zh'} language
  * @property {ApprovalLike} approval
  * @property {string} [sourceLabel]
  * @typedef {object} PluginConfig - apply 的宽松配置形状（cordis loader 已套 schema 默认值）。
@@ -78,6 +79,7 @@ import { extractEventText } from './lib/extract.mjs'
  * @property {{user?: {userGlobal?: number, workspace?: number}, agent?: {userGlobal?: number, workspace?: number}}} [budgets]
  * @property {string} [writePolicy]
  * @property {Record<string, string>} [writePolicies]
+ * @property {'en'|'zh'} [language]
  * @property {number} [snapshotOrder]
  * @property {number} [maxEntriesPerQuery]
  * @property {number} [commandListLimit]
@@ -130,6 +132,7 @@ export const DEFAULT_SNAPSHOT_ORDER = -50
  *   每轨每层硬字符预算。
  * @property {'ask'|'auto'|'off'} [writePolicy] 写审批策略；模型不可见、不可改。
  * @property {Record<string, 'ask'|'auto'|'off'>} [writePolicies] 粒度写策略（键 `track/scope` 或 `source:<name>`；未命中回退 writePolicy）。
+ * @property {'en'|'zh'} [language] 模型可见文案与命令输出语言（默认 en；快照/工具描述/命令随选）。
  * @property {number} [snapshotOrder] 快照段注入顺序（默认 -50，靠前负值）。
  * @property {number} [maxEntriesPerQuery] query 默认返回条目上限（显式 limit 可超出，Provider 硬钳 1000）。
  * @property {number} [commandListLimit] /memory list|query 单次渲染条目上限（默认 50）。
@@ -157,6 +160,7 @@ export const Config = Schema.object({
   }),
   writePolicy: Schema.union(['ask', 'auto', 'off']).default('ask'),
   writePolicies: Schema.dict(Schema.union(['ask', 'auto', 'off'])).default({}),
+  language: Schema.union(['en', 'zh']).default('en'),
   snapshotOrder: Schema.number().default(DEFAULT_SNAPSHOT_ORDER),
   maxEntriesPerQuery: Schema.number().default(20),
   commandListLimit: Schema.number().default(50),
@@ -235,6 +239,7 @@ export class MemoryService {
     this.maxEntriesPerQuery = deps.maxEntriesPerQuery
     this.commandListLimit = deps.commandListLimit
     this.commandAuditLimit = deps.commandAuditLimit
+    this.language = deps.language
     this.approval = deps.approval
     this.sourceLabel = deps.sourceLabel ?? DEFAULT_SOURCE
   }
@@ -623,63 +628,101 @@ function toToolError(/** @type {unknown} */ error) {
   return { code: 'INTERNAL', message: error instanceof Error ? error.message : String(error) }
 }
 
-/** 记忆工具描述：内嵌 Save/Skip 行为指引（学 Hermes 官方 memory.md 清单）。 */
-const MEMORY_TOOL_DESCRIPTION = [
-  'Read and write the bounded, layered, approval-gated cross-session memory store (dsh-memento).',
-  '',
-  'Tracks: "user" holds facts about the user (preferences, communication style, landmines, corrections); "agent" holds environment facts, project conventions, lessons learned, and completed-work summaries. Layers: "user-global" applies to every workspace; "workspace" applies only to the current working directory.',
-  '',
-  'Each track/layer pair has a hard character budget (shown in the session memory snapshot header). A write that would exceed it FAILS with a structured error carrying current usage and the limit — consolidate or remove entries, then retry. Never truncate or silently drop content.',
-  '',
-  'SAVE: user preferences and corrections; environment facts and project conventions; lessons learned from mistakes; summaries of completed work; anything the user explicitly asks you to remember.',
-  'SKIP: trivial or re-derivable facts; encyclopedia knowledge a fresh search can answer; large data dumps or logs; one-off file paths; content already available in the current workspace.',
-  '',
-  'Writes (add/replace/remove/consolidate) require approval under the configured policy and are audited; reads (query) are free. replace/remove target an entry by a UNIQUE case-insensitive substring — an ambiguous match fails with the candidate list, so use a longer substring. consolidate merges 1..20 existing entries (unique substrings) into ONE new entry with a single approval and one atomic write — use it when a layer is over budget. Each session receives a frozen snapshot of current memory at startup; the snapshot never changes mid-session.',
-].join('\n')
+/** 记忆工具描述：内嵌 Save/Skip 行为指引（学 Hermes 官方 memory.md 清单）。en 为源文，zh 为对应译文。 */
+const MEMORY_TOOL_DESCRIPTION = {
+  en: [
+    'Read and write the bounded, layered, approval-gated cross-session memory store (dsh-memento).',
+    '',
+    'Tracks: "user" holds facts about the user (preferences, communication style, landmines, corrections); "agent" holds environment facts, project conventions, lessons learned, and completed-work summaries. Layers: "user-global" applies to every workspace; "workspace" applies only to the current working directory.',
+    '',
+    'Each track/layer pair has a hard character budget (shown in the session memory snapshot header). A write that would exceed it FAILS with a structured error carrying current usage and the limit — consolidate or remove entries, then retry. Never truncate or silently drop content.',
+    '',
+    'SAVE: user preferences and corrections; environment facts and project conventions; lessons learned from mistakes; summaries of completed work; anything the user explicitly asks you to remember.',
+    'SKIP: trivial or re-derivable facts; encyclopedia knowledge a fresh search can answer; large data dumps or logs; one-off file paths; content already available in the current workspace.',
+    '',
+    'Writes (add/replace/remove/consolidate) require approval under the configured policy and are audited; reads (query) are free. replace/remove target an entry by a UNIQUE case-insensitive substring — an ambiguous match fails with the candidate list, so use a longer substring. consolidate merges 1..20 existing entries (unique substrings) into ONE new entry with a single approval and one atomic write — use it when a layer is over budget. Each session receives a frozen snapshot of current memory at startup; the snapshot never changes mid-session.',
+  ].join('\n'),
+  zh: [
+    '读写有界、分层、带审批门、可审计的跨会话记忆库（dsh-memento）。',
+    '',
+    '轨道："user" 存用户相关事实（偏好、沟通风格、雷区、纠正）；"agent" 存环境事实、项目约定、教训与已完成工作总结。层："user-global" 对所有工作区生效；"workspace" 只对当前工作目录生效。',
+    '',
+    '每对轨道/层有硬字符预算（显示在会话记忆快照头部）。会超限的写入以结构化错误失败（携带当前用量与上限）——整合或删除条目后重试。绝不截断、绝不静默丢弃内容。',
+    '',
+    '应存（SAVE）：用户偏好与纠正；环境事实与项目约定；犯错得到的教训；已完成工作总结；用户明确要求记住的内容。',
+    '应跳过（SKIP）：琐碎或可再推导的事实；重新搜索即可回答的百科知识；大数据转储或日志；一次性文件路径；当前工作区已有的内容。',
+    '',
+    '写（add/replace/remove/consolidate）需按配置策略审批并落审计；读（query）免费。replace/remove 用唯一大小写不敏感子串定位——歧义时报候选清单，请用更长子串。consolidate 以一次审批 + 一次原子写把 1..20 条整合为一条——层超预算时使用。每个会话启动时获得当前记忆的冻结快照；会话内快照不变。',
+  ].join('\n'),
+}
+
+/** 记忆工具参数描述（双语）。 */
+const MEMORY_TOOL_PARAMETERS = {
+  en: {
+    action: 'add = insert a new entry; replace = rewrite one existing entry; remove = delete one existing entry; consolidate = merge 1..20 existing entries into one new entry (single approval, atomic); query = substring search over existing entries.',
+    track: 'Memory track. Defaults to "user". user = facts about the user; agent = environment/project facts and conventions.',
+    scope: 'Layer. Defaults to "workspace". user-global applies to every workspace; workspace applies only to this working directory.',
+    text: 'add/replace: the exact entry text. query: case-insensitive substring filter.',
+    match: 'replace/remove: a UNIQUE case-insensitive substring of the existing entry to target.',
+    matches: 'consolidate: 1..20 UNIQUE case-insensitive substrings of the entries to merge into the new text.',
+    limit: 'query: maximum entries to return (default 20; hard-capped at 1000).',
+  },
+  zh: {
+    action: 'add = 新增一条；replace = 改写一条既有条目；remove = 删除一条既有条目；consolidate = 把 1..20 条既有条目整合为一条新条目（单次审批、原子执行）；query = 对既有条目的子串检索。',
+    track: '记忆轨道。默认 "user"。user = 用户相关事实；agent = 环境/项目事实与约定。',
+    scope: '层。默认 "workspace"。user-global 对所有工作区生效；workspace 只对当前工作目录生效。',
+    text: 'add/replace：完整条目文本。query：大小写不敏感子串过滤。',
+    match: 'replace/remove：目标条目的唯一大小写不敏感子串。',
+    matches: 'consolidate：要并入新文本的 1..20 个唯一大小写不敏感子串。',
+    limit: 'query：最多返回条数（默认 20；硬钳 1000）。',
+  },
+}
 
 /**
  * memory 工具定义（Consumer）。execute 尊重 exec.signal；领域失败返回
  * ok:false + 结构化 error，基础设施失败才抛出（isError）。
  * @param {MemoryService} service - ctx.memory。
+ * @param {'en'|'zh'} [language] - 'en' | 'zh'。
  * @returns {object} 工具定义。
  */
-export function makeMemoryTool(service) {
+export function makeMemoryTool(service, language = 'en') {
+  const parameters = MEMORY_TOOL_PARAMETERS[language] ?? MEMORY_TOOL_PARAMETERS.en
   return defineTool({
     name: 'memory',
-    description: MEMORY_TOOL_DESCRIPTION,
+    description: MEMORY_TOOL_DESCRIPTION[language] ?? MEMORY_TOOL_DESCRIPTION.en,
     parameters: {
       action: {
         type: 'string',
         required: true,
         enum: ['add', 'replace', 'remove', 'consolidate', 'query'],
-        description: 'add = insert a new entry; replace = rewrite one existing entry; remove = delete one existing entry; consolidate = merge 1..20 existing entries into one new entry (single approval, atomic); query = substring search over existing entries.',
+        description: parameters.action,
       },
       track: {
         type: 'string',
         enum: ['user', 'agent'],
-        description: 'Memory track. Defaults to "user". user = facts about the user; agent = environment/project facts and conventions.',
+        description: parameters.track,
       },
       scope: {
         type: 'string',
         enum: ['user-global', 'workspace'],
-        description: 'Layer. Defaults to "workspace". user-global applies to every workspace; workspace applies only to this working directory.',
+        description: parameters.scope,
       },
       text: {
         type: 'string',
-        description: 'add/replace: the exact entry text. query: case-insensitive substring filter.',
+        description: parameters.text,
       },
       match: {
         type: 'string',
-        description: 'replace/remove: a UNIQUE case-insensitive substring of the existing entry to target.',
+        description: parameters.match,
       },
       matches: {
         type: 'array',
         items: { type: 'string' },
-        description: 'consolidate: 1..20 UNIQUE case-insensitive substrings of the entries to merge into the new text.',
+        description: parameters.matches,
       },
       limit: {
         type: 'integer',
-        description: 'query: maximum entries to return (default 20; hard-capped at 1000).',
+        description: parameters.limit,
       },
     },
     output: {
@@ -937,6 +980,7 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
     },
     writePolicy: config.writePolicy ?? 'ask',
     writePolicies: config.writePolicies ?? {},
+    language: config.language ?? 'en',
     snapshotOrder: config.snapshotOrder ?? DEFAULT_SNAPSHOT_ORDER,
     maxEntriesPerQuery: config.maxEntriesPerQuery ?? 20,
     commandListLimit: config.commandListLimit ?? 50,
@@ -961,6 +1005,9 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
   if (!budgetCheck.ok) throw new InvalidInputError(`dsh-memento config: ${/** @type {{message: string}} */ (budgetCheck).message}`)
   normalizeWritePolicy(resolved.writePolicy)
   validateWritePolicies(resolved.writePolicies)
+  if (resolved.language !== 'en' && resolved.language !== 'zh') {
+    throw new InvalidInputError(`dsh-memento config: language must be 'en' or 'zh' (got ${JSON.stringify(resolved.language)})`)
+  }
   if (!Number.isFinite(resolved.snapshotOrder)) {
     throw new InvalidInputError('dsh-memento config: snapshotOrder must be a finite number')
   }
@@ -1002,6 +1049,7 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
     maxEntriesPerQuery: resolved.maxEntriesPerQuery,
     commandListLimit: resolved.commandListLimit,
     commandAuditLimit: resolved.commandAuditLimit,
+    language: resolved.language,
     approval: ctx.approval,
     sourceLabel: DEFAULT_SOURCE,
   })
@@ -1021,7 +1069,7 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
     return applyWritePolicy(effective, req, next)
   }, { prepend: true })
 
-  ctx.tools.register(/** @type {import('@deepseek-ai/dsh-tools').ToolDefinition} */ (makeMemoryTool(service)))
+  ctx.tools.register(/** @type {import('@deepseek-ai/dsh-tools').ToolDefinition} */ (makeMemoryTool(service, resolved.language)))
 
   // 冻结快照注入：会话首个 assemble 时同步读库渲染，WeakMap 按 Session 冻结。
   // 提供者必须同步（rc.6 不 await systemPrompt 提供者），SQLite 同步读满足。
@@ -1050,7 +1098,7 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
           workspaceKey,
           agentKey,
         )
-        frozen = renderSnapshot(entries, resolved.budgets, proposals)
+        frozen = renderSnapshot(entries, resolved.budgets, proposals, resolved.language)
         snapshots.set(session, frozen)
         store.auditAppend({
           action: 'snapshot',
@@ -1075,7 +1123,7 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
   // V2 观察面：/memory 命令（用户触发）、memory_recall 工具、面板 JSON 路由。
   // commands/webServer 为可选服务，缺失（headless）自动跳过。
   registerCommands(ctx, service)
-  ctx.tools.register(/** @type {import('@deepseek-ai/dsh-tools').ToolDefinition} */ (makeMemoryRecallTool(service, ctx, resolved.recall)))
+  ctx.tools.register(/** @type {import('@deepseek-ai/dsh-tools').ToolDefinition} */ (makeMemoryRecallTool(service, ctx, resolved.recall, resolved.language)))
   registerWebRoutes(ctx, service, resolved)
 
   // auto-capture：监听会话事件火线，压缩结束后生成记忆提案（只落提案，不写记忆、不调模型）。
@@ -1192,8 +1240,115 @@ function makeCommandGate(ctx, write) {
 }
 
 /**
- * 注册 /memory 命令（用户触发，非模型回合）。列出/查询/预算/审计直接读；
- * add/remove 走 turn 外审批门（同一 waterfall + writePolicy）。命令缺失的
+ * /memory 命令文案（en 源文 / zh 译文；service.language 选择）。
+ * @typedef {object} CommandTextBundle
+ * @property {string} usage
+ * @property {string} memoryEmpty
+ * @property {(total: number, shown: number) => string} entries
+ * @property {(total: number) => string} entriesFull
+ * @property {string} queryNeedsWord
+ * @property {(text: string) => string} noMatch
+ * @property {(total: number, shown: number) => string} matches
+ * @property {(total: number) => string} matchesFull
+ * @property {string} budgets
+ * @property {string} proposalsNone
+ * @property {(n: number, rows: string) => string} proposalsList
+ * @property {string} proposalsUsage
+ * @property {(id: string) => string} proposalNotPending
+ * @property {(track: string, scope: string, text: string, used: number, limit: number) => string} proposalApproved
+ * @property {(id: string) => string} proposalDismissed
+ * @property {string} auditEmpty
+ * @property {(n: number) => string} audit
+ * @property {string} addNeedsText
+ * @property {(track: string, scope: string, text: string, used: number, limit: number) => string} added
+ * @property {string} removeNeedsSubstring
+ * @property {(track: string, scope: string, text: string, used: number, limit: number) => string} removed
+ * @property {string} consolidateUsage
+ * @property {string} consolidateNeedsMatches
+ * @property {string} consolidateNeedsText
+ * @property {(track: string, scope: string, removed: number, text: string, used: number, limit: number) => string} consolidated
+ * @property {string} exportUsage
+ * @property {(verb: string) => string} unknownVerb
+ * @property {(message: string) => string} commandFailed
+ */
+const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} */ ({
+  en: {
+    usage: 'Usage: /memory list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | export',
+    memoryEmpty: 'Memory is empty.',
+    entries: (total, shown) => `Memory entries (${total} total, showing first ${shown}):`,
+    entriesFull: (total) => `Memory entries (${total}):`,
+    queryNeedsWord: 'query needs a keyword: /memory query <word>',
+    noMatch: (text) => `No entry contains "${text}".`,
+    matches: (total, shown) => `Matches (${total} total, showing first ${shown}):`,
+    matchesFull: (total) => `Matches (${total}):`,
+    budgets: 'Budget usage:',
+    proposalsNone: 'No pending memory proposals.',
+    proposalsList: (n, rows) => `Pending proposals (${n}):\n${rows}\nApprove: /memory proposals approve <id>; dismiss: /memory proposals dismiss <id>`,
+    proposalsUsage: 'proposals usage: /memory proposals | proposals approve <id> | proposals dismiss <id>',
+    proposalNotPending: (id) => `proposal ${JSON.stringify(id)} is not a pending proposal (decided or missing)`,
+    proposalApproved: (track, scope, text, used, limit) => `Proposal approved and written to memory (${track}/${scope}): ${text}\nLayer usage: ${used}/${limit}`,
+    proposalDismissed: (id) => `Proposal ${id} dismissed.`,
+    auditEmpty: 'Audit is empty.',
+    audit: (n) => `Recent audit (${n} rows):`,
+    addNeedsText: 'add needs text: /memory add [--track=user|agent] [--scope=user-global|workspace] <text>',
+    added: (track, scope, text, used, limit) => `Added (${track}/${scope}): ${text}\nLayer usage: ${used}/${limit}`,
+    removeNeedsSubstring: 'remove needs a unique substring: /memory remove [--track=user|agent] [--scope=user-global|workspace] <substring>',
+    removed: (track, scope, text, used, limit) => `Removed (${track}/${scope}): ${text}\nLayer usage: ${used}/${limit}`,
+    consolidateUsage: 'consolidate usage: /memory consolidate [--track=user|agent] [--scope=user-global|workspace] <substring1> [<substring2> ...] => <new text>',
+    consolidateNeedsMatches: 'consolidate needs 1..20 unique substrings (left of =>)',
+    consolidateNeedsText: 'consolidate needs new text (right of =>)',
+    consolidated: (track, scope, removed, text, used, limit) => `Consolidated (${track}/${scope}): removed ${removed}, added 1.\nNew entry: ${text}\nLayer usage: ${used}/${limit}`,
+    exportUsage: 'export dumps all entries + budgets as one JSON document (read-only; redirect it to a file for backup/migration): /memory export',
+    unknownVerb: (verb) => `Unknown subcommand "${verb}". Usage: /memory list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | export`,
+    commandFailed: (message) => `memory command failed: ${message}`,
+  },
+  zh: {
+    usage: '用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | export',
+    memoryEmpty: '记忆为空。',
+    entries: (total, shown) => `记忆条目（共 ${total} 条，显示前 ${shown} 条）：`,
+    entriesFull: (total) => `记忆条目（${total} 条）：`,
+    queryNeedsWord: 'query 需要一个关键词：/memory query <词>',
+    noMatch: (text) => `没有条目包含「${text}」。`,
+    matches: (total, shown) => `命中（共 ${total} 条，显示前 ${shown} 条）：`,
+    matchesFull: (total) => `命中（${total} 条）：`,
+    budgets: '预算用量：',
+    proposalsNone: '暂无待审批记忆提案。',
+    proposalsList: (n, rows) => `待审批提案（${n} 条）：\n${rows}\n审批：/memory proposals approve <id>；驳回：/memory proposals dismiss <id>`,
+    proposalsUsage: 'proposals 用法：/memory proposals | proposals approve <id> | proposals dismiss <id>',
+    proposalNotPending: (id) => `proposal ${JSON.stringify(id)} 不是待审批提案（可能已裁决或不存在）`,
+    proposalApproved: (track, scope, text, used, limit) => `已批准提案并写入记忆（${track}/${scope}）：${text}\n该层用量：${used}/${limit}`,
+    proposalDismissed: (id) => `已驳回提案 ${id}。`,
+    auditEmpty: '审计为空。',
+    audit: (n) => `最近审计（${n} 条）：`,
+    addNeedsText: 'add 需要文本：/memory add [--track=user|agent] [--scope=user-global|workspace] <文本>',
+    added: (track, scope, text, used, limit) => `已添加（${track}/${scope}）：${text}\n该层用量：${used}/${limit}`,
+    removeNeedsSubstring: 'remove 需要一个唯一子串：/memory remove [--track=user|agent] [--scope=user-global|workspace] <唯一子串>',
+    removed: (track, scope, text, used, limit) => `已删除（${track}/${scope}）：${text}\n该层用量：${used}/${limit}`,
+    consolidateUsage: 'consolidate 用法：/memory consolidate [--track=user|agent] [--scope=user-global|workspace] <唯一子串1> [<唯一子串2> ...] => <新文本>',
+    consolidateNeedsMatches: 'consolidate 需要 1..20 个唯一子串（=> 左侧）',
+    consolidateNeedsText: 'consolidate 需要新文本（=> 右侧）',
+    consolidated: (track, scope, removed, text, used, limit) => `已整合（${track}/${scope}）：删除 ${removed} 条，新增 1 条。\n新条目：${text}\n该层用量：${used}/${limit}`,
+    exportUsage: 'export 把所有条目 + 预算导出为一份 JSON 文档（只读；可重定向到文件做备份/迁移）：/memory export',
+    unknownVerb: (verb) => `未知子命令「${verb}」。用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | export`,
+    commandFailed: (message) => `memory 命令失败：${message}`,
+  },
+})
+
+/** 命令注册描述与输入提示（双语）。 */
+const COMMAND_DESCRIPTION = /** @type {{en: {description: string, hint: string}, zh: {description: string, hint: string}}} */ ({
+  en: {
+    description: 'View/manage dsh-memento memory: list | query <word> | add [--track=user|agent] [--scope=user-global|workspace] <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | export',
+    hint: 'list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | export',
+  },
+  zh: {
+    description: '查看/管理 dsh-memento 记忆：list | query <词> | add [--track=user|agent] [--scope=user-global|workspace] <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | export',
+    hint: 'list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | export',
+  },
+})
+
+/**
+ * 注册 /memory 命令（用户触发，非模型回合）。列出/查询/预算/审计/导出直接读；
+ * add/remove/consolidate 走 turn 外审批门（同一 waterfall + writePolicy）。命令缺失的
  * profile（headless）自动跳过。
  * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文。
  * @param {MemoryService} service - ctx.memory。
@@ -1201,10 +1356,11 @@ function makeCommandGate(ctx, write) {
 export function registerCommands(ctx, service) {
   withService(ctx, 'commands', (/** @type {{register?: (def: object) => unknown} | null | undefined} */ commands) => {
     if (typeof commands?.register !== 'function') return
+    const meta = COMMAND_DESCRIPTION[service.language] ?? COMMAND_DESCRIPTION.en
     commands.register({
       name: 'memory',
-      description: '查看/管理 dsh-memento 记忆：list | query <词> | add [--track=user|agent] [--scope=user-global|workspace] <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit',
-      input: { hint: 'list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit' },
+      description: meta.description,
+      input: { hint: meta.hint },
       handler: async (/** @type {{rawInput?: unknown, agent?: unknown, signal?: AbortSignal}} */ invocation) => handleMemoryCommand(ctx, service, invocation),
     })
   })
@@ -1221,9 +1377,10 @@ export async function handleMemoryCommand(ctx, service, /** @type {{rawInput?: u
   try {
     return await runMemoryCommand(ctx, service, invocation)
   } catch (error) {
+    const text = COMMAND_TEXT[service.language] ?? COMMAND_TEXT.en
     if (error instanceof MemoryError) return { kind: 'error', text: `memory ${String(error.code)}: ${error.message}` }
     const message = error instanceof Error ? error.message : String(error)
-    return { kind: 'error', text: `memory 命令失败：${message}` }
+    return { kind: 'error', text: text.commandFailed(message) }
   }
 }
 
@@ -1235,10 +1392,11 @@ export async function handleMemoryCommand(ctx, service, /** @type {{rawInput?: u
  * @returns {Promise<{kind: 'success' | 'error', text: string}>}。
  */
 async function runMemoryCommand(ctx, service, invocation) {
+  const text = COMMAND_TEXT[service.language] ?? COMMAND_TEXT.en
   const raw = String(invocation?.rawInput ?? '').trim()
   const [verb, ...rest] = raw.split(/\s+/)
   if (verb === undefined || verb.length === 0) {
-    return { kind: 'success', text: '用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit' }
+    return { kind: 'success', text: text.usage }
   }
   switch (verb) {
     case 'list': {
@@ -1246,82 +1404,107 @@ async function runMemoryCommand(ctx, service, invocation) {
         { limit: service.commandListLimit },
         { sessionId: /** @type {string | undefined} */ (invocation?.agent?.session?.id), session: invocation?.agent?.session },
       )
-      if (total === 0) return { kind: 'success', text: '记忆为空。' }
-      const note = truncated ? `（共 ${total} 条，显示前 ${entries.length} 条）` : `（${total} 条）`
-      return { kind: 'success', text: `记忆条目${note}：\n${entries.map(renderEntryLine).join('\n')}` }
+      if (total === 0) return { kind: 'success', text: text.memoryEmpty }
+      const header = truncated ? text.entries(total, entries.length) : text.entriesFull(total)
+      return { kind: 'success', text: `${header}\n${entries.map(renderEntryLine).join('\n')}` }
     }
     case 'query': {
-      const text = rest.join(' ')
-      if (text.length === 0) return { kind: 'error', text: 'query 需要一个关键词：/memory query <词>' }
+      const query = rest.join(' ')
+      if (query.length === 0) return { kind: 'error', text: text.queryNeedsWord }
       const { entries, total, truncated } = service.query(
-        { text, limit: service.commandListLimit },
+        { text: query, limit: service.commandListLimit },
         { sessionId: /** @type {string | undefined} */ (invocation?.agent?.session?.id), session: invocation?.agent?.session },
       )
-      if (total === 0) return { kind: 'success', text: `没有条目包含「${text}」。` }
-      const note = truncated ? `（共 ${total} 条，显示前 ${entries.length} 条）` : `（${total} 条）`
-      return { kind: 'success', text: `命中${note}：\n${entries.map(renderEntryLine).join('\n')}` }
+      if (total === 0) return { kind: 'success', text: text.noMatch(query) }
+      const header = truncated ? text.matches(total, entries.length) : text.matchesFull(total)
+      return { kind: 'success', text: `${header}\n${entries.map(renderEntryLine).join('\n')}` }
     }
     case 'budgets': {
       const rows = service.budgets()
-      return { kind: 'success', text: `预算用量：\n${rows.map((/** @type {{track: string, scope: string, used: number, limit: number}} */ row) => `- ${row.track}/${row.scope}: ${row.used}/${row.limit}`).join('\n')}` }
+      return { kind: 'success', text: `${text.budgets}\n${rows.map((/** @type {{track: string, scope: string, used: number, limit: number}} */ row) => `- ${row.track}/${row.scope}: ${row.used}/${row.limit}`).join('\n')}` }
     }
     case 'proposals': {
       const [sub, id] = rest
       if (sub === undefined) {
         const rows = /** @type {MemoryProposal[]} */ (service.store.proposalList('pending', 50))
-        if (rows.length === 0) return { kind: 'success', text: '暂无待审批记忆提案。' }
-        return { kind: 'success', text: `待审批提案（${rows.length} 条）：\n${rows.map((proposal) => `- [${proposal.id}] ${proposal.track}/${proposal.scope}: ${proposal.text.length > 120 ? `${proposal.text.slice(0, 120)}…` : proposal.text}`).join('\n')}\n审批：/memory proposals approve <id>；驳回：/memory proposals dismiss <id>` }
+        if (rows.length === 0) return { kind: 'success', text: text.proposalsNone }
+        const lines = rows.map((proposal) => `- [${proposal.id}] ${proposal.track}/${proposal.scope}: ${proposal.text.length > 120 ? `${proposal.text.slice(0, 120)}…` : proposal.text}`).join('\n')
+        return { kind: 'success', text: text.proposalsList(rows.length, lines) }
       }
-      if (id === undefined) return { kind: 'error', text: 'proposals 用法：/memory proposals | proposals approve <id> | proposals dismiss <id>' }
+      if (id === undefined) return { kind: 'error', text: text.proposalsUsage }
       if (sub === 'approve') {
         const proposal = /** @type {MemoryProposal | null} */ (service.store.proposalList('pending', 1000).find((/** @type {MemoryProposal} */ candidate) => candidate.id === id) ?? null)
         if (proposal === null) {
-          return { kind: 'error', text: `proposal ${JSON.stringify(id)} 不是待审批提案（可能已裁决或不存在）` }
+          return { kind: 'error', text: text.proposalNotPending(id) }
         }
         const result = await service.add(
           { track: proposal.track, scope: proposal.scope, text: proposal.text, source: 'proposal', workspaceKey: proposal.workspaceKey, agentKey: proposal.agentKey },
           { agent: invocation?.agent, gate: makeCommandGate(ctx, invocation) },
         )
         service.store.proposalDecide(id, 'approved')
-        return { kind: 'success', text: `已批准提案并写入记忆（${proposal.track}/${proposal.scope}）：${result.entry.text}\n该层用量：${result.usage.used}/${result.usage.limit}` }
+        return { kind: 'success', text: text.proposalApproved(proposal.track, proposal.scope, result.entry.text, result.usage.used, result.usage.limit) }
       }
       if (sub === 'dismiss') {
         service.store.proposalDecide(id, 'dismissed')
-        return { kind: 'success', text: `已驳回提案 ${id}。` }
+        return { kind: 'success', text: text.proposalDismissed(id) }
       }
-      return { kind: 'error', text: 'proposals 用法：/memory proposals | proposals approve <id> | proposals dismiss <id>' }
+      return { kind: 'error', text: text.proposalsUsage }
     }
     case 'audit': {
       const rows = service.store.auditList(service.commandAuditLimit)
-      if (rows.length === 0) return { kind: 'success', text: '审计为空。' }
-      return { kind: 'success', text: `最近审计（${rows.length} 条）：\n${rows.map((/** @type {{ts: number, action: string, track?: string | null, scope?: string | null, outcome?: string | null, source?: string | null}} */ row) => `- ${new Date(row.ts).toISOString()} ${row.action}${row.track ? ` ${row.track}/${row.scope}` : ''} ${row.outcome ?? ''} (${row.source ?? ''})`.trim()).join('\n')}` }
+      if (rows.length === 0) return { kind: 'success', text: text.auditEmpty }
+      return { kind: 'success', text: `${text.audit(rows.length)}\n${rows.map((/** @type {{ts: number, action: string, track?: string | null, scope?: string | null, outcome?: string | null, source?: string | null}} */ row) => `- ${new Date(row.ts).toISOString()} ${row.action}${row.track ? ` ${row.track}/${row.scope}` : ''} ${row.outcome ?? ''} (${row.source ?? ''})`.trim()).join('\n')}` }
+    }
+    case 'export': {
+      if (rest.length > 0) return { kind: 'error', text: text.exportUsage }
+      const entries = service.store.listEntries()
+      const payload = {
+        plugin: 'dsh-memento',
+        schema: 'memory-export-v1',
+        exportedAt: new Date().toISOString(),
+        budgets: service.budgets(),
+        entries: entries.map((/** @type {MemoryEntry} */ entry) => ({
+          id: entry.id,
+          track: entry.track,
+          scope: entry.scope,
+          workspaceKey: entry.workspaceKey,
+          agentKey: entry.agentKey,
+          text: entry.text,
+          source: entry.source,
+          createdAt: entry.createdAt,
+          updatedAt: entry.updatedAt,
+          lastRecalled: entry.lastRecalled,
+          recallCount: entry.recallCount,
+        })),
+      }
+      return { kind: 'success', text: JSON.stringify(payload, null, 2) }
     }
     case 'add': {
       const parsed = parseCommandWrite(rest, true)
       if (parsed.kind === 'error') {
-        return { kind: 'error', text: 'add 需要文本：/memory add [--track=user|agent] [--scope=user-global|workspace] <文本>' }
+        return { kind: 'error', text: text.addNeedsText }
       }
       const write = { agent: invocation?.agent, gate: makeCommandGate(ctx, invocation) }
       const result = await service.add(
         { track: parsed.track, scope: parsed.scope, text: parsed.text, source: 'command' },
         write,
       )
-      return { kind: 'success', text: `已添加（${parsed.track}/${parsed.scope}）：${result.entry.text}\n该层用量：${result.usage.used}/${result.usage.limit}` }
+      return { kind: 'success', text: text.added(parsed.track, parsed.scope, result.entry.text, result.usage.used, result.usage.limit) }
     }
     case 'remove': {
       const parsed = parseCommandWrite(rest, true)
-      if (parsed.kind === 'error') return { kind: 'error', text: `remove 需要一个唯一子串：/memory remove [--track=user|agent] [--scope=user-global|workspace] <唯一子串>` }
+      if (parsed.kind === 'error') return { kind: 'error', text: text.removeNeedsSubstring }
       const result = await service.remove(
         { track: parsed.track, scope: parsed.scope, match: parsed.text },
         { agent: invocation?.agent, gate: makeCommandGate(ctx, invocation) },
       )
-      return { kind: 'success', text: `已删除（${parsed.track}/${parsed.scope}）：${result.entry.text}\n该层用量：${result.usage.used}/${result.usage.limit}` }
+      return { kind: 'success', text: text.removed(parsed.track, parsed.scope, result.entry.text, result.usage.used, result.usage.limit) }
     }
     case 'consolidate': {
       const joined = rest.join(' ')
       const separator = joined.indexOf(' => ')
       if (separator === -1) {
-        return { kind: 'error', text: 'consolidate 用法：/memory consolidate [--track=user|agent] [--scope=user-global|workspace] <唯一子串1> [<唯一子串2> ...] => <新文本>' }
+        return { kind: 'error', text: text.consolidateUsage }
       }
       let track = 'user'
       let scope = 'workspace'
@@ -1333,17 +1516,17 @@ async function runMemoryCommand(ctx, service, invocation) {
         if (scopeMatch !== null) { scope = scopeMatch[1]; continue }
         if (part.length > 0) matches.push(part)
       }
-      const text = joined.slice(separator + 4).trim()
-      if (matches.length === 0 || matches.length > 20) return { kind: 'error', text: 'consolidate 需要 1..20 个唯一子串（=> 左侧）' }
-      if (text.length === 0) return { kind: 'error', text: 'consolidate 需要新文本（=> 右侧）' }
+      const newText = joined.slice(separator + 4).trim()
+      if (matches.length === 0 || matches.length > 20) return { kind: 'error', text: text.consolidateNeedsMatches }
+      if (newText.length === 0) return { kind: 'error', text: text.consolidateNeedsText }
       const result = await service.consolidate(
-        { track, scope, matches, text, source: 'command' },
+        { track, scope, matches, text: newText, source: 'command' },
         { agent: invocation?.agent, gate: makeCommandGate(ctx, invocation) },
       )
-      return { kind: 'success', text: `已整合（${track}/${scope}）：删除 ${result.removed.length} 条，新增 1 条。\n新条目：${result.entry.text}\n该层用量：${result.usage.used}/${result.usage.limit}` }
+      return { kind: 'success', text: text.consolidated(track, scope, result.removed.length, result.entry.text, result.usage.used, result.usage.limit) }
     }
     default:
-      return { kind: 'error', text: `未知子命令「${verb}」。用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit` }
+      return { kind: 'error', text: text.unknownVerb(verb) }
   }
 }
 
@@ -1378,20 +1561,39 @@ function renderEntryLine(/** @type {{track: string, scope: string, workspaceKey?
  * @param {MemoryService} service - ctx.memory。
  * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文（查 sessionQuery）。
  * @param {{historyLimitDefault: number, snippetCap: number, snippetChars: number, windowDays: number}} recall - Config.recall（默认值）。
+ * @param {'en'|'zh'} [language] - 'en' | 'zh'。
  * @returns {object} 工具定义。
  */
-export function makeMemoryRecallTool(service, ctx, recall) {
-  return defineTool({
-    name: 'memory_recall',
-    description: [
+export function makeMemoryRecallTool(service, ctx, recall, language = 'en') {
+  const description = language === 'zh'
+    ? [
+      '对记忆与会话历史的两段式召回：返回 (1) dsh-memento 库中与查询匹配的有界记忆条目，以及 (2) 经 session-query 服务的近期会话历史匹配。',
+      '当仅凭记忆查询有歧义、或答案可能在更早的对话而非记忆中时使用。普通记忆查询请优先用 memory 工具的 action=query。',
+      '查询对记忆条目是大小写不敏感子串（与 memory 工具一致），对会话历史是大小写不敏感语义文本扫描。',
+    ].join('\n')
+    : [
       'Two-part recall over memory and session history: returns (1) bounded memory entries matching the query from the dsh-memento store, and (2) recent session-history matches via the session-query service.',
       'Use when a memory query alone is ambiguous or when the answer may live in an earlier conversation rather than in memory. For plain memory lookup prefer the memory tool with action=query.',
       'The query is a case-insensitive substring for memory entries (same as the memory tool) and a case-insensitive semantic-text scan for session history.',
-    ].join('\n'),
+    ].join('\n')
+  const parameters = language === 'zh'
+    ? {
+        query: '两个数据源的大小写不敏感检索词。',
+        memoryLimit: '最多返回的记忆条目数（默认 10）。',
+        historyLimit: '最多扫描的历史会话数（默认 8）。',
+      }
+    : {
+        query: 'Case-insensitive search terms for both sources.',
+        memoryLimit: 'Max memory entries to return (default 10).',
+        historyLimit: 'Max history sessions to scan (default 8).',
+      }
+  return defineTool({
+    name: 'memory_recall',
+    description,
     parameters: {
-      query: { type: 'string', required: true, description: 'Case-insensitive search terms for both sources.' },
-      memoryLimit: { type: 'integer', description: 'Max memory entries to return (default 10).' },
-      historyLimit: { type: 'integer', description: 'Max history sessions to scan (default 8).' },
+      query: { type: 'string', required: true, description: parameters.query },
+      memoryLimit: { type: 'integer', description: parameters.memoryLimit },
+      historyLimit: { type: 'integer', description: parameters.historyLimit },
     },
     output: {
       schema: {
@@ -1446,7 +1648,7 @@ export function makeMemoryRecallTool(service, ctx, recall) {
           },
         },
       },
-      render: renderMemoryRecallResult,
+      render: (/** @type {object} */ _args, /** @type {RecallToolValue} */ value) => renderMemoryRecallResult(_args, value, language),
     },
     execute: /** @type {(args: any, exec: any) => Promise<any>} */ (async (args, exec) => {
       exec.signal.throwIfAborted()
@@ -1538,25 +1740,31 @@ async function recallHistory(ctx, query, limit, snippetCap, snippetChars, signal
 }
 
 /**
- * memory_recall 结果渲染（纯函数）。
+ * memory_recall 结果渲染（纯函数；language 选文案，未知回退 en）。
  * @param {object} _args - 调用参数（未用）。
  * @param {object} value - 规范 JSON 结果。
+ * @param {string} [language] - 'en' | 'zh'。
  * @returns {Array<{type: 'text', text: string}>} 模型可见文本。
  */
-export function renderMemoryRecallResult(/** @type {object} */ _args, /** @type {RecallToolValue} */ value) {
+export function renderMemoryRecallResult(/** @type {object} */ _args, /** @type {RecallToolValue} */ value, language = 'en') {
+  const zh = language === 'zh'
   const memoryLine = value.memory.total === 0
-    ? 'memory: no entries matched'
-    : `memory: ${value.memory.entries.length} match${value.memory.entries.length === 1 ? '' : 'es'}${value.memory.truncated ? ` (of ${value.memory.total})` : ''}\n${value.memory.entries.map((entry) => `- [${entry.track}/${entry.scope}] ${entry.text}`).join('\n')}`
+    ? (zh ? 'memory：没有条目命中' : 'memory: no entries matched')
+    : (zh
+        ? `memory：${value.memory.entries.length} 条命中${value.memory.truncated ? `（共 ${value.memory.total} 条）` : ''}\n${value.memory.entries.map((entry) => `- [${entry.track}/${entry.scope}] ${entry.text}`).join('\n')}`
+        : `memory: ${value.memory.entries.length} match${value.memory.entries.length === 1 ? '' : 'es'}${value.memory.truncated ? ` (of ${value.memory.total})` : ''}\n${value.memory.entries.map((entry) => `- [${entry.track}/${entry.scope}] ${entry.text}`).join('\n')}`)
   const historyLines = []
   if (!value.history.available) {
     historyLines.push(value.history.error === undefined
-      ? 'history: session-query unavailable in this profile'
-      : `history: session-query failed (${value.history.error})`)
+      ? (zh ? 'history：本 profile 未提供 session-query 服务' : 'history: session-query unavailable in this profile')
+      : (zh ? `history：session-query 失败（${value.history.error}）` : `history: session-query failed (${value.history.error})`))
   } else if (value.history.sessions.length === 0) {
-    historyLines.push('history: no matching sessions')
+    historyLines.push(zh ? 'history：没有匹配的会话' : 'history: no matching sessions')
   } else {
     for (const session of value.history.sessions) {
-      historyLines.push(`- session ${session.sessionId}: ${session.matches} event match${session.matches === 1 ? '' : 'es'}`)
+      historyLines.push(zh
+        ? `- 会话 ${session.sessionId}：${session.matches} 条事件命中`
+        : `- session ${session.sessionId}: ${session.matches} event match${session.matches === 1 ? '' : 'es'}`)
       for (const snippet of session.snippets) historyLines.push(`    ${snippet.replaceAll('\n', ' ')}`)
     }
   }
@@ -1592,7 +1800,7 @@ export function registerWebRoutes(ctx, service, options) {
             ...filter,
             ...(limit === undefined ? {} : { limit }),
           })
-          sendPanelJson(res, 200, { entries, total, truncated, budgets: service.budgets() })
+          sendPanelJson(res, 200, { entries, total, truncated, budgets: service.budgets(), language: service.language })
         } catch (error) {
           sendPanelJson(res, 500, { error: error instanceof Error ? error.message : String(error) })
         }
@@ -1606,7 +1814,7 @@ export function registerWebRoutes(ctx, service, options) {
           const url = new URL(req.url ?? '', 'http://localhost')
           const raw = Number(url.searchParams.get('limit') ?? String(options.panelAuditLimit))
           const limit = Number.isInteger(raw) && raw > 0 ? Math.min(raw, PANEL_AUDIT_CEILING) : options.panelAuditLimit
-          sendPanelJson(res, 200, { rows: service.store.auditList(limit) })
+          sendPanelJson(res, 200, { rows: service.store.auditList(limit), language: service.language })
         } catch (error) {
           sendPanelJson(res, 500, { error: error instanceof Error ? error.message : String(error) })
         }
@@ -1618,7 +1826,7 @@ export function registerWebRoutes(ctx, service, options) {
       handler: async (/** @type {{url?: string}} */ _req, /** @type {PanelResponse} */ res) => {
         try {
           // 只读：仅列出 pending 提案；approve/dismiss 走 /memory 命令（用户动作 + 审批门）。
-          sendPanelJson(res, 200, { proposals: service.store.proposalList('pending', 50) })
+          sendPanelJson(res, 200, { proposals: service.store.proposalList('pending', 50), language: service.language })
         } catch (error) {
           sendPanelJson(res, 500, { error: error instanceof Error ? error.message : String(error) })
         }

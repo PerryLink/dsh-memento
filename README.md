@@ -85,6 +85,7 @@ Every field is a validated Schemastery `Config`; invalid values fail loudly at l
 | `budgets.agent.userGlobal` / `budgets.agent.workspace` | `4000` / `4000` | hard char budget per layer of the agent track |
 | `writePolicy` | `'ask'` | `'ask'` = user approval; `'auto'` = allow through (approval source recorded); `'off'` = reject. Model-invisible |
 | `writePolicies` | `{}` | per-track/scope or per-source overrides: keys `user/workspace`, `agent/user-global`, `source:claude`, … → `ask`/`auto`/`off`; unmatched falls back to `writePolicy` |
+| `language` | `'en'` | model-visible text and command output language: `'en'` (default) or `'zh'` — tool descriptions, frozen snapshot, `/memory` command, and web panel all follow it |
 | `snapshotOrder` | `-50` | snapshot section order: after harness identity (`-100`), before persona (`0`) |
 | `maxEntriesPerQuery` | `20` | default per-query result cap (explicit `limit` allowed, hard-capped at 1000) |
 | `commandListLimit` | `50` | entries rendered per `/memory list` / `query` command |
@@ -99,9 +100,23 @@ Every field is a validated Schemastery `Config`; invalid values fail loudly at l
 
 - **`memory`** — add/replace/remove/consolidate/query with Save/Skip guidance embedded in the description (save user preferences, corrections, environment facts, conventions, lessons; skip trivia, re-derivable facts, dumps, one-off paths). Writes ride the approval gate; reads are free; replace/remove target a **unique substring** (ambiguous matches fail with the candidate list); consolidate merges 1..20 entries into one with a single approval and one atomic write.
 - **`memory_recall`** — two-part recall: bounded memory matches **plus** recent session-history matches via `ctx.sessionQuery` (degrades gracefully to memory-only where the service is absent).
-- **`/memory`** — user-triggered command (not a model turn): `list` · `query <word>` · `add [--track=user|agent] [--scope=user-global|workspace] <text>` · `remove [flags] <substring>` · `consolidate [flags] <substring...> => <text>` · `proposals [approve|dismiss <id>]` · `budgets` · `audit`. Command writes ride the same waterfall + policy; audit lands in the plugin audit table + `command/done`.
+- **`/memory`** — user-triggered command (not a model turn): `list` · `query <word>` · `add [--track=user|agent] [--scope=user-global|workspace] <text>` · `remove [flags] <substring>` · `consolidate [flags] <substring...> => <text>` · `proposals [approve|dismiss <id>]` · `budgets` · `audit` · `export`. Command writes ride the same waterfall + policy; audit lands in the plugin audit table + `command/done`. `export` is read-only and dumps all entries + budgets as one JSON document (backup / migration).
 - **Auto-capture proposals** — after a successful session compaction, the summary lands as a pending memory proposal (`agent/workspace`); approving writes it through the approval gate, dismissing drops it. Pending proposals appear in the frozen snapshot and the panel.
 - **Web panel** — zero-build `dsh.client` drawer: browse entries by track/layer, search, budget bars, audit tail. Read-only by design: writes and approval happen through the `memory` tool and the built-in approval UI.
+
+## 🎓 What we learned from the terminal memories
+
+dsh-memento is not a port of Claude Code, Codex, or Hermes — but its design deliberately absorbed the parts each of them got right, and refused the parts that hurt:
+
+| Terminal memory | What it got right | What dsh-memento adopted |
+| --- | --- | --- |
+| **Claude Code** — `CLAUDE.md` | hierarchical **plain-text memory files** (user-level → project-level) that are human-readable, human-editable, and merged automatically into every session — memory you can read and fix yourself | plain-text entries; `user-global` / `workspace` layers merged per session; a store you can browse, `export`, and audit — transparency as a feature |
+| **Codex** — `AGENTS.md` | **per-directory scoped instructions** auto-discovered and injected with zero model friction — locality beats volume, no tool call needed to "load" memory | `workspace` layer keyed by the session's cwd (Windows case-insensitive); the frozen snapshot is injected automatically at session start |
+| **Hermes** — `memory.md` | **proactive memory saves** (save/update/delete) and, in [issue #48181](https://github.com/NousResearch/hermes-agent/issues/48181), the security lesson that a gate enforced only in the tool layer is bypassable by late tool injection — enforce it where every write path meets | the `memory` tool with explicit Save/Skip guidance + approval-gated auto-capture proposals; the approval gate lives **inside** `ctx.memory`'s write methods, not in the tool layer |
+
+Sources: [Claude Code memory](https://code.claude.com/docs/en/memory) · [Codex AGENTS.md](https://developers.openai.com/codex/cli/agents-md) · [Hermes memory](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/memory.md) · [Hermes #48181](https://github.com/NousResearch/hermes-agent/issues/48181).
+
+And the parts we deliberately refused: hidden auto-summarization into model-private state (compaction summaries here become **pending proposals** that wait for a human approve/dismiss), warehouse/vector-store ambitions, and any write that lacks a human-visible approval or audit trail. Also adopted: Hermes's documented caveat that two processes sharing one home directory write the same memory file — see Security boundaries.
 
 ## 🆚 How it's different
 
@@ -134,7 +149,7 @@ The name is **`dsh-memento`** (free on npm and GitHub). Not `dsh-recall` (confus
 
 ```sh
 npm install
-npm test                # node --test: 74 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel
+npm test                # node --test: 103 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel
 npm run typecheck       # tsc --checkJs gate over index.mjs / lib / scripts
 npm run check:coverage  # line-coverage gate: lib ≥90%, index.mjs ≥85%, all files ≥90%
 npm run check:readmes   # five-language README consistency gate

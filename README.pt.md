@@ -85,6 +85,7 @@ Todo campo é um `Config` Schemastery validado; valores inválidos falham ruidos
 | `budgets.agent.userGlobal` / `budgets.agent.workspace` | `4000` / `4000` | orçamento rígido de caracteres por camada da trilha agent |
 | `writePolicy` | `'ask'` | `'ask'` = aprovação do usuário; `'auto'` = permite passar (fonte da aprovação registrada); `'off'` = rejeita. Invisível ao modelo |
 | `writePolicies` | `{}` | substituições por trilha/camada ou por fonte: chaves `user/workspace`, `agent/user-global`, `source:claude`, … → `ask`/`auto`/`off`; sem correspondência cai para `writePolicy` |
+| `language` | `'en'` | idioma do texto visível ao modelo e da saída do comando: `'en'` (padrão) ou `'zh'` — descrições de ferramentas, snapshot congelado, comando `/memory` e painel web o seguem |
 | `snapshotOrder` | `-50` | ordem da seção do snapshot: depois da identidade do harness (`-100`), antes da persona (`0`) |
 | `maxEntriesPerQuery` | `20` | limite padrão de resultados por consulta (`limit` explícito permitido, teto rígido 1000) |
 | `commandListLimit` | `50` | entradas exibidas por comando `/memory list` / `query` |
@@ -99,9 +100,23 @@ Todo campo é um `Config` Schemastery validado; valores inválidos falham ruidos
 
 - **`memory`** — add/replace/remove/consolidate/query com orientação de Salvar/Pular embutida na descrição (salve preferências do usuário, correções, fatos do ambiente, convenções, lições; pule trivialidades, fatos rederiváveis, despejos, caminhos de uso único). Escritas passam pelo portão de aprovação; leituras são livres; replace/remove miram uma **substring única** (correspondências ambíguas falham com a lista de candidatos); consolidate mescla 1..20 entradas em uma com uma única aprovação e uma escrita atômica.
 - **`memory_recall`** — recuperação em duas partes: correspondências de memória limitadas **mais** correspondências recentes do histórico da sessão via `ctx.sessionQuery` (degrada graciosamente para somente memória onde o serviço está ausente).
-- **`/memory`** — comando acionado pelo usuário (não um turno do modelo): `list` · `query <word>` · `add [--track=user|agent] [--scope=user-global|workspace] <text>` · `remove [flags] <substring>` · `consolidate [flags] <substring...> => <text>` · `proposals [approve|dismiss <id>]` · `budgets` · `audit`. Escritas por comando passam pela mesma cascata + política; a auditoria cai na tabela de auditoria do plugin + `command/done`.
+- **`/memory`** — comando acionado pelo usuário (não um turno do modelo): `list` · `query <word>` · `add [--track=user|agent] [--scope=user-global|workspace] <text>` · `remove [flags] <substring>` · `consolidate [flags] <substring...> => <text>` · `proposals [approve|dismiss <id>]` · `budgets` · `audit` · `export`. Escritas por comando passam pela mesma cascata + política; a auditoria cai na tabela de auditoria do plugin + `command/done`. `export` é somente leitura e despeja todas as entradas + orçamentos como um documento JSON (backup / migração).
 - **Propostas auto-capturadas** — após uma compactação de sessão bem-sucedida, o resumo vira uma proposta de memória pendente (`agent/workspace`); aprovar a escreve pelo portão de aprovação, descartar a remove. Propostas pendentes aparecem no snapshot congelado e no painel.
 - **Painel Web** — gaveta `dsh.client` sem build: navegue pelas entradas por trilha/camada, pesquise, veja barras de orçamento e o fim da auditoria. Somente leitura por design: escritas e aprovação acontecem pela ferramenta `memory` e pela UI de aprovação embutida.
+
+## 🎓 O que aprendemos com as memórias de terminal
+
+dsh-memento não é um port do Claude Code, do Codex ou do Hermes — mas seu design absorveu deliberadamente as partes que cada um acertou e recusou as partes que machucam:
+
+| Memória de terminal | O que acertou | O que o dsh-memento adotou |
+| --- | --- | --- |
+| **Claude Code** — `CLAUDE.md` | **arquivos de memória em texto puro** hierárquicos (nível usuário → nível projeto), legíveis e editáveis por humanos, e mesclados automaticamente a cada sessão — memória que você mesmo pode ler e corrigir | entradas em texto puro; camadas `user-global` / `workspace` mescladas por sessão; um armazenamento que você pode navegar, `export`ar e auditar — transparência como recurso |
+| **Codex** — `AGENTS.md` | **instruções com escopo por diretório** autodescobertas e injetadas sem fricção do modelo — localidade vale mais que volume; nenhuma chamada de ferramenta é necessária para "carregar" memória | camada `workspace` vinculada ao cwd da sessão (insensível a maiúsculas no Windows); o snapshot congelado é injetado automaticamente no início da sessão |
+| **Hermes** — `memory.md` | **gravações de memória proativas** (salvar/atualizar/apagar) e, na [issue #48181](https://github.com/NousResearch/hermes-agent/issues/48181), a lição de segurança de que um portão imposto apenas na camada de ferramentas é contornável por injeção tardia de ferramentas — imponha-o onde todas as rotas de escrita convergem | a ferramenta `memory` com orientação explícita de Salvar/Pular + propostas de auto-captura com portão de aprovação; o portão de aprovação vive **dentro** dos métodos de escrita de `ctx.memory`, não na camada de ferramentas |
+
+Fontes: [memória do Claude Code](https://code.claude.com/docs/en/memory) · [AGENTS.md do Codex](https://developers.openai.com/codex/cli/agents-md) · [memória do Hermes](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/memory.md) · [Hermes #48181](https://github.com/NousResearch/hermes-agent/issues/48181).
+
+E as partes que recusamos deliberadamente: auto-resumir de forma oculta para estado privado do modelo (aqui os resumos de compactação viram **propostas pendentes** que aguardam um aprovar/descartar humano), ambições de armazém/vetorial, e qualquer escrita sem aprovação ou trilha de auditoria visível ao humano. Também adotamos a ressalva documentada do Hermes: dois processos compartilhando um diretório home escrevem o mesmo arquivo de memória — veja Limites de segurança.
 
 ## 🆚 Como ele é diferente
 
@@ -134,7 +149,7 @@ O nome é **`dsh-memento`** (livre no npm e no GitHub). Não `dsh-recall` (confu
 
 ```sh
 npm install
-npm test                # node --test: 74 testes — orçamento, substring única, política do portão, armazenamento, snapshot, integração com mock-ctx (invariantes S2/S3), comando/recuperação/painel V2
+npm test                # node --test: 103 testes — orçamento, substring única, política do portão, armazenamento, snapshot, integração com mock-ctx (invariantes S2/S3), comando/recuperação/painel V2
 npm run typecheck       # portão tsc --checkJs sobre index.mjs / lib / scripts
 npm run check:coverage  # portão de cobertura de linhas: lib ≥90%, index.mjs ≥85%, todos ≥90%
 npm run check:readmes   # portão de coerência dos cinco README

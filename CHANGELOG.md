@@ -5,7 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] - 2026-08-14
+
+### Added
+
+- `language` config (`'en'` default / `'zh'`): model-visible text, the frozen snapshot, `/memory` command output, and the web panel all switch languages; invalid values fail loudly at load.
+- `/memory export` subcommand: read-only JSON dump of all entries + budgets (backup / migration / transparency).
+- Web panel renders `en`/`zh` labels according to the plugin's `language` (the language travels with the `/api/memento/*` responses).
+- Bilingual `memory_recall` tool description, parameter descriptions, and result renderer.
+- New README section "What we learned from the terminal memories" (Claude Code / Codex / Hermes), mirrored across all five languages.
+- `commandListLimit` (default 50) and `commandAuditLimit` (default 10) config fields for the `/memory` command surface.
+- Coverage gate (`npm run check:coverage`: lib ≥90%, index.mjs ≥85%, all files ≥90%) and a weekly `next`-rc compatibility probe workflow.
+- Peer dependency ranges widened to `>=0.1.0-rc.6` so later harness rc releases resolve without a coordinated release.
+- Package metadata (`repository`/`homepage`/`bugs`), `types` conditions on the `exports` map, and this changelog.
 
 ### Fixed
 
@@ -16,13 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Audit rows record the real decision source (`via approval, writePolicy …` vs `via write gate`) instead of always labeling the configured policy.
 - `memory_recall` description now states the true case semantics (case-sensitive for memory entries, case-insensitive for session history).
 - `maxEntriesPerQuery` is documented and enforced as the default result cap; explicit `limit` values are hard-capped at 1000 by the provider.
-
-### Added
-
-- `commandListLimit` (default 50) and `commandAuditLimit` (default 10) config fields for the `/memory` command surface.
-- Coverage gate (`npm run check:coverage`: lib ≥90%, index.mjs ≥85%, all files ≥90%) and a weekly `next`-rc compatibility probe workflow.
-- Peer dependency ranges widened to `>=0.1.0-rc.6` so later harness rc releases resolve without a coordinated release.
-- Package metadata (`repository`/`homepage`/`bugs`), `types` conditions on the `exports` map, and this changelog.
 
 ## [0.1.0] - 2026-08-14
 

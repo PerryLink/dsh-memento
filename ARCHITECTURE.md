@@ -106,6 +106,12 @@ memory 工具(add)
     - 可见性：`agent_key === '' || === 会话 agentKey`，且 scope 规则不变；预算仍按 track×scope 计（agentKey 不新增预算维度）。
     - 工具不暴露 agentKey 参数——由写方 session 自动决定，模型不可选，避免污染。
 
+12. **语言面（Config.language，en/zh）与错误文案的分界**。
+    - 随语言切换的只有**模型可见/命令/面板**文案：`memory`/`memory_recall` 工具描述与参数说明、冻结快照（`lib/strings.mjs` 词表）、`/memory` 命令输出、Web 面板标签（语言经 `/api/memento/*` 响应的 `language` 字段下发）。en 为源文，zh 为对应译文；未知语言回退 en。
+    - **错误信息保持英文**：结构化错误码（`INVALID_INPUT`、`BUDGET_EXCEEDED`…）与 message 是跨语言的审计契约，模型按 code 分支（整合后重试等），不受 language 影响。
+    - 非法 `language` 值在加载期响亮失败（schema 层 union + apply 直调路径双保险）。默认 `en` 与 DSH 核心提示一致。
+    - `/memory export` 是纯只读路径（条目 + 预算的 JSON 导出，备份/迁移/透明性），不落审计、不走审批门——与 Claude Code/Codex"记忆是用户可读的纯文本"精神对齐。
+
 ## V3 协同（F12/F13，接口已就位，文档对齐）
 
 ### F12：seed 与 dsh-claude-move 的对接方式
@@ -123,4 +129,4 @@ memory 工具(add)
 
 ## 配置面（无硬编码 tunable）
 
-全部字段可 cordis.yml 覆盖，schema 见 `index.mjs` 的 `Config`：`enabled` / `dbPath` / `budgets`（user/agent × userGlobal/workspace）/ `writePolicy` / `snapshotOrder` / `maxEntriesPerQuery`。非法值加载期响亮失败。
+全部字段可 cordis.yml 覆盖，schema 见 `index.mjs` 的 `Config`；完整字段表（`enabled` / `dbPath` / `budgets` / `writePolicy` / `writePolicies` / `language` / `snapshotOrder` / `maxEntriesPerQuery` / `commandListLimit` / `commandAuditLimit` / `recall.*` / `panelEntriesLimit` / `panelAuditLimit` / `auditRetentionDays` / `proposals.*`）以 README 配置表为准，本文件不再逐项复制以免漂移。非法值加载期响亮失败。

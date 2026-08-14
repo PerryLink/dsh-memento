@@ -48,6 +48,7 @@ function mount(opts = {}) {
     maxEntriesPerQuery: opts.maxEntriesPerQuery ?? 20,
     commandListLimit: opts.commandListLimit ?? 50,
     commandAuditLimit: opts.commandAuditLimit ?? 10,
+    language: opts.language ?? 'zh',
     recall: opts.recall ?? { historyLimitDefault: 8, snippetCap: 5, snippetChars: 300, windowDays: 30 },
     panelEntriesLimit: 200,
     panelAuditLimit: 20,
@@ -202,6 +203,84 @@ test('F11：sessionQuery 缺失时 memory_recall 降级为纯记忆结果（不�
   assert.deepEqual(result.history.sessions, [])
 })
 
+test('F10：/memory export 只读 JSON 导出全部条目 + 预算（备份/迁移用）', async (t) => {
+  const mounted = mount()
+  t.after(() => teardown(mounted))
+  const { mock } = mounted
+  const service = mock.services.get('memory')
+  await service.add(
+    { track: 'agent', scope: 'workspace', text: '导出条目甲' },
+    { agent: makeAgent(makeSession({ id: 's-exp' })) },
+  )
+  const invocation = { agent: makeAgent(makeSession()), signal: new AbortController().signal }
+  const exported = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'export' })
+  assert.equal(exported.kind, 'success')
+  const payload = JSON.parse(exported.text)
+  assert.equal(payload.plugin, 'dsh-memento')
+  assert.equal(payload.schema, 'memory-export-v1')
+  assert.equal(payload.entries.length, 1)
+  assert.equal(payload.entries[0].text, '导出条目甲')
+  assert.equal(payload.entries[0].track, 'agent')
+  assert.equal(payload.entries[0].source, 'dsh-memento')
+  assert.ok(Array.isArray(payload.budgets))
+  assert.equal(payload.budgets.length, 4)
+  // export 是只读路径：不产生任何审计行
+  const audit = service.store.auditList()
+  assert.equal(audit.length, 1, '仅写入本身有审计；export 不落审计')
+  assert.equal(audit[0].action, 'add')
+  // 带多余参数时报用法
+  const usage = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'export extra' })
+  assert.equal(usage.kind, 'error')
+})
+
+test('F10 语言面：language=en 命令输出英文（默认），zh 输出中文；recall 渲染随语言', async (t) => {
+  const en = mount({ language: 'en' })
+  t.after(() => teardown(en))
+  const enService = en.mock.services.get('memory')
+  await enService.add(
+    { track: 'agent', scope: 'workspace', text: '项目约定：测试先于实现' },
+    { agent: makeAgent(makeSession({ id: 's-en' })) },
+  )
+  const invocation = { agent: makeAgent(makeSession()), signal: new AbortController().signal }
+  const list = await handleMemoryCommand(en.mock.ctx, enService, { ...invocation, rawInput: 'list' })
+  assert.ok(list.text.includes('Memory entries (1):'), 'en 命令输出')
+  const query = await handleMemoryCommand(en.mock.ctx, enService, { ...invocation, rawInput: 'query 测试' })
+  assert.ok(query.text.includes('Matches (1):'))
+  const zh = mount({ language: 'zh' })
+  t.after(() => teardown(zh))
+  const zhService = zh.mock.services.get('memory')
+  await zhService.add(
+    { track: 'agent', scope: 'workspace', text: '项目约定：测试先于实现' },
+    { agent: makeAgent(makeSession({ id: 's-zh' })) },
+  )
+  const zhList = await handleMemoryCommand(zh.mock.ctx, zhService, { ...invocation, rawInput: 'list' })
+  assert.ok(zhList.text.includes('记忆条目（1 条）：'), 'zh 命令输出')
+  // memory_recall 工具描述与渲染随语言
+  const enRecall = en.mock.tools.find((t) => t.name === 'memory_recall')
+  const zhRecall = zh.mock.tools.find((t) => t.name === 'memory_recall')
+  assert.ok(enRecall.description.includes('Two-part recall over memory and session history'))
+  assert.ok(zhRecall.description.includes('两段式召回'))
+  assert.ok(enRecall.parameters.properties.query.description.includes('Case-insensitive search terms'))
+  assert.ok(zhRecall.parameters.properties.query.description.includes('大小写不敏感检索词'))
+  const value = {
+    ok: true,
+    memory: { entries: [{ id: 'x', track: 'user', scope: 'workspace', text: '条目' }], total: 1, truncated: false },
+    history: { available: false, sessions: [] },
+  }
+  const enRendered = renderMemoryRecallResult({}, value, 'en')
+  const zhRendered = renderMemoryRecallResult({}, value, 'zh')
+  assert.ok(enRendered[0].text.includes('memory: 1 match'))
+  assert.ok(enRendered[0].text.includes('session-query unavailable in this profile'))
+  assert.ok(zhRendered[0].text.includes('memory：1 条命中'))
+  assert.ok(zhRendered[0].text.includes('未提供 session-query 服务'))
+  // 未知语言回退 en
+  assert.deepEqual(renderMemoryRecallResult({}, value, 'fr'), enRendered)
+  // 命令注册的 description/hint 也随语言
+  assert.ok(en.commands[0].description.includes('View/manage dsh-memento memory'))
+  assert.ok(zh.commands[0].description.includes('查看/管理 dsh-memento 记忆'))
+  assert.ok(zh.commands[0].input.hint.includes('export'))
+})
+
 test('F9：面板路由只读——entries（含预算）与 audit（上限钳制）', async (t) => {
   const routes = []
   const mounted = mount({ webServer: { register(route) { routes.push(route); return () => {} } } })
@@ -224,6 +303,7 @@ test('F9：面板路由只读——entries（含预算）与 audit（上限钳�
   assert.equal(entriesData.total, 1)
   assert.ok(Array.isArray(entriesData.budgets))
   assert.equal(entriesData.budgets.length, 4)
+  assert.equal(entriesData.language, 'zh', '面板路由携带 language 供客户端选文案')
 
   const auditRoute = routes.find((route) => route.path === '/api/memento/audit')
   captured = ''

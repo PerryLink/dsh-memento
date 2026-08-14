@@ -85,6 +85,7 @@ dsh plugin --profile <name> remove dsh-memento       # 卸载：库与会话日�
 | `budgets.agent.userGlobal` / `budgets.agent.workspace` | `4000` / `4000` | agent 轨每层硬字符预算 |
 | `writePolicy` | `'ask'` | `'ask'`=用户审批；`'auto'`=放行但记录审批来源；`'off'`=拒绝。模型不可见 |
 | `writePolicies` | `{}` | 按 track/scope 或来源覆盖：键 `user/workspace`、`agent/user-global`、`source:claude` 等 → `ask`/`auto`/`off`；未命中回退 `writePolicy` |
+| `language` | `'en'` | 模型可见文案与命令输出语言：`'en'`（默认）或 `'zh'`——工具描述、冻结快照、`/memory` 命令、Web 面板全部跟随 |
 | `snapshotOrder` | `-50` | 快照段注入顺序：harness identity(`-100`) 之后、persona(`0`) 之前 |
 | `maxEntriesPerQuery` | `20` | query 默认返回上限（显式 `limit` 可超出，硬钳 1000） |
 | `commandListLimit` | `50` | `/memory list`/`query` 命令单次渲染条目上限 |
@@ -99,9 +100,23 @@ dsh plugin --profile <name> remove dsh-memento       # 卸载：库与会话日�
 
 - **`memory`** —— add/replace/remove/consolidate/query，工具描述内嵌 Save/Skip 行为指引（存用户偏好、纠正、环境事实、项目约定、教训；跳过琐碎事实、可再查的百科知识、大数据转储、一次性路径）。写走审批门，读免费；replace/remove 用**唯一子串**定位（歧义时报候选清单）；consolidate 一次审批 + 一次原子写把 1..20 条整合为一条。
 - **`memory_recall`** —— 两段式召回：有界记忆匹配 **+** 经 `ctx.sessionQuery` 的近期会话历史匹配（服务缺失时优雅降级为纯记忆结果）。
-- **`/memory`** —— 用户触发命令（非模型回合）：`list` · `query <词>` · `add [--track=user|agent] [--scope=user-global|workspace] <文本>` · `remove [选项] <子串>` · `consolidate [选项] <子串...> => <新文本>` · `proposals [approve|dismiss <id>]` · `budgets` · `audit`。命令写走同一 waterfall 与策略；审计落插件审计表 + `command/done`。
+- **`/memory`** —— 用户触发命令（非模型回合）：`list` · `query <词>` · `add [--track=user|agent] [--scope=user-global|workspace] <文本>` · `remove [选项] <子串>` · `consolidate [选项] <子串...> => <新文本>` · `proposals [approve|dismiss <id>]` · `budgets` · `audit` · `export`。命令写走同一 waterfall 与策略；审计落插件审计表 + `command/done`。`export` 只读，把所有条目 + 预算导出为一份 JSON 文档（备份/迁移）。
 - **Auto-capture 提案** —— 会话压缩成功后，摘要落为待审批记忆提案（`agent/workspace`）；approve 经审批门写入记忆，dismiss 丢弃。待审批提案出现在冻结快照与面板中。
 - **Web 面板** —— 零构建 `dsh.client` 抽屉：按轨/层浏览条目、搜索、预算用量条、审计尾。设计上只读：写与审批走 `memory` 工具与内置审批 UI。
+
+## 🎓 向终端记忆们学到的优点
+
+dsh-memento 不是 Claude Code、Codex 或 Hermes 的移植版——但它的设计刻意吸收了这三家各自做对的部分，也刻意拒绝了它们吃过的亏：
+
+| 终端记忆 | 做对了什么 | dsh-memento 吸收了 |
+| --- | --- | --- |
+| **Claude Code** —— `CLAUDE.md` | 分层**纯文本记忆文件**（用户级 → 项目级），人可读、人可改，每个会话自动合并——你能自己读、自己修的记忆 | 纯文本条目；每会话合并 `user-global` / `workspace` 层；可浏览、可 `export`、可审计的库——透明即特性 |
+| **Codex** —— `AGENTS.md` | **按目录作用域的指令**自动发现、零摩擦注入——就近比堆量更重要，加载记忆无需任何工具调用 | `workspace` 层按会话 cwd 隔离（Windows 大小写不敏感）；冻结快照会话启动时自动注入 |
+| **Hermes** —— `memory.md` | **主动记忆保存**（存/改/删），以及 [issue #48181](https://github.com/NousResearch/hermes-agent/issues/48181) 的安全教训：只做在工具层的门会被迟到的工具注入绕过——应把门做在所有写路径的交汇处 | 内嵌 Save/Skip 指引的 `memory` 工具 + 走审批门的 auto-capture 提案；审批门做在 **`ctx.memory` 写方法内部**，不在工具层 |
+
+出处：[Claude Code 记忆](https://code.claude.com/docs/en/memory) · [Codex AGENTS.md](https://developers.openai.com/codex/cli/agents-md) · [Hermes 记忆](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/memory.md) · [Hermes #48181](https://github.com/NousResearch/hermes-agent/issues/48181)。
+
+刻意拒绝的部分：把自动摘要写进模型私有状态的隐藏记忆（本插件把压缩摘要变成**待审批提案**，等人 approve/dismiss）、仓库/向量库野心、以及任何缺少人可见审批或审计痕迹的写入。同时采纳 Hermes 文档的警告：两个进程共用一个 home 目录会写同一份记忆文件——见安全边界。
 
 ## 🆚 与其它记忆插件的差异
 
@@ -134,7 +149,7 @@ dsh plugin --profile <name> remove dsh-memento       # 卸载：库与会话日�
 
 ```sh
 npm install
-npm test                # node --test：74 个测试——预算、唯一子串、审批策略、store、快照、mock ctx 集成（S2/S3 不变量）、V2 命令/召回/面板
+npm test                # node --test：103 个测试——预算、唯一子串、审批策略、store、快照、mock ctx 集成（S2/S3 不变量）、V2 命令/召回/面板
 npm run typecheck       # tsc --checkJs 类型检查门（index.mjs / lib / scripts）
 npm run check:coverage  # 行覆盖率门：lib ≥90%、index.mjs ≥85%、全部 ≥90%
 npm run check:readmes   # 五语 README 一致性门

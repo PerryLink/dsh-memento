@@ -50,6 +50,19 @@ test('同一组内按创建时间升序（旧事实在前）', () => {
   assert.ok(text.indexOf('- older') < text.indexOf('- newer'))
 })
 
+test('language=zh 渲染中文冻结头、分组标题与用量后缀；未知语言回退 en', () => {
+  const entries = [
+    entry({ id: 'u1', track: 'user', scope: 'user-global', text: '偏好中文回复' }),
+    entry({ id: 'a1', track: 'agent', scope: 'workspace', text: '测试先于实现', workspaceKey: '/w' }),
+  ]
+  const zh = renderSnapshot(entries, BUDGETS, [], 'zh')
+  assert.ok(zh.startsWith('[dsh-memento：冻结记忆快照'), 'zh 冻结头')
+  assert.ok(zh.includes('用户画像（全局偏好、沟通风格、雷区） — 6/2000 已用字符'), 'zh 分组标题 + 用量后缀')
+  assert.ok(zh.includes('- 偏好中文回复'))
+  const fallback = renderSnapshot(entries, BUDGETS, [], 'fr')
+  assert.equal(fallback, renderSnapshot(entries, BUDGETS), '未知语言回退 en')
+})
+
 test('空组不渲染（不浪费 token）', () => {
   const entries = [entry({ id: 'a', track: 'user', scope: 'user-global', text: 'x' })]
   const text = renderSnapshot(entries, BUDGETS)
