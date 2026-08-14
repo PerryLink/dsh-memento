@@ -49,7 +49,9 @@
     "@deepseek-ai/schemastery": ">=3.0.0"
   },
   "scripts": {
-    "test": "node --test \"test/*.test.mjs\""
+    "test": "node --test \"test/*.test.mjs\"",
+    "coverage": "node --test --experimental-test-coverage \"test/*.test.mjs\"",
+    "check:readmes": "node scripts/verify-readmes.mjs"
   },
   "keywords": [
     "dsh",
