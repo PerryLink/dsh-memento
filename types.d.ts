@@ -87,8 +87,8 @@ export interface MemoryService {
   /** 每轨每层当前用量与上限。 */
   budgets(): MemoryBudgetRow[]
 
-  /** 子串查询（无审批）；带 sessionId 时记 recalled 审计。 */
-  query(filter?: { track?: MemoryTrack; scope?: MemoryScope; text?: string; limit?: number }, opts?: { sessionId?: string }): MemoryQueryResult
+  /** 子串查询（无审批）；带 sessionId 时记 recalled 审计，带 session 时按已知事件类型自适应派发 memory/recalled。 */
+  query(filter?: { track?: MemoryTrack; scope?: MemoryScope; text?: string; limit?: number }, opts?: { sessionId?: string; session?: unknown }): MemoryQueryResult
 
   /** 新增条目（审批门 + 预算门）。 */
   add(input: MemoryEntryInput, write: MemoryWriteContext): Promise<{ entry: MemoryEntry; usage: MemoryUsage }>

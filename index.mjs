@@ -28,7 +28,6 @@ import {
   AmbiguousMatchError,
   WriteDeniedError,
   NoAgentError,
-  errorToPublic,
 } from './lib/errors.mjs'
 import { checkBudget, budgetReport, budgetLimits, validateBudgets } from './lib/budget.mjs'
 import { buildWriteReason, isMemoryWriteRequest, applyWritePolicy, normalizeWritePolicy } from './lib/gate.mjs'
@@ -147,7 +146,8 @@ export class MemoryService {
   /**
    * 查询条目（无审批；带 sessionId 时记一条 recalled 审计）。
    * @param {object} [filter] - {track, scope, text, limit}。
-   * @param {object} [opts] - {sessionId}。
+   * @param {object} [opts] - {sessionId, session}；session 用于 memory/recalled
+   *   事件的按已知类型自适应派发（与写事件同一 maybeAppendSessionEvent 门）。
    * @returns {{entries: object[], total: number, truncated: boolean}}。
    */
   query(filter = {}, opts = {}) {
@@ -166,6 +166,13 @@ export class MemoryService {
         outcome: 'ok',
         source: this.sourceLabel,
         sessionId: opts.sessionId,
+      })
+    }
+    if (opts.session !== undefined && opts.session !== null) {
+      maybeAppendSessionEvent(opts.session, SESSION_EVENTS.recalled, {
+        query: typeof filter.text === 'string' ? filter.text : '',
+        matches: total,
+        sessionId: opts.sessionId ?? opts.session.id ?? '',
       })
     }
     return { entries, total, truncated }
@@ -423,15 +430,18 @@ function uniqueScopes(entries) {
 
 /** 工具结果里的固定错误形状（schema additionalProperties:false 需要显式字段）。 */
 function toToolError(error) {
-  const detail = error instanceof MemoryError ? error.details : {}
-  return {
-    code: error instanceof MemoryError ? error.code : 'INTERNAL',
-    message: error.message,
-    ...(detail.outcome === undefined ? {} : { outcome: detail.outcome }),
-    ...(detail.used === undefined ? {} : { usage: { track: detail.track, scope: detail.scope, used: detail.used, limit: detail.limit } }),
-    ...(detail.candidates === undefined ? {} : { candidates: detail.candidates }),
-    ...(detail.sample === undefined ? {} : { sample: detail.sample }),
+  if (error instanceof MemoryError) {
+    const { code, message, ...details } = error.toPublic()
+    return {
+      code,
+      message,
+      ...(details.outcome === undefined ? {} : { outcome: details.outcome }),
+      ...(details.used === undefined ? {} : { usage: { track: details.track, scope: details.scope, used: details.used, limit: details.limit } }),
+      ...(details.candidates === undefined ? {} : { candidates: details.candidates }),
+      ...(details.sample === undefined ? {} : { sample: details.sample }),
+    }
   }
+  return { code: 'INTERNAL', message: error instanceof Error ? error.message : String(error) }
 }
 
 /** 记忆工具描述：内嵌 Save/Skip 行为指引（学 Hermes 官方 memory.md 清单）。 */
@@ -582,7 +592,7 @@ export function makeMemoryTool(service) {
                 ...(args.text === undefined ? {} : { text: args.text }),
                 ...(args.limit === undefined ? {} : { limit: args.limit }),
               },
-              { sessionId: exec.agent?.session?.id },
+              { sessionId: exec.agent?.session?.id, session: exec.agent?.session },
             )
             return {
               action: 'query',
@@ -890,14 +900,14 @@ async function runMemoryCommand(ctx, service, invocation) {
   }
   switch (verb) {
     case 'list': {
-      const { entries, total } = service.query({}, { sessionId: invocation?.agent?.session?.id })
+      const { entries, total } = service.query({}, { sessionId: invocation?.agent?.session?.id, session: invocation?.agent?.session })
       if (total === 0) return { kind: 'success', text: '记忆为空。' }
       return { kind: 'success', text: `记忆条目（${total} 条）：\n${entries.map(renderEntryLine).join('\n')}` }
     }
     case 'query': {
       const text = rest.join(' ')
       if (text.length === 0) return { kind: 'error', text: 'query 需要一个关键词：/memory query <词>' }
-      const { entries, total, truncated } = service.query({ text }, { sessionId: invocation?.agent?.session?.id })
+      const { entries, total, truncated } = service.query({ text }, { sessionId: invocation?.agent?.session?.id, session: invocation?.agent?.session })
       if (total === 0) return { kind: 'success', text: `没有条目包含「${text}」。` }
       return { kind: 'success', text: `命中 ${total} 条${truncated ? '（已截断）' : ''}：\n${entries.map(renderEntryLine).join('\n')}` }
     }
@@ -1038,7 +1048,10 @@ export function makeMemoryRecallTool(service, ctx) {
     },
     async execute(args, exec) {
       exec.signal.throwIfAborted()
-      const memory = service.query({ text: args.query, limit: args.memoryLimit ?? 10 }, { sessionId: exec.agent?.session?.id })
+      const memory = service.query(
+        { text: args.query, limit: args.memoryLimit ?? 10 },
+        { sessionId: exec.agent?.session?.id, session: exec.agent?.session },
+      )
       const history = await recallHistory(ctx, args.query, args.historyLimit ?? 8, exec.signal)
       return {
         ok: true,
@@ -1173,4 +1186,3 @@ export { openMemoryStore, resolveDbPath }
 export { renderSnapshot, visibleEntries }
 export { workspaceKeyOf }
 export { validateBudgets, budgetReport, budgetLimits, checkBudget }
-export { errorToPublic }

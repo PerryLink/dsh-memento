@@ -20,6 +20,7 @@ import {
 } from '../index.mjs'
 import { createMockCtx, makeSession, makeAgent, makeExec } from './helpers/mock-ctx.mjs'
 import { parseWriteReason } from '../lib/gate.mjs'
+import { KNOWN_SESSION_EVENT_TYPES } from '@deepseek-ai/dsh-session'
 
 /** 经 mock 事件总线裁决的审批服务（对齐真 ApprovalService 的 waterfall 派发）。 */
 function makeBusApproval(ctx) {
@@ -408,4 +409,28 @@ test('rc.6 安全线：memory/* 未被 harness 收录时不向会话日志 appen
   section.text({ agent: { session } })
   const types = session.events.map((event) => event.type)
   assert.equal(types.some((type) => type.startsWith('memory/')), false, '未注册类型绝不 append（否则会话下次加载被持久化层拒绝）')
+})
+
+test('memory/recalled：query 带 session 时按已知类型自适应派发（未收录跳过，收录后开启）', async (t) => {
+  const mounted = mount({ writePolicy: 'auto' })
+  t.after(() => teardown(mounted))
+  const service = mounted.mock.services.get('memory')
+  const session = makeSession({ id: 's-recall' })
+  await service.add({ track: 'user', scope: 'user-global', text: '召回目标条目' }, { agent: makeAgent(session) })
+
+  // 未收录：query 不向会话日志 append（与写路径同一安全线）
+  service.query({ text: '召回' }, { sessionId: 's-recall', session })
+  assert.equal(session.events.some((event) => event.type === 'memory/recalled'), false)
+
+  // 模拟 harness 收录：自适应门打开后同路径 append，载荷与 SessionEventMap 声明一致
+  KNOWN_SESSION_EVENT_TYPES.add('memory/recalled')
+  t.after(() => KNOWN_SESSION_EVENT_TYPES.delete('memory/recalled'))
+  service.query({ text: '召回' }, { sessionId: 's-recall', session })
+  const recalled = session.events.filter((event) => event.type === 'memory/recalled')
+  assert.equal(recalled.length, 1)
+  assert.deepEqual(recalled[0].data, { query: '召回', matches: 1, sessionId: 's-recall' })
+  // 工具路径同样传递 session（收录状态下经工具 query 也会派发）
+  const tool = mounted.mock.tools.find((t) => t.name === 'memory')
+  await tool.execute({ action: 'query', text: '召回' }, makeExec({ agent: makeAgent(session) }))
+  assert.equal(session.events.filter((event) => event.type === 'memory/recalled').length, 2)
 })
