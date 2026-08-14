@@ -88,7 +88,7 @@ Every field is a validated Schemastery `Config`; invalid values fail loudly at l
 | `maxEntriesPerQuery` | `20` | default per-query result cap (explicit `limit` allowed, hard-capped at 1000) |
 | `commandListLimit` | `50` | entries rendered per `/memory list` / `query` command |
 | `commandAuditLimit` | `10` | audit rows rendered per `/memory audit` command |
-| `recall.historyLimitDefault` / `recall.snippetCap` / `recall.snippetChars` | `8` / `5` / `300` | `memory_recall` history defaults: sessions scanned, snippets per session, snippet chars |
+| `recall.historyLimitDefault` / `recall.snippetCap` / `recall.snippetChars` / `recall.windowDays` | `8` / `5` / `300` / `30` | `memory_recall` history defaults: sessions scanned, snippets per session, snippet chars, recency window in days |
 | `panelEntriesLimit` | `200` | web panel entries page size (and clamp) |
 | `panelAuditLimit` | `20` | web panel audit rows by default (ceiling 200) |
 | `auditRetentionDays` | `0` | audit retention: 0 = keep forever, >0 = prune rows older than N days at store open |

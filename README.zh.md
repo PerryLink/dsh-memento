@@ -88,7 +88,7 @@ dsh plugin --profile <name> remove dsh-memento       # 卸载：库与会话日�
 | `maxEntriesPerQuery` | `20` | query 默认返回上限（显式 `limit` 可超出，硬钳 1000） |
 | `commandListLimit` | `50` | `/memory list`/`query` 命令单次渲染条目上限 |
 | `commandAuditLimit` | `10` | `/memory audit` 命令单次渲染审计行上限 |
-| `recall.historyLimitDefault` / `recall.snippetCap` / `recall.snippetChars` | `8` / `5` / `300` | `memory_recall` 历史段默认值：扫描会话数 / 每会话片段数 / 片段字符数 |
+| `recall.historyLimitDefault` / `recall.snippetCap` / `recall.snippetChars` / `recall.windowDays` | `8` / `5` / `300` / `30` | `memory_recall` 历史段默认值：扫描会话数 / 每会话片段数 / 片段字符数 / 回溯天数 |
 | `panelEntriesLimit` | `200` | Web 面板条目页大小（兼钳制上限） |
 | `panelAuditLimit` | `20` | Web 面板审计默认条数（天花板 200） |
 | `auditRetentionDays` | `0` | 审计保留天数：0 = 永久，>0 = 打开库时裁剪更早的审计行 |

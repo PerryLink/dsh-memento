@@ -81,7 +81,7 @@ import { extractEventText } from './lib/extract.mjs'
  * @property {number} [maxEntriesPerQuery]
  * @property {number} [commandListLimit]
  * @property {number} [commandAuditLimit]
- * @property {{historyLimitDefault?: number, snippetCap?: number, snippetChars?: number}} [recall]
+ * @property {{historyLimitDefault?: number, snippetCap?: number, snippetChars?: number, windowDays?: number}} [recall]
  * @property {number} [panelEntriesLimit]
  * @property {number} [panelAuditLimit]
  * @property {number} [auditRetentionDays]
@@ -132,8 +132,8 @@ export const DEFAULT_SNAPSHOT_ORDER = -50
  * @property {number} [maxEntriesPerQuery] query 默认返回条目上限（显式 limit 可超出，Provider 硬钳 1000）。
  * @property {number} [commandListLimit] /memory list|query 单次渲染条目上限（默认 50）。
  * @property {number} [commandAuditLimit] /memory audit 单次渲染审计行上限（默认 10）。
- * @property {{historyLimitDefault?: number, snippetCap?: number, snippetChars?: number}} [recall]
- *   memory_recall 历史段默认值（默认 8/5/300）。
+ * @property {{historyLimitDefault?: number, snippetCap?: number, snippetChars?: number, windowDays?: number}} [recall]
+ *   memory_recall 历史段默认值（默认 8/5/300/30）。
  * @property {number} [panelEntriesLimit] 面板条目页上限与钳制（默认 200）。
  * @property {number} [panelAuditLimit] 面板审计默认条数（默认 20；上限 200 为协议常量）。
  * @property {number} [auditRetentionDays] 审计保留天数（默认 0 = 不限）。
@@ -162,6 +162,7 @@ export const Config = Schema.object({
     historyLimitDefault: Schema.number().default(8),
     snippetCap: Schema.number().default(5),
     snippetChars: Schema.number().default(300),
+    windowDays: Schema.number().default(30),
   }),
   panelEntriesLimit: Schema.number().default(200),
   panelAuditLimit: Schema.number().default(20),
@@ -940,6 +941,7 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
       historyLimitDefault: config.recall?.historyLimitDefault ?? 8,
       snippetCap: config.recall?.snippetCap ?? 5,
       snippetChars: config.recall?.snippetChars ?? 300,
+      windowDays: config.recall?.windowDays ?? 30,
     },
     panelEntriesLimit: config.panelEntriesLimit ?? 200,
     panelAuditLimit: config.panelAuditLimit ?? 20,
@@ -1366,7 +1368,7 @@ function renderEntryLine(/** @type {{track: string, scope: string, workspaceKey?
  * 结果（history 段为空，绝不报错）。
  * @param {MemoryService} service - ctx.memory。
  * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文（查 sessionQuery）。
- * @param {{historyLimitDefault: number, snippetCap: number, snippetChars: number}} recall - Config.recall（默认值）。
+ * @param {{historyLimitDefault: number, snippetCap: number, snippetChars: number, windowDays: number}} recall - Config.recall（默认值）。
  * @returns {object} 工具定义。
  */
 export function makeMemoryRecallTool(service, ctx, recall) {
@@ -1443,7 +1445,16 @@ export function makeMemoryRecallTool(service, ctx, recall) {
         { text: args.query, limit: args.memoryLimit ?? 10 },
         { sessionId: exec.agent?.session?.id, session: exec.agent?.session },
       )
-      const history = await recallHistory(ctx, args.query, args.historyLimit ?? recall.historyLimitDefault, recall.snippetCap, recall.snippetChars, exec.signal)
+      const history = await recallHistory(
+        ctx,
+        args.query,
+        args.historyLimit ?? recall.historyLimitDefault,
+        recall.snippetCap,
+        recall.snippetChars,
+        exec.signal,
+        /** @type {string | undefined} */ (exec.agent?.session?.header?.cwd),
+        recall.windowDays,
+      )
       return {
         ok: true,
         memory: {
@@ -1459,22 +1470,34 @@ export function makeMemoryRecallTool(service, ctx, recall) {
 
 /**
  * 近期会话历史召回（sessionQuery 可选；rc.6 记录形状 = {header:{id}}，事件为元数据记录）。
+ * 服务端下推：filterSessions 以会话 cwd（原值直传，harness 按存储值比较）与
+ * created-at 时间窗收窄候选，再对前 N 个候选做 filterEvents 定位——从"全量列举 +
+ * 每候选一次扫描"变为"一次过滤 + ≤N 次定位"。
  * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文（查 sessionQuery）。
  * @param {string} query - 检索词。
  * @param {number} limit - 最多扫描的会话数。
  * @param {number} snippetCap - 每个会话最多展示的片段数。
  * @param {number} snippetChars - 每个片段的最大字符数。
  * @param {AbortSignal} signal - 取消信号。
+ * @param {string | undefined} cwd - 当前会话 cwd（服务端 cwd 过滤；缺省不加该过滤器）。
+ * @param {number} windowDays - 时间窗（天）；>0 时加 created-at 下界。
  * @returns {Promise<{available: boolean, sessions: Array<{sessionId: string, matches: number, snippets: string[]}>, error?: string}>}。
  */
-async function recallHistory(ctx, query, limit, snippetCap, snippetChars, signal) {
+async function recallHistory(ctx, query, limit, snippetCap, snippetChars, signal, cwd, windowDays) {
   const sessionQuery = ctx.get('sessionQuery')
   if (sessionQuery === undefined || sessionQuery === null) {
     return { available: false, sessions: [] }
   }
   const queryService = /** @type {{filterSessions: (filters: object[], signal?: AbortSignal) => Promise<Array<{header?: {id?: unknown}}>>, filterEvents: (sessionId: string, filters: object[]) => Promise<Array<{seq: number}>>, readSession: (sessionId: string) => Promise<{session?: unknown, events: Array<{seq: number, type?: string, data?: unknown}>}>}} */ (sessionQuery)
   try {
-    const records = await queryService.filterSessions([], signal)
+    const sessionFilters = []
+    if (typeof cwd === 'string' && cwd.length > 0) {
+      sessionFilters.push({ kind: 'cwd', values: [cwd] })
+    }
+    if (Number.isInteger(windowDays) && windowDays > 0) {
+      sessionFilters.push({ kind: 'created-at', from: Date.now() - windowDays * 86400000 })
+    }
+    const records = await queryService.filterSessions(sessionFilters, signal)
     /** @type {Array<{sessionId: string, matches: number, snippets: string[]}>} */
     const results = []
     for (const record of records.slice(0, limit)) {

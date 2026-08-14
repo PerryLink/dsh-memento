@@ -88,7 +88,7 @@ Todo campo é um `Config` Schemastery validado; valores inválidos falham ruidos
 | `maxEntriesPerQuery` | `20` | limite padrão de resultados por consulta (`limit` explícito permitido, teto rígido 1000) |
 | `commandListLimit` | `50` | entradas exibidas por comando `/memory list` / `query` |
 | `commandAuditLimit` | `10` | linhas de auditoria exibidas por comando `/memory audit` |
-| `recall.historyLimitDefault` / `recall.snippetCap` / `recall.snippetChars` | `8` / `5` / `300` | padrões de histórico do `memory_recall`: sessões escaneadas, trechos por sessão, caracteres por trecho |
+| `recall.historyLimitDefault` / `recall.snippetCap` / `recall.snippetChars` / `recall.windowDays` | `8` / `5` / `300` / `30` | padrões de histórico do `memory_recall`: sessões escaneadas, trechos por sessão, caracteres por trecho, janela em dias |
 | `panelEntriesLimit` | `200` | tamanho da página de entradas do painel web (e teto) |
 | `panelAuditLimit` | `20` | linhas de auditoria do painel web por padrão (teto 200) |
 | `auditRetentionDays` | `0` | retenção de auditoria: 0 = para sempre, >0 = poda ao abrir a loja |

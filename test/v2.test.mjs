@@ -48,7 +48,7 @@ function mount(opts = {}) {
     maxEntriesPerQuery: opts.maxEntriesPerQuery ?? 20,
     commandListLimit: opts.commandListLimit ?? 50,
     commandAuditLimit: opts.commandAuditLimit ?? 10,
-    recall: opts.recall ?? { historyLimitDefault: 8, snippetCap: 5, snippetChars: 300 },
+    recall: opts.recall ?? { historyLimitDefault: 8, snippetCap: 5, snippetChars: 300, windowDays: 30 },
     panelEntriesLimit: 200,
     panelAuditLimit: 20,
     auditRetentionDays: 0,
@@ -333,6 +333,27 @@ test('F10：命令 consolidate 走 turn 外审批门并单事务整合', async (
   assert.equal(audit[0].outcome, 'allowed-once (via write gate)', '命令路径 audit 标注 gate 来源')
   const malformed = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'consolidate 无分隔符' })
   assert.equal(malformed.kind, 'error')
+})
+
+test('F11：recall 下推——filterSessions 收到 cwd + created-at 窗口过滤与信号', async (t) => {
+  const calls = []
+  const fakeSessionQuery = {
+    async filterSessions(filters, signal) {
+      calls.push({ filters, hasSignal: signal !== undefined })
+      return []
+    },
+    async filterEvents() { return [] },
+    async readSession() { throw new Error('无候选时不应读取') },
+  }
+  const mounted = mount({ sessionQuery: fakeSessionQuery })
+  t.after(() => teardown(mounted))
+  const tool = mounted.mock.tools.find((t) => t.name === 'memory_recall')
+  await tool.execute({ query: 'x' }, makeExec({ agent: makeAgent(makeSession({ cwd: 'C:\\work\\proj' })) }))
+  assert.equal(calls.length, 1)
+  assert.deepEqual(calls[0].filters[0], { kind: 'cwd', values: ['C:\\work\\proj'] })
+  assert.equal(calls[0].filters[1].kind, 'created-at', '时间窗下界')
+  assert.ok(calls[0].filters[1].from <= Date.now())
+  assert.equal(calls[0].hasSignal, true, 'signal 透传')
 })
 
 test('S3：enabled:false 时 V2 观察面一并消失', (t) => {
