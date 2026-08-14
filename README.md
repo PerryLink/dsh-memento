@@ -127,7 +127,10 @@ The name is **`dsh-memento`** (free on npm and GitHub). Not `dsh-recall` (confus
 
 ```sh
 npm install
-npm test    # node --test: 68 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel
+npm test                # node --test: 74 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel
+npm run typecheck       # tsc --checkJs gate over index.mjs / lib / scripts
+npm run check:coverage  # line-coverage gate: lib ≥90%, index.mjs ≥85%, all files ≥90%
+npm run check:readmes   # five-language README consistency gate
 ```
 
 `lib/` is zero-DSH-dependency (node: builtins only); DSH imports exist only in `index.mjs`. Full discipline in [AGENTS.md](AGENTS.md); design decisions in [ARCHITECTURE.md](ARCHITECTURE.md).

@@ -127,7 +127,10 @@ dsh plugin --profile <name> remove dsh-memento       # uninstall: DB + session l
 
 ```sh
 npm install
-npm test    # node --test: 68 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel
+npm test                # node --test: 74 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel
+npm run typecheck       # index.mjs / lib / scripts पर tsc --checkJs द्वार
+npm run check:coverage  # लाइन-कवरेज द्वार: lib ≥90%, index.mjs ≥85%, सभी ≥90%
+npm run check:readmes   # पाँच-भाषा README संगति द्वार
 ```
 
 `lib/` शून्य-DSH-निर्भरता है (केवल node: बिल्ट-इन); DSH आयात केवल `index.mjs` में मौजूद हैं। पूर्ण अनुशासन [AGENTS.md](AGENTS.md) में; डिज़ाइन निर्णय [ARCHITECTURE.md](ARCHITECTURE.md) में।

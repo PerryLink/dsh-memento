@@ -1,0 +1,25 @@
+name: compat
+
+# 每周用 npm `next` dist-tag 的最新 DSH rc 试跑全量测试：harness 发新 rc 后 24h 内
+# 给出兼容信号（红 = 需要跟发版）。不修改任何发布产物。
+on:
+  schedule:
+    - cron: '23 7 * * 1'
+  workflow_dispatch:
+
+jobs:
+  next-rc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --save-dev @deepseek-ai/dsh-session@next @deepseek-ai/dsh-tools@next
+      - run: npm test
+      - name: 兼容失败指引
+        if: failure()
+        run: |
+          echo "::warning::npm @next（最新 rc）下测试失败：dsh-memento 需要跟随 harness 发版（升 peer 区间并适配行为变更）。"

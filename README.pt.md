@@ -127,7 +127,10 @@ O nome é **`dsh-memento`** (livre no npm e no GitHub). Não `dsh-recall` (confu
 
 ```sh
 npm install
-npm test    # node --test: 68 testes — orçamento, substring única, política do portão, armazenamento, snapshot, integração com mock-ctx (invariantes S2/S3), comando/recuperação/painel V2
+npm test                # node --test: 74 testes — orçamento, substring única, política do portão, armazenamento, snapshot, integração com mock-ctx (invariantes S2/S3), comando/recuperação/painel V2
+npm run typecheck       # portão tsc --checkJs sobre index.mjs / lib / scripts
+npm run check:coverage  # portão de cobertura de linhas: lib ≥90%, index.mjs ≥85%, todos ≥90%
+npm run check:readmes   # portão de coerência dos cinco README
 ```
 
 `lib/` tem zero dependência de DSH (somente builtins do node:); imports de DSH existem apenas em `index.mjs`. Disciplina completa em [AGENTS.md](AGENTS.md); decisões de design em [ARCHITECTURE.md](ARCHITECTURE.md).

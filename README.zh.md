@@ -127,7 +127,10 @@ dsh plugin --profile <name> remove dsh-memento       # 卸载：库与会话日�
 
 ```sh
 npm install
-npm test    # node --test：68 个测试——预算、唯一子串、审批策略、store、快照、mock ctx 集成（S2/S3 不变量）、V2 命令/召回/面板
+npm test                # node --test：74 个测试——预算、唯一子串、审批策略、store、快照、mock ctx 集成（S2/S3 不变量）、V2 命令/召回/面板
+npm run typecheck       # tsc --checkJs 类型检查门（index.mjs / lib / scripts）
+npm run check:coverage  # 行覆盖率门：lib ≥90%、index.mjs ≥85%、全部 ≥90%
+npm run check:readmes   # 五语 README 一致性门
 ```
 
 `lib/` 零 DSH 依赖（仅 node: 内置模块）；DSH 依赖只出现在 `index.mjs`。完整纪律见 [AGENTS.md](AGENTS.md)；设计决策见 [ARCHITECTURE.md](ARCHITECTURE.md)。
