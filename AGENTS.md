@@ -17,14 +17,15 @@ lib/gate.mjs         审批门策略与 reason 编解码（零依赖）
 lib/snapshot.mjs     冻结快照渲染（纯函数，零依赖）
 lib/workspace.mjs    工作区键规范化（Windows 大小写不敏感，零依赖）
 lib/extract.mjs      会话事件文本抽取（memory_recall 历史片段用，零依赖）
+lib/strings.mjs      模型可见/命令面双语词表（快照头/分组标题/提案头，零依赖）
 lib/store.mjs        node:sqlite Provider：条目表+审计账本+迁移（零依赖）
-client/client.js     Web 面板（零构建 vanilla，只读；经 dsh.client 注入）
+client/client.js     Web 面板（零构建 vanilla，只读；en/zh 随 language 配置；经 dsh.client 注入）
 scripts/             机械门：verify-readmes.mjs（五语一致性）、check-coverage.mjs（覆盖率）
 cordis.patch.yml     bundle 声明（insert memento）
 package.json         npm 元数据；files 白名单 = 发布内容
 package-lock.json    锁文件（CI 用，不进 npm 包）
 tsconfig.check.json  tsc --checkJs 类型检查门
-.github/workflows/   CI（三平台×双 Node）与每周 next-rc 兼容探针
+.github/workflows/   CI（三平台×双 Node）、每周 next-rc 兼容探针、v* 标签 npm 发布
 README.md            英文主介绍（GitHub 默认页；五语源文）
 README.{zh,es,pt,hi}.md   中/西/葡/印地语介绍（顶部互链，与英文同 commit 更新）
 ARCHITECTURE.md      三角色 seam 架构图与全部设计决策

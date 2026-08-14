@@ -1,0 +1,28 @@
+name: release
+
+# 打 v* 标签即发布 npm：先全量门禁（测试/类型/覆盖率/五语 README），再 npm publish。
+# 需要仓库 secret：NPM_TOKEN（npm 自动化 token，类型 Automation 或 Publish）。
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org/
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run check:coverage
+      - run: npm run check:readmes
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
