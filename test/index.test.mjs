@@ -143,7 +143,7 @@ test('F8：auto 策略下服务直写经 answerer 自动放行并记录审批来
   assert.ok(result.entry.id)
   const audit = service.store.auditList()
   assert.equal(audit[0].action, 'add')
-  assert.equal(audit[0].outcome, 'allowed-once (policy auto)', '审计行记录审批来源=auto 策略')
+  assert.equal(audit[0].outcome, 'allowed-once (via approval, writePolicy auto)', '审计行记录真实裁决来源=审批传输+auto 策略')
   // 审批审计对也记录了放行（bus 派发路径）
   assert.equal(mounted.approval.asked.length, 1)
 })

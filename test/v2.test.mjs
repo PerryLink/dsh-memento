@@ -95,6 +95,7 @@ test('F10：命令 add/remove 走 turn 外审批门（同一 waterfall + writePo
   const audit = service.store.auditList()
   assert.equal(audit[0].action, 'add')
   assert.equal(audit[0].source, 'command')
+  assert.equal(audit[0].outcome, 'allowed-once (via write gate)', '命令路径审计标注 gate 来源，不张冠李戴为策略标签')
   const removed = await handleMemoryCommand(mock.ctx, service, {
     ...invocation,
     rawInput: 'remove --track=agent --scope=workspace 手动添加',

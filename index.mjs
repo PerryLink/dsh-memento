@@ -247,15 +247,24 @@ export class MemoryService {
    * 会话级 never 策略由调用方预检；审计落在插件审计表 + command/done）。
    * @param {WritePayload} payload - {action, track, scope, text, count?}。
    * @param {MemoryWriteContext} write - {agent, callId?, signal?, gate?}。
+   * @returns {Promise<{outcome: string, source: 'approval'|'gate'}>} 实际裁决结果与传输来源（审计标签用）。
    */
   async #ask(payload, write) {
     if (typeof write.gate === 'function') {
       const outcome = await write.gate(payload, write)
       this.#assertOutcome(outcome)
-      return
+      return { outcome, source: 'gate' }
     }
     const outcome = await askApproval(this.approval, payload, write)
     this.#assertOutcome(outcome)
+    return { outcome, source: 'approval' }
+  }
+
+  /** 审计 outcome 标签：审批传输标注策略，gate 传输标注 gate（真实裁决来源，不张冠李戴）。 */
+  #outcomeLabel(/** @type {{outcome: string, source: 'approval'|'gate'}} */ via) {
+    return via.source === 'gate'
+      ? `${via.outcome} (via write gate)`
+      : `${via.outcome} (via approval, writePolicy ${this.writePolicy})`
   }
 
   /**
@@ -267,7 +276,7 @@ export class MemoryService {
   async add(input, write) {
     const { track, scope, text } = this.#validateEntry(input, write)
     this.#assertBudget(track, scope, this.store.usage(track, scope), text.length)
-    await this.#ask({ action: 'add', track, scope, text }, write)
+    const via = await this.#ask({ action: 'add', track, scope, text }, write)
     this.#throwIfAborted(write)
     // 审批等待期间用量可能变化：以此刻用量为权威复审。
     const now = this.store.usage(track, scope)
@@ -278,7 +287,7 @@ export class MemoryService {
       source: input.source ?? this.sourceLabel,
       sessionId: write.agent.session?.id ?? null,
     })
-    this.#auditWrite('add', track, scope, entry, write)
+    this.#auditWrite('add', track, scope, entry, write, via)
     this.#appendWriteEvent(write, SESSION_EVENTS.added, { entry, source: entry.source })
     return { entry, usage: this.#usage(track, scope) }
   }
@@ -295,7 +304,7 @@ export class MemoryService {
     // 审批前先定位：零/多命中在打扰用户之前就响亮失败。
     const initial = this.#resolveMatch(input, track, scope)
     this.#assertBudget(track, scope, this.store.usage(track, scope), text.length - initial.text.length)
-    await this.#ask({ action: 'replace', track, scope, text }, write)
+    const via = await this.#ask({ action: 'replace', track, scope, text }, write)
     this.#throwIfAborted(write)
     // 审批等待期间目标条目可能已被并发写改动：以此刻重新定位的 previous 为权威重算净变化，
     // 再用此刻用量复审。复审与 replaceEntry 之间无 await，判断与实际写入之间不存在窗口。
@@ -307,7 +316,7 @@ export class MemoryService {
       track, scope, match: input.match, text,
       sessionId: write.agent.session?.id ?? null,
     })
-    this.#auditWrite('replace', track, scope, replaced.entry, write)
+    this.#auditWrite('replace', track, scope, replaced.entry, write, via)
     this.#appendWriteEvent(write, SESSION_EVENTS.updated, {
       previous: replaced.previous,
       entry: replaced.entry,
@@ -328,10 +337,10 @@ export class MemoryService {
     this.#assertMatch(input)
     // 审批前先定位：零/多命中在打扰用户之前就响亮失败。
     this.#resolveMatch(input, input.track, input.scope)
-    await this.#ask({ action: 'remove', track: input.track, scope: input.scope, text: input.match }, write)
+    const via = await this.#ask({ action: 'remove', track: input.track, scope: input.scope, text: input.match }, write)
     this.#throwIfAborted(write)
     const removed = this.store.removeEntry({ track: input.track, scope: input.scope, match: input.match })
-    this.#auditWrite('remove', input.track, input.scope, removed, write)
+    this.#auditWrite('remove', input.track, input.scope, removed, write, via)
     this.#appendWriteEvent(write, SESSION_EVENTS.removed, { entry: removed, source: removed.source })
     return { entry: removed, usage: this.#usage(input.track, input.scope) }
   }
@@ -357,7 +366,7 @@ export class MemoryService {
       }
     })
     const summary = normalized.map((entry) => `${entry.track}/${entry.scope}: ${entry.text}`).join('\n')
-    await this.#ask({
+    const via = await this.#ask({
       action: 'seed', track: 'batch', scope: 'batch', text: summary, count: normalized.length,
     }, write)
     this.#throwIfAborted(write)
@@ -374,11 +383,11 @@ export class MemoryService {
     this.store.auditAppend({
       action: 'seed',
       track: null, scope: null, entryId: null,
-      text: summary, outcome: `allowed-once (policy ${this.writePolicy})`,
+      text: summary, outcome: this.#outcomeLabel(via),
       source: this.sourceLabel, sessionId,
     })
     for (const entry of entries) {
-      this.#auditWrite('add', entry.track, entry.scope, entry, write)
+      this.#auditWrite('add', entry.track, entry.scope, entry, write, via)
       this.#appendWriteEvent(write, SESSION_EVENTS.added, { entry, source: entry.source })
     }
     return { added: entries.length, entries }
@@ -449,15 +458,15 @@ export class MemoryService {
     write.signal?.throwIfAborted()
   }
 
-  /** 写成功的审计行（含审批来源与策略）。 */
-  #auditWrite(/** @type {string} */ action, /** @type {string} */ track, /** @type {string} */ scope, /** @type {MemoryEntry} */ entry, /** @type {MemoryWriteContext} */ write) {
+  /** 写成功的审计行（outcome 携带真实裁决来源：审批传输标注策略，gate 传输标注 gate）。 */
+  #auditWrite(/** @type {string} */ action, /** @type {string} */ track, /** @type {string} */ scope, /** @type {MemoryEntry} */ entry, /** @type {MemoryWriteContext} */ write, /** @type {{outcome: string, source: 'approval'|'gate'}} */ via) {
     this.store.auditAppend({
       action,
       track,
       scope,
       entryId: entry.id,
       text: entry.text,
-      outcome: `allowed-once (policy ${this.writePolicy})`,
+      outcome: this.#outcomeLabel(via),
       source: entry.source,
       sessionId: write.agent.session?.id ?? null,
     })
