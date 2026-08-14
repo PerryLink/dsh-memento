@@ -19,6 +19,7 @@ import {
   TOOL_NAME,
   DEFAULT_SOURCE,
   SESSION_EVENTS,
+  PANEL_AUDIT_CEILING,
 } from './lib/constants.mjs'
 import {
   MemoryError,
@@ -72,6 +73,10 @@ import { extractEventText } from './lib/extract.mjs'
  * @property {number} [maxEntriesPerQuery]
  * @property {number} [commandListLimit]
  * @property {number} [commandAuditLimit]
+ * @property {{historyLimitDefault?: number, snippetCap?: number, snippetChars?: number}} [recall]
+ * @property {number} [panelEntriesLimit]
+ * @property {number} [panelAuditLimit]
+ * @property {number} [auditRetentionDays]
  * @typedef {{action: string, track: string, scope: string, text: string, count?: number}} WritePayload
  * @typedef {{agent?: {session?: MemorySessionLike | null} | null, callId?: unknown, signal?: AbortSignal}} AskWrite
  * @typedef {{track: string, scope: string, text: string}} PublicEntry
@@ -117,6 +122,11 @@ export const DEFAULT_SNAPSHOT_ORDER = -50
  * @property {number} [maxEntriesPerQuery] query 默认返回条目上限（显式 limit 可超出，Provider 硬钳 1000）。
  * @property {number} [commandListLimit] /memory list|query 单次渲染条目上限（默认 50）。
  * @property {number} [commandAuditLimit] /memory audit 单次渲染审计行上限（默认 10）。
+ * @property {{historyLimitDefault?: number, snippetCap?: number, snippetChars?: number}} [recall]
+ *   memory_recall 历史段默认值（默认 8/5/300）。
+ * @property {number} [panelEntriesLimit] 面板条目页上限与钳制（默认 200）。
+ * @property {number} [panelAuditLimit] 面板审计默认条数（默认 20；上限 200 为协议常量）。
+ * @property {number} [auditRetentionDays] 审计保留天数（默认 0 = 不限）。
  */
 export const Config = Schema.object({
   enabled: Schema.boolean().default(true),
@@ -136,6 +146,14 @@ export const Config = Schema.object({
   maxEntriesPerQuery: Schema.number().default(20),
   commandListLimit: Schema.number().default(50),
   commandAuditLimit: Schema.number().default(10),
+  recall: Schema.object({
+    historyLimitDefault: Schema.number().default(8),
+    snippetCap: Schema.number().default(5),
+    snippetChars: Schema.number().default(300),
+  }),
+  panelEntriesLimit: Schema.number().default(200),
+  panelAuditLimit: Schema.number().default(20),
+  auditRetentionDays: Schema.number().default(0),
 })
 
 /**
@@ -801,6 +819,14 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
     maxEntriesPerQuery: config.maxEntriesPerQuery ?? 20,
     commandListLimit: config.commandListLimit ?? 50,
     commandAuditLimit: config.commandAuditLimit ?? 10,
+    recall: {
+      historyLimitDefault: config.recall?.historyLimitDefault ?? 8,
+      snippetCap: config.recall?.snippetCap ?? 5,
+      snippetChars: config.recall?.snippetChars ?? 300,
+    },
+    panelEntriesLimit: config.panelEntriesLimit ?? 200,
+    panelAuditLimit: config.panelAuditLimit ?? 20,
+    auditRetentionDays: config.auditRetentionDays ?? 0,
   }
   if (resolved.enabled === false) return
   const budgetCheck = validateBudgets(resolved.budgets)
@@ -818,8 +844,22 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
   if (!Number.isInteger(resolved.commandAuditLimit) || resolved.commandAuditLimit <= 0) {
     throw new InvalidInputError('dsh-memento config: commandAuditLimit must be a positive integer')
   }
+  for (const [key, value] of Object.entries(resolved.recall)) {
+    if (!Number.isInteger(value) || value <= 0) {
+      throw new InvalidInputError(`dsh-memento config: recall.${key} must be a positive integer`)
+    }
+  }
+  if (!Number.isInteger(resolved.panelEntriesLimit) || resolved.panelEntriesLimit <= 0) {
+    throw new InvalidInputError('dsh-memento config: panelEntriesLimit must be a positive integer')
+  }
+  if (!Number.isInteger(resolved.panelAuditLimit) || resolved.panelAuditLimit <= 0) {
+    throw new InvalidInputError('dsh-memento config: panelAuditLimit must be a positive integer')
+  }
+  if (!Number.isInteger(resolved.auditRetentionDays) || resolved.auditRetentionDays < 0) {
+    throw new InvalidInputError('dsh-memento config: auditRetentionDays must be a non-negative integer')
+  }
   const dbPath = resolveDbPath(resolved.dbPath)
-  const store = openMemoryStore(dbPath)
+  const store = openMemoryStore(dbPath, { retentionDays: resolved.auditRetentionDays })
   const service = new MemoryService({
     store,
     budgets: resolved.budgets,
@@ -889,8 +929,8 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
   // V2 观察面：/memory 命令（用户触发）、memory_recall 工具、面板 JSON 路由。
   // commands/webServer 为可选服务，缺失（headless）自动跳过。
   registerCommands(ctx, service)
-  ctx.tools.register(/** @type {import('@deepseek-ai/dsh-tools').ToolDefinition} */ (makeMemoryRecallTool(service, ctx)))
-  registerWebRoutes(ctx, service)
+  ctx.tools.register(/** @type {import('@deepseek-ai/dsh-tools').ToolDefinition} */ (makeMemoryRecallTool(service, ctx, resolved.recall)))
+  registerWebRoutes(ctx, service, resolved)
 }
 
 // ── V2 观察面 ────────────────────────────────────────────────────────────────
@@ -1081,9 +1121,10 @@ function renderEntryLine(/** @type {{track: string, scope: string, workspaceKey?
  * 结果（history 段为空，绝不报错）。
  * @param {MemoryService} service - ctx.memory。
  * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文（查 sessionQuery）。
+ * @param {{historyLimitDefault: number, snippetCap: number, snippetChars: number}} recall - Config.recall（默认值）。
  * @returns {object} 工具定义。
  */
-export function makeMemoryRecallTool(service, ctx) {
+export function makeMemoryRecallTool(service, ctx, recall) {
   return defineTool({
     name: 'memory_recall',
     description: [
@@ -1157,7 +1198,7 @@ export function makeMemoryRecallTool(service, ctx) {
         { text: args.query, limit: args.memoryLimit ?? 10 },
         { sessionId: exec.agent?.session?.id, session: exec.agent?.session },
       )
-      const history = await recallHistory(ctx, args.query, args.historyLimit ?? 8, exec.signal)
+      const history = await recallHistory(ctx, args.query, args.historyLimit ?? recall.historyLimitDefault, recall.snippetCap, recall.snippetChars, exec.signal)
       return {
         ok: true,
         memory: {
@@ -1176,10 +1217,12 @@ export function makeMemoryRecallTool(service, ctx) {
  * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文（查 sessionQuery）。
  * @param {string} query - 检索词。
  * @param {number} limit - 最多扫描的会话数。
+ * @param {number} snippetCap - 每个会话最多展示的片段数。
+ * @param {number} snippetChars - 每个片段的最大字符数。
  * @param {AbortSignal} signal - 取消信号。
  * @returns {Promise<{available: boolean, sessions: Array<{sessionId: string, matches: number, snippets: string[]}>, error?: string}>}。
  */
-async function recallHistory(ctx, query, limit, signal) {
+async function recallHistory(ctx, query, limit, snippetCap, snippetChars, signal) {
   const sessionQuery = ctx.get('sessionQuery')
   if (sessionQuery === undefined || sessionQuery === null) {
     return { available: false, sessions: [] }
@@ -1199,11 +1242,11 @@ async function recallHistory(ctx, query, limit, signal) {
       try {
         const snapshot = await queryService.readSession(sessionId)
         const bySeq = new Map(snapshot.events.map((event) => [event.seq, event]))
-        for (const hit of matched.slice(0, 5)) {
+        for (const hit of matched.slice(0, snippetCap)) {
           const event = bySeq.get(hit.seq)
           if (event === undefined) continue
           const text = extractEventText(event)
-          if (text.length > 0) snippets.push(text.length > 300 ? `${text.slice(0, 300)}…` : text)
+          if (text.length > 0) snippets.push(text.length > snippetChars ? `${text.slice(0, snippetChars)}…` : text)
         }
       } catch {
         // 片段提取失败不影响已确认的命中记录；空 catch 语义：只放弃片段装饰。
@@ -1249,8 +1292,9 @@ export function renderMemoryRecallResult(/** @type {object} */ _args, /** @type 
  * 条目浏览/搜索/预算条/审计尾。路由随插件生命周期自动撤销。
  * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文。
  * @param {MemoryService} service - ctx.memory。
+ * @param {{panelEntriesLimit: number, panelAuditLimit: number}} options - Config 面板上限。
  */
-export function registerWebRoutes(ctx, service) {
+export function registerWebRoutes(ctx, service, options) {
   withService(ctx, 'webServer', (/** @type {{register?: (route: object) => unknown} | null | undefined} */ webServer) => {
     if (typeof webServer?.register !== 'function') return
     webServer.register({
@@ -1266,7 +1310,7 @@ export function registerWebRoutes(ctx, service) {
           }
           const rawParam = url.searchParams.get('limit')
           const raw = rawParam === null ? undefined : Number(rawParam)
-          const limit = raw === undefined ? undefined : (Number.isInteger(raw) && raw > 0 ? Math.min(raw, 200) : undefined)
+          const limit = raw === undefined ? undefined : (Number.isInteger(raw) && raw > 0 ? Math.min(raw, options.panelEntriesLimit) : undefined)
           const { entries, total, truncated } = service.query({
             ...filter,
             ...(limit === undefined ? {} : { limit }),
@@ -1283,8 +1327,8 @@ export function registerWebRoutes(ctx, service) {
       handler: async (/** @type {{url?: string}} */ req, /** @type {PanelResponse} */ res) => {
         try {
           const url = new URL(req.url ?? '', 'http://localhost')
-          const raw = Number(url.searchParams.get('limit') ?? '20')
-          const limit = Number.isInteger(raw) && raw > 0 && raw <= 200 ? raw : 20
+          const raw = Number(url.searchParams.get('limit') ?? String(options.panelAuditLimit))
+          const limit = Number.isInteger(raw) && raw > 0 ? Math.min(raw, PANEL_AUDIT_CEILING) : options.panelAuditLimit
           sendPanelJson(res, 200, { rows: service.store.auditList(limit) })
         } catch (error) {
           sendPanelJson(res, 500, { error: error instanceof Error ? error.message : String(error) })

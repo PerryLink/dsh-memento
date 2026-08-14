@@ -460,6 +460,34 @@ test('S5：非法配置在加载期响亮失败（不注册半残状态）', (t)
     () => apply(mk().ctx, { dbPath: path.join(dir, 'm.db'), snapshotOrder: Number.NaN }),
     InvalidInputError,
   )
+  assert.throws(
+    () => apply(mk().ctx, { dbPath: path.join(dir, 'm.db'), commandListLimit: 0 }),
+    InvalidInputError,
+  )
+  assert.throws(
+    () => apply(mk().ctx, { dbPath: path.join(dir, 'm.db'), commandAuditLimit: -1 }),
+    InvalidInputError,
+  )
+  assert.throws(
+    () => apply(mk().ctx, { dbPath: path.join(dir, 'm.db'), recall: { historyLimitDefault: 0 } }),
+    InvalidInputError,
+  )
+  assert.throws(
+    () => apply(mk().ctx, { dbPath: path.join(dir, 'm.db'), recall: { snippetCap: 1.5 } }),
+    InvalidInputError,
+  )
+  assert.throws(
+    () => apply(mk().ctx, { dbPath: path.join(dir, 'm.db'), panelEntriesLimit: 0 }),
+    InvalidInputError,
+  )
+  assert.throws(
+    () => apply(mk().ctx, { dbPath: path.join(dir, 'm.db'), panelAuditLimit: 0 }),
+    InvalidInputError,
+  )
+  assert.throws(
+    () => apply(mk().ctx, { dbPath: path.join(dir, 'm.db'), auditRetentionDays: -1 }),
+    InvalidInputError,
+  )
 })
 
 test('rc.6 安全线：memory/* 未被 harness 收录时不向会话日志 append（防持久化拒绝）', async (t) => {

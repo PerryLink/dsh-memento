@@ -48,6 +48,10 @@ function mount(opts = {}) {
     maxEntriesPerQuery: opts.maxEntriesPerQuery ?? 20,
     commandListLimit: opts.commandListLimit ?? 50,
     commandAuditLimit: opts.commandAuditLimit ?? 10,
+    recall: opts.recall ?? { historyLimitDefault: 8, snippetCap: 5, snippetChars: 300 },
+    panelEntriesLimit: 200,
+    panelAuditLimit: 20,
+    auditRetentionDays: 0,
   })
   return { dir, dbPath, mock, approval, commands }
 }
@@ -290,6 +294,24 @@ test('F10：list/query 超过 commandListLimit 时标注截断且行数受控；
 
   const audit = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'audit' })
   assert.ok(audit.text.includes('最近审计（3 条）'), 'audit 上限取 commandAuditLimit')
+})
+
+test('F11：recall 默认值可配置——historyLimitDefault 控制未传参时的会话扫描数', async (t) => {
+  const fakeSessionQuery = {
+    async filterSessions() {
+      return [{ header: { id: 's-1' } }, { header: { id: 's-2' } }, { header: { id: 's-3' } }]
+    },
+    async filterEvents() { return [{ seq: 0 }] },
+    async readSession(sessionId) {
+      return { session: { id: sessionId }, events: [{ seq: 0, type: 'user/message', data: { content: [{ type: 'text', text: 'x' }] } }] }
+    },
+  }
+  const mounted = mount({ sessionQuery: fakeSessionQuery, recall: { historyLimitDefault: 2, snippetCap: 5, snippetChars: 300 } })
+  t.after(() => teardown(mounted))
+  const tool = mounted.mock.tools.find((t) => t.name === 'memory_recall')
+  const result = await tool.execute({ query: 'x' }, makeExec({ agent: makeAgent(makeSession()) }))
+  assert.equal(result.history.available, true)
+  assert.equal(result.history.sessions.length, 2, '默认 historyLimitDefault=2 生效')
 })
 
 test('S3：enabled:false 时 V2 观察面一并消失', (t) => {

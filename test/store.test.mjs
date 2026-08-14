@@ -171,6 +171,27 @@ test('queryEntries 显式 limit 被硬钳到 MAX_QUERY_LIMIT（1000）', (t) => 
   assert.equal(capped.truncated, true)
 })
 
+test('auditRetentionDays：>0 裁剪过期审计行，0 保留全部', (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'dsh-memento-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const dbPath = path.join(dir, 'memory.db')
+  const first = openMemoryStore(dbPath)
+  first.db.prepare(`INSERT INTO audit (ts, action, track, scope, entry_id, text, outcome, source, session_id)
+    VALUES (?, 'add', null, null, null, 'old', 'ok', 't', null), (?, 'add', null, null, null, 'fresh', 'ok', 't', null)`)
+    .run(Date.now() - 10 * 86400000, Date.now())
+  first.close()
+
+  const pruned = openMemoryStore(dbPath, { retentionDays: 1 })
+  const rows = pruned.auditList()
+  assert.equal(rows.length, 1, '仅保留 1 天内的审计行')
+  assert.equal(rows[0].text, 'fresh')
+  pruned.close()
+
+  const unlimited = openMemoryStore(dbPath)
+  assert.equal(unlimited.auditList().length, 1, '默认 0 = 不裁剪')
+  unlimited.close()
+})
+
 test('库损坏（非 SQLite 文件）在打开点响亮失败', (t) => {
   const dir = mkdtempSync(path.join(tmpdir(), 'dsh-memento-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))

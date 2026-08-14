@@ -88,6 +88,10 @@ dsh plugin --profile <name> remove dsh-memento       # uninstall: DB + session l
 | `maxEntriesPerQuery` | `20` | प्रति-क्वेरी परिणाम की डिफ़ॉल्ट सीमा (स्पष्ट `limit` अनुमत, कठोर सीमा 1000) |
 | `commandListLimit` | `50` | प्रति `/memory list` / `query` कमांड दिखाई गई प्रविष्टियाँ |
 | `commandAuditLimit` | `10` | प्रति `/memory audit` कमांड दिखाई गई ऑडिट पंक्तियाँ |
+| `recall.historyLimitDefault` / `recall.snippetCap` / `recall.snippetChars` | `8` / `5` / `300` | `memory_recall` इतिहास डिफ़ॉल्ट: स्कैन किए सेशन, प्रति सेशन स्निपेट, स्निपेट वर्ण |
+| `panelEntriesLimit` | `200` | वेब पैनल प्रविष्टि पृष्ठ आकार (और सीमा) |
+| `panelAuditLimit` | `20` | वेब पैनल ऑडिट पंक्तियाँ डिफ़ॉल्ट (सीमा 200) |
+| `auditRetentionDays` | `0` | ऑडिट अवधारण: 0 = हमेशा, >0 = स्टोर खुलने पर पुरानी पंक्तियाँ हटाएँ |
 
 ## 🛠 टूल और सतहें
 
