@@ -99,7 +99,7 @@ export function createMockCtx(opts = {}) {
 
 /**
  * 合成会话：events 记录 append 内容（S2 重建断言用）。
- * @param {object} [opts] - {id, cwd}。
+ * @param {object} [opts] - {id, cwd, agentPreset}。
  * @returns {object} 会话假件。
  */
 export function makeSession(opts = {}) {
@@ -109,7 +109,7 @@ export function makeSession(opts = {}) {
   return {
     id,
     events,
-    header: { cwd },
+    header: { cwd, ...(opts.agentPreset === undefined ? {} : { agentPreset: opts.agentPreset }) },
     append(type, data) {
       const event = { type, seq: events.length, time: Date.now(), data }
       events.push(event)

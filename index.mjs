@@ -35,7 +35,7 @@ import { checkBudget, budgetReport, budgetLimits, validateBudgets } from './lib/
 import { buildWriteReason, isMemoryWriteRequest, applyWritePolicy, normalizeWritePolicy } from './lib/gate.mjs'
 import { renderSnapshot, visibleEntries, visibleProposals } from './lib/snapshot.mjs'
 import { openMemoryStore, resolveDbPath } from './lib/store.mjs'
-import { workspaceKeyOf } from './lib/workspace.mjs'
+import { workspaceKeyOf, agentKeyOf } from './lib/workspace.mjs'
 import { extractEventText } from './lib/extract.mjs'
 
 /**
@@ -44,11 +44,12 @@ import { extractEventText } from './lib/extract.mjs'
  * @typedef {import('./types.js').MemoryWriteContext} MemoryWriteContext
  * @typedef {import('./types.js').MemorySessionLike} MemorySessionLike
  * @typedef {{track: string, scope: string, used: number, limit: number}} MemoryUsage
- * @typedef {{id: string, kind: string, track: string, scope: string, workspaceKey: string, text: string, source: string, sessionId: string | null, status: string, createdAt: number, decidedAt: number | null}} MemoryProposal
+ * @typedef {{id: string, kind: string, track: string, scope: string, workspaceKey: string, agentKey: string, text: string, source: string, sessionId: string | null, status: string, createdAt: number, decidedAt: number | null}} MemoryProposal
  * @typedef {{user: {userGlobal: number, workspace: number}, agent: {userGlobal: number, workspace: number}}} BudgetsConfig
  * @typedef {object} StoreHandle - ctx.memory 依赖的 Provider 面。
  * @property {(filter?: {track?: string, scope?: string, text?: string, limit?: number}) => MemoryQueryResult} queryEntries
  * @property {() => MemoryEntry[]} listEntries
+ * @property {(track: string, scope: string, match: string) => MemoryEntry[]} matchCandidates
  * @property {(track: string, scope: string) => number} usage
  * @property {(input: object) => MemoryEntry} insertEntry
  * @property {(inputs: object[]) => MemoryEntry[]} seedEntries
@@ -305,7 +306,7 @@ export class MemoryService {
 
   /**
    * 新增条目（写：审批门 + 预算门）。
-   * @param {{track: string, scope: string, text: string, source?: string, workspaceKey?: string}} input - {track, scope, text, source?, workspaceKey?}。
+   * @param {{track: string, scope: string, text: string, source?: string, workspaceKey?: string, agentKey?: string}} input - {track, scope, text, source?, workspaceKey?, agentKey?}。
    * @param {MemoryWriteContext} write - {agent, callId?, signal?, gate?}；agent 缺失即失败封闭。
    * @returns {Promise<{entry: MemoryEntry, usage: {track: string, scope: string, used: number, limit: number}}>}。
    */
@@ -320,6 +321,7 @@ export class MemoryService {
     const entry = this.store.insertEntry({
       track, scope, text,
       workspaceKey: input.workspaceKey ?? this.#workspaceKeyOf(write),
+      agentKey: input.agentKey ?? this.#agentKeyOf(write),
       source: input.source ?? this.sourceLabel,
       sessionId: write.agent.session?.id ?? null,
     })
@@ -384,7 +386,7 @@ export class MemoryService {
   /**
    * 批量种子（一次 ask 审批整个批次；dsh-claude-move 等插件喂数据用）。
    * 任一条超预算 → 整批拒绝（先全量预检再落盘，无部分写入）。
-   * @param {Array<{track: string, scope: string, text: string, source?: string, workspaceKey?: string}>} inputs - 条目数组（track/scope/text/source/workspaceKey）。
+   * @param {Array<{track: string, scope: string, text: string, source?: string, workspaceKey?: string, agentKey?: string}>} inputs - 条目数组（track/scope/text/source/workspaceKey/agentKey）。
    * @param {MemoryWriteContext} write - {agent, callId?, signal?}。
    * @returns {Promise<{added: number, entries: MemoryEntry[]}>}。
    */
@@ -399,6 +401,7 @@ export class MemoryService {
         track, scope, text,
         source: input.source ?? this.sourceLabel,
         workspaceKey: input.workspaceKey ?? this.#workspaceKeyOf(write),
+        agentKey: input.agentKey ?? this.#agentKeyOf(write),
       }
     })
     const summary = normalized.map((entry) => `${entry.track}/${entry.scope}: ${entry.text}`).join('\n')
@@ -432,7 +435,7 @@ export class MemoryService {
   /**
    * 整合多个条目为一条新条目（写：审批门 + 预算门；一次审批 + Provider 单事务原子执行）。
    * 零/多命中、超预算、审批拒绝、目标在审批期间消失都响亮失败；任一步失败无部分写入。
-   * @param {{track: string, scope: string, matches: string[], text: string, source?: string, workspaceKey?: string}} input - 整合方案。
+   * @param {{track: string, scope: string, matches: string[], text: string, source?: string, workspaceKey?: string, agentKey?: string}} input - 整合方案。
    * @param {MemoryWriteContext} write - {agent, callId?, signal?, gate?}。
    * @returns {Promise<{removed: MemoryEntry[], entry: MemoryEntry, usage: MemoryUsage}>}。
    */
@@ -454,6 +457,7 @@ export class MemoryService {
       track, scope, matches: input.matches, text,
       source: input.source ?? this.sourceLabel,
       workspaceKey: input.workspaceKey ?? this.#workspaceKeyOf(write),
+      agentKey: input.agentKey ?? this.#agentKeyOf(write),
       sessionId: write.agent.session?.id ?? null,
     })
     const sessionId = write.agent.session?.id ?? null
@@ -515,10 +519,10 @@ export class MemoryService {
     return { track: input.track, scope: input.scope, text: input.text }
   }
 
-  /** 审批前定位替换/删除目标（唯一子串语义，零/多命中结构化报错）。 */
+  /** 审批前定位替换/删除目标（唯一子串语义，大小写不敏感，零/多命中结构化报错）。 */
   #resolveMatch(/** @type {{match: string}} */ input, /** @type {string} */ track, /** @type {string} */ scope) {
-    const hits = /** @type {Array<{text: string}>} */ (this.store.queryEntries({ track, scope, text: input.match }).entries)
-      .filter((entry) => entry.text.includes(input.match))
+    const hits = /** @type {Array<{text: string}>} */ (this.store.matchCandidates(track, scope, input.match))
+      .filter((entry) => entry.text.toLowerCase().includes(input.match.toLowerCase()))
     if (hits.length === 0) throw new EntryNotFoundError({ track, scope, match: input.match })
     if (hits.length > 1) {
       throw new AmbiguousMatchError({
@@ -578,6 +582,11 @@ export class MemoryService {
   #workspaceKeyOf(write) {
     return workspaceKeyOf(/** @type {string | undefined} */ (write.agent?.session?.header?.cwd))
   }
+
+  /** @param {{agent?: {session?: MemorySessionLike | null} | null}} write - {agent}。 */
+  #agentKeyOf(write) {
+    return agentKeyOf(/** @type {string | undefined} */ (write.agent?.session?.header?.agentPreset))
+  }
 }
 
 /** 去重的 (track, scope) 组合（seed 预检用）。 */
@@ -621,7 +630,7 @@ const MEMORY_TOOL_DESCRIPTION = [
   'SAVE: user preferences and corrections; environment facts and project conventions; lessons learned from mistakes; summaries of completed work; anything the user explicitly asks you to remember.',
   'SKIP: trivial or re-derivable facts; encyclopedia knowledge a fresh search can answer; large data dumps or logs; one-off file paths; content already available in the current workspace.',
   '',
-  'Writes (add/replace/remove/consolidate) require approval under the configured policy and are audited; reads (query) are free. replace/remove target an entry by a UNIQUE case-sensitive substring — an ambiguous match fails with the candidate list, so use a longer substring. consolidate merges 1..20 existing entries (unique substrings) into ONE new entry with a single approval and one atomic write — use it when a layer is over budget. Each session receives a frozen snapshot of current memory at startup; the snapshot never changes mid-session.',
+  'Writes (add/replace/remove/consolidate) require approval under the configured policy and are audited; reads (query) are free. replace/remove target an entry by a UNIQUE case-insensitive substring — an ambiguous match fails with the candidate list, so use a longer substring. consolidate merges 1..20 existing entries (unique substrings) into ONE new entry with a single approval and one atomic write — use it when a layer is over budget. Each session receives a frozen snapshot of current memory at startup; the snapshot never changes mid-session.',
 ].join('\n')
 
 /**
@@ -653,16 +662,16 @@ export function makeMemoryTool(service) {
       },
       text: {
         type: 'string',
-        description: 'add/replace: the exact entry text. query: case-sensitive substring filter.',
+        description: 'add/replace: the exact entry text. query: case-insensitive substring filter.',
       },
       match: {
         type: 'string',
-        description: 'replace/remove: a UNIQUE case-sensitive substring of the existing entry to target.',
+        description: 'replace/remove: a UNIQUE case-insensitive substring of the existing entry to target.',
       },
       matches: {
         type: 'array',
         items: { type: 'string' },
-        description: 'consolidate: 1..20 UNIQUE case-sensitive substrings of the entries to merge into the new text.',
+        description: 'consolidate: 1..20 UNIQUE case-insensitive substrings of the entries to merge into the new text.',
       },
       limit: {
         type: 'integer',
@@ -1019,13 +1028,16 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
       let frozen = snapshots.get(session)
       if (frozen === undefined) {
         const workspaceKey = workspaceKeyOf(/** @type {string | undefined} */ (session.header?.cwd))
+        const agentKey = agentKeyOf(/** @type {string | undefined} */ (session.header?.agentPreset))
         const entries = visibleEntries(
-          /** @type {Array<{id: string, track: string, scope: string, workspaceKey: string, text: string, createdAt: number}>} */ (store.listEntries()),
+          /** @type {Array<{id: string, track: string, scope: string, workspaceKey: string, agentKey: string, text: string, createdAt: number}>} */ (store.listEntries()),
           workspaceKey,
+          agentKey,
         )
         const proposals = visibleProposals(
           /** @type {MemoryProposal[]} */ (store.proposalList('pending', resolved.proposals.maxPending)),
           workspaceKey,
+          agentKey,
         )
         frozen = renderSnapshot(entries, resolved.budgets, proposals)
         snapshots.set(session, frozen)
@@ -1096,6 +1108,7 @@ function handleSessionEvent(store, session, event, proposals, summaries) {
     track: 'agent',
     scope: 'workspace',
     workspaceKey: workspaceKeyOf(/** @type {string | undefined} */ (session.header?.cwd)),
+    agentKey: agentKeyOf(/** @type {string | undefined} */ (session.header?.agentPreset)),
     text: truncated,
     source: 'compaction',
     sessionId: typeof session.id === 'string' ? session.id : '',
@@ -1255,7 +1268,7 @@ async function runMemoryCommand(ctx, service, invocation) {
           return { kind: 'error', text: `proposal ${JSON.stringify(id)} 不是待审批提案（可能已裁决或不存在）` }
         }
         const result = await service.add(
-          { track: proposal.track, scope: proposal.scope, text: proposal.text, source: 'proposal', workspaceKey: proposal.workspaceKey },
+          { track: proposal.track, scope: proposal.scope, text: proposal.text, source: 'proposal', workspaceKey: proposal.workspaceKey, agentKey: proposal.agentKey },
           { agent: invocation?.agent, gate: makeCommandGate(ctx, invocation) },
         )
         service.store.proposalDecide(id, 'approved')
@@ -1362,10 +1375,10 @@ export function makeMemoryRecallTool(service, ctx, recall) {
     description: [
       'Two-part recall over memory and session history: returns (1) bounded memory entries matching the query from the dsh-memento store, and (2) recent session-history matches via the session-query service.',
       'Use when a memory query alone is ambiguous or when the answer may live in an earlier conversation rather than in memory. For plain memory lookup prefer the memory tool with action=query.',
-      'The query is a case-sensitive substring for memory entries (same as the memory tool) and a case-insensitive semantic-text scan for session history.',
+      'The query is a case-insensitive substring for memory entries (same as the memory tool) and a case-insensitive semantic-text scan for session history.',
     ].join('\n'),
     parameters: {
-      query: { type: 'string', required: true, description: 'Search terms: case-sensitive for memory entries; case-insensitive for session history.' },
+      query: { type: 'string', required: true, description: 'Case-insensitive search terms for both sources.' },
       memoryLimit: { type: 'integer', description: 'Max memory entries to return (default 10).' },
       historyLimit: { type: 'integer', description: 'Max history sessions to scan (default 8).' },
     },

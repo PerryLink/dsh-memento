@@ -478,6 +478,25 @@ test('consolidate：off 策略拒绝时零落盘', async (t) => {
   assert.equal(service.query({}).total, 0, '目标不存在即失败，任何情况都不落盘')
 })
 
+test('P2-5：agentKey 按会话 agentPreset 隔离，缺失时落共享层', async (t) => {
+  const mounted = mount({ writePolicy: 'auto' })
+  t.after(() => teardown(mounted))
+  const { mock } = mounted
+  const service = mock.services.get('memory')
+  await service.add({ track: 'user', scope: 'user-global', text: 'coder 专属偏好' }, { agent: makeAgent(makeSession({ id: 'sa', agentPreset: 'coder' })) })
+  await service.add({ track: 'user', scope: 'user-global', text: 'reviewer 专属偏好' }, { agent: makeAgent(makeSession({ id: 'sb', agentPreset: 'reviewer' })) })
+  await service.add({ track: 'user', scope: 'user-global', text: '共享条目' }, { agent: makeAgent(makeSession({ id: 'sc' })) })
+
+  const section = mock.sections.find((s) => s.name === 'dsh-memento:memory')
+  const viewA = section.text({ agent: { session: makeSession({ id: 'va', agentPreset: 'coder' }) } })
+  assert.ok(viewA.includes('coder 专属偏好'), '专属层对同 preset 可见')
+  assert.ok(viewA.includes('共享条目'), '共享层对一切 preset 可见')
+  assert.ok(!viewA.includes('reviewer 专属偏好'), '其它 preset 的专属层不可见')
+  const viewBlank = section.text({ agent: { session: makeSession({ id: 'vb' }) } })
+  assert.ok(viewBlank.includes('共享条目'))
+  assert.ok(!viewBlank.includes('coder 专属偏好'), '无 preset 会话只见共享层')
+})
+
 test('S5：无 agent 的服务直写失败封闭（不产生任何写/审计）', async (t) => {
   const mounted = mount({ writePolicy: 'auto' })
   t.after(() => teardown(mounted))

@@ -47,7 +47,7 @@ Depois, na Web UI: peça ao modelo para lembrar algo → aprove a escrita → in
 | 💾 Provider | `lib/store.mjs` — `node:sqlite` arquivo único (`$DSH_HOME/dsh-memento/memory.db`, WAL) | Zero dependências, zero rede; tabelas de entrada + auditoria; correspondência por substring única |
 | 🛠 Consumers | ferramenta `memory` · injeção de snapshot congelado (seção de system-prompt, ordem `-50`) · ferramenta `memory_recall` · comando `/memory` · painel Web somente leitura | Escritas/leituras voltadas ao modelo, snapshot congelado com cabeçalho de orçamento, recuperação em duas partes, comando do usuário, gaveta do navegador |
 
-**Duas trilhas × duas camadas.** Trilha `user` = fatos sobre o usuário (preferências, estilo de comunicação, pontos sensíveis); trilha `agent` = fatos do ambiente, convenções do projeto, lições aprendidas. Cada trilha tem camadas `user-global` (entre workspaces) e `workspace` (cwd por sessão) — camadas mescladas no estilo Codex, não global-apenas no estilo Hermes.
+**Duas trilhas × duas camadas × chave por agente.** Trilha `user` = fatos sobre o usuário (preferências, estilo de comunicação, pontos sensíveis); trilha `agent` = fatos do ambiente, convenções do projeto, lições aprendidas. Cada trilha tem camadas `user-global` (entre workspaces) e `workspace` (cwd por sessão) — camadas mescladas no estilo Codex, não global-apenas no estilo Hermes. Uma terceira dimensão isola entradas pelo `agentPreset` da sessão (escopo por agente); entradas sem preset ficam na camada compartilhada visível para todos.
 
 **Snapshots congelados.** O snapshot é renderizado uma vez por sessão na primeira montagem do prompt (leitura síncrona do SQLite + cache por sessão) e nunca muda no meio da sessão — estável por cache de prefixo por construção. Mudanças internas da sessão persistem apenas em disco + auditoria.
 
@@ -127,7 +127,7 @@ O nome é **`dsh-memento`** (livre no npm e no GitHub). Não `dsh-recall` (confu
 
 - **O vocabulário de eventos de sessão é declarado, ainda não emitido (rc.6).** `memory/added|updated|removed|recalled|snapshot` são declarados por merge em `types.d.ts`, mas o rc.6 não tem superfície de registro para tipos de evento fora do repositório (appends não registrados tornariam sessões persistidas incapazes de carregar). A completude da auditoria vem do par de aprovação + a tabela de auditoria; a emissão liga automaticamente assim que um build do harness registra os tipos. Veja [ARCHITECTURE.md](ARCHITECTURE.md) decisão 4.
 - **A política `ask` precisa de um answerer.** Sem um answerer de UI/ACP composto, as escritas falham fechado (`unavailable`) — por design, a postura fail-closed da emenda de aprovação.
-- **Ainda sem escopo por agente.** As camadas da V1 são apenas `user-global` e `workspace`.
+- **Sem índice FTS5.** A busca por substring usa `instr` insensível a maiúsculas (correto para CJK); o ranking de recuperação usa contadores de acertos por entrada. O tokenizador trigram do FTS5 não indexa caracteres CJK de um único caractere, então não é usado — veja [ARCHITECTURE.md](ARCHITECTURE.md), decisão 10.
 
 ## 🧪 Desenvolvimento
 

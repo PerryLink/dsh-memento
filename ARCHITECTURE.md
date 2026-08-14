@@ -95,6 +95,17 @@ memory 工具(add)
 
 9. **V2 面板只读**：Web 面板（`dsh.client` 零构建抽屉）只做条目浏览/搜索/预算条/审计尾；审批与写操作一律发生在 DSH 内置审批 UI + `memory` 工具（否则会与内置审批呈现重复并产生分歧）。
 
+10. **检索引擎 = 大小写不敏感 instr + 召回计数排序，不用 FTS5**。
+    - 实测（Node 22 内置 SQLite，FTS5 可用）：trigram 分词器无法索引单字 CJK 字符——`'中文测试'` 中查 `'中文'` 零命中；unicode61 把 CJK 连续段当一个 token，仅前缀可查。本插件语料以中文记忆为主，子串语义必须对 CJK 成立，instr 是唯一正确的内置引擎。
+    - query 大小写不敏感（lower() 折叠 ASCII；CJK 无大小写不受影响），与面板过滤、sessionQuery 文本检索语义一致；replace/remove/consolidate 定位同语义（`lib/match.mjs` 的 `findUniqueMatch` 统一折叠，store 层 lower(instr) 与之一致）。
+    - 召回排序：query 命中页的条目 `recall_count` +1、`last_recalled` 落地（SCHEMA v3 列）；排序 `recall_count DESC, updated_at DESC`（高频即重要）。快照仍走 `listEntries` 创建序（冻结块稳定优先）。
+    - 未来真正的升级路径是 harness 出现 embedding seam 后的语义召回（Provider 角色天然兼容），不是 FTS5。
+
+11. **第三维 agentKey（per-agent 作用域，SCHEMA v3）**。
+    - 写方 session 的 `header.agentPreset` 经 `agentKeyOf` 规范化（缺失→'' 共享层）；条目与提案落 `agent_key`。
+    - 可见性：`agent_key === '' || === 会话 agentKey`，且 scope 规则不变；预算仍按 track×scope 计（agentKey 不新增预算维度）。
+    - 工具不暴露 agentKey 参数——由写方 session 自动决定，模型不可选，避免污染。
+
 ## V3 协同（F12/F13，接口已就位，文档对齐）
 
 ### F12：seed 与 dsh-claude-move 的对接方式

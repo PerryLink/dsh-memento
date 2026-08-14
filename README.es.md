@@ -47,7 +47,7 @@ Luego, en la interfaz web: pide al modelo que recuerde algo → aprueba la escri
 | 💾 Proveedor | `lib/store.mjs` — un solo archivo `node:sqlite` (`$DSH_HOME/dsh-memento/memory.db`, WAL) | Cero dependencias, cero red; tablas de entradas + auditoría; coincidencia por subcadena única |
 | 🛠 Consumidores | herramienta `memory` · inyección de instantánea congelada (sección del system prompt, orden `-50`) · herramienta `memory_recall` · comando `/memory` · panel web de solo lectura | Escrituras/lecturas orientadas al modelo, instantánea congelada encabezada por presupuesto, recuperación en dos partes, comando del lado del usuario, panel lateral en el navegador |
 
-**Dos pistas × dos capas.** La pista `user` = hechos sobre el usuario (preferencias, estilo de comunicación, temas delicados); la pista `agent` = hechos del entorno, convenciones del proyecto, lecciones aprendidas. Cada pista tiene capas `user-global` (entre espacios de trabajo) y `workspace` (cwd por sesión): capas fusionadas al estilo Codex, no solo global al estilo Hermes.
+**Dos pistas × dos capas × clave por agente.** La pista `user` = hechos sobre el usuario (preferencias, estilo de comunicación, temas delicados); la pista `agent` = hechos del entorno, convenciones del proyecto, lecciones aprendidas. Cada pista tiene capas `user-global` (entre espacios de trabajo) y `workspace` (cwd por sesión): capas fusionadas al estilo Codex, no solo global al estilo Hermes. Una tercera dimensión aísla entradas por el `agentPreset` de la sesión (ámbito por agente); las entradas sin preset quedan en la capa compartida visible para todos.
 
 **Instantáneas congeladas.** La instantánea se renderiza una vez por sesión en el primer ensamblado del prompt (lectura síncrona de SQLite + caché por sesión) y nunca cambia a mitad de sesión: estable en caché de prefijo por construcción. Los cambios internos de la sesión persisten solo a disco + auditoría.
 
@@ -127,7 +127,7 @@ El nombre es **`dsh-memento`** (libre en npm y GitHub). No `dsh-recall` (confund
 
 - **El vocabulario de eventos de sesión está declarado, pero aún no se emite (rc.6).** `memory/added|updated|removed|recalled|snapshot` están declarados por fusión en `types.d.ts`, pero rc.6 no tiene superficie de registro para tipos de eventos fuera del repositorio (los appends no registrados harían que las sesiones persistidas no se pudieran cargar). La completitud de la auditoría proviene del par de aprobación + la tabla de auditoría; la emisión se activa automáticamente en cuanto una compilación del harness registre los tipos. Véase [ARCHITECTURE.md](ARCHITECTURE.md), decisión 4.
 - **La política `ask` necesita un contestador.** Sin un contestador de UI/ACP compuesto, las escrituras fallan en modo cerrado (`unavailable`): por diseño, la postura de fallo cerrado de la costura de aprobación.
-- **Aún no hay ámbito por agente.** Las capas de la V1 son solo `user-global` y `workspace`.
+- **Sin índice FTS5.** La búsqueda por subcadena usa `instr` insensible a mayúsculas (correcto para CJK); el ranking de recuperación usa contadores de aciertos por entrada. El tokenizador trigram de FTS5 no puede indexar caracteres CJK de un solo carácter, así que no se usa — véase [ARCHITECTURE.md](ARCHITECTURE.md), decisión 10.
 
 ## 🧪 Desarrollo
 

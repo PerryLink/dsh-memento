@@ -27,6 +27,8 @@ export interface MemoryEntry {
   scope: MemoryScope
   /** workspace 条目的规范化 cwd 键；user-global 条目为空串。 */
   workspaceKey: string
+  /** 规范化 agentPreset 键；'' = 共享层（所有 preset 可见）。 */
+  agentKey: string
   /** 条目文本（预算计数字符 = JS 字符串长度）。 */
   text: string
   /** 来源标注（dsh-memento / memory-tool / claude 等）。 */
@@ -35,6 +37,10 @@ export interface MemoryEntry {
   createdAt: number
   /** 最近更新时间（epoch ms）。 */
   updatedAt: number
+  /** 最近召回时间（epoch ms）；从未命中为 null。 */
+  lastRecalled: number | null
+  /** 召回次数（query 排序用：高频即重要）。 */
+  recallCount: number
   /** 最近一次写它的会话 id；无则 null。 */
   sessionId: string | null
 }
@@ -47,6 +53,8 @@ export interface MemoryEntryInput {
   source?: string
   /** 显式 workspaceKey；省略时取写方会话 cwd。 */
   workspaceKey?: string
+  /** 显式 agentKey；省略时取写方会话 agentPreset。 */
+  agentKey?: string
 }
 
 /** 会话最小形状（插件只读这些面；字段宽类型以兼容真实 Session/Agent）。 */
@@ -116,7 +124,7 @@ export interface MemoryService {
   remove(input: { track: MemoryTrack; scope: MemoryScope; match: string }, write: MemoryWriteContext): Promise<{ entry: MemoryEntry; usage: MemoryUsage }>
 
   /** 整合多条为一条（一次审批 + Provider 单事务原子执行；零/多命中或超预算响亮失败）。 */
-  consolidate(input: { track: MemoryTrack; scope: MemoryScope; matches: string[]; text: string; source?: string; workspaceKey?: string }, write: MemoryWriteContext): Promise<{ removed: MemoryEntry[]; entry: MemoryEntry; usage: MemoryUsage }>
+  consolidate(input: { track: MemoryTrack; scope: MemoryScope; matches: string[]; text: string; source?: string; workspaceKey?: string; agentKey?: string }, write: MemoryWriteContext): Promise<{ removed: MemoryEntry[]; entry: MemoryEntry; usage: MemoryUsage }>
 
   /** 批量种子（一次 ask 审批整批；任一条超预算整批拒绝）。 */
   seed(inputs: MemoryEntryInput[], write: MemoryWriteContext): Promise<{ added: number; entries: MemoryEntry[] }>

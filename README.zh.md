@@ -47,7 +47,7 @@ dsh --profile web --dump-config               # 应看到 "# == dsh-memento" 层
 | 💾 Provider | `lib/store.mjs` —— `node:sqlite` 单文件（`$DSH_HOME/dsh-memento/memory.db`，WAL） | 零依赖、零网络；条目表 + 审计表；唯一子串匹配 |
 | 🛠 Consumers | `memory` 工具 · 冻结快照注入（systemPrompt 段，顺序 `-50`）· `memory_recall` 工具 · `/memory` 命令 · 只读 Web 面板 | 模型读写、带用量头的冻结快照、两段式召回、用户侧命令、浏览器抽屉 |
 
-**双轨 × 双层。** `user` 轨 = 用户画像（偏好、沟通风格、雷区）；`agent` 轨 = 环境事实、项目约定、教训。每轨分 `user-global`（跨工作区）与 `workspace`（按会话 cwd）两层——学 Codex 的合并分层，不学 Hermes 的纯全局。
+**双轨 × 双层 × per-agent 键。** `user` 轨 = 用户画像（偏好、沟通风格、雷区）；`agent` 轨 = 环境事实、项目约定、教训。每轨分 `user-global`（跨工作区）与 `workspace`（按会话 cwd）两层——学 Codex 的合并分层，不学 Hermes 的纯全局。第三维按会话 `agentPreset` 隔离条目（per-agent 作用域）；无 preset 的条目留在人人可见的共享层。
 
 **冻结快照。** 快照在会话首个 prompt 组装时渲染一次（SQLite 同步读 + 按会话缓存），会话内不再变化——前缀缓存天然稳定。会话内变更只落盘 + 落审计。
 
@@ -127,7 +127,7 @@ dsh plugin --profile <name> remove dsh-memento       # 卸载：库与会话日�
 
 - **会话事件词汇已声明、rc.6 上暂不派发。** `memory/added|updated|removed|recalled|snapshot` 已在 `types.d.ts` 声明合并，但 rc.6 没有仓外插件事件类型的注册面（append 未注册类型会让持久化会话无法加载）。审计完整性由审批审计对 + 审计表承担；harness 收录这些类型后自动开启派发。见 [ARCHITECTURE.md](ARCHITECTURE.md) 决策 4。
 - **`ask` 策略需要 answerer。** 没有 UI/ACP answerer 组合时写失败封闭（`unavailable`）——这是审批 seam 的失败封闭姿态，属设计行为。
-- **暂无 per-agent 作用域。** V1 只有 `user-global` 与 `workspace` 两层。
+- **不使用 FTS5 索引。** 子串检索走大小写不敏感 `instr`（对 CJK 正确）；召回排序用逐条目命中计数。FTS5 的 trigram 分词器无法索引单字 CJK 字符，故不采用——见 [ARCHITECTURE.md](ARCHITECTURE.md) 决策 10。
 
 ## 🧪 开发
 

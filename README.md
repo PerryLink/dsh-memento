@@ -47,7 +47,7 @@ Then, in the Web UI: ask the model to remember something → approve the write �
 | 💾 Provider | `lib/store.mjs` — `node:sqlite` single file (`$DSH_HOME/dsh-memento/memory.db`, WAL) | Zero dependencies, zero network; entry + audit tables; unique-substring match |
 | 🛠 Consumers | `memory` tool · frozen snapshot injection (system-prompt section, order `-50`) · `memory_recall` tool · `/memory` command · read-only Web panel | Model-facing writes/reads, budget-headed frozen snapshot, two-part recall, user-side command, browser drawer |
 
-**Two tracks × two layers.** `user` track = facts about the user (preferences, communication style, landmines); `agent` track = environment facts, project conventions, lessons learned. Each track has `user-global` (cross-workspace) and `workspace` (per-session cwd) layers — Codex-style merged layering, not Hermes-style global-only.
+**Two tracks × two layers × per-agent key.** `user` track = facts about the user (preferences, communication style, landmines); `agent` track = environment facts, project conventions, lessons learned. Each track has `user-global` (cross-workspace) and `workspace` (per-session cwd) layers — Codex-style merged layering, not Hermes-style global-only. A third dimension isolates entries by the session's `agentPreset` (per-agent scope); entries without a preset stay in the shared layer visible to everyone.
 
 **Frozen snapshots.** The snapshot is rendered once per session at first prompt assembly (synchronous SQLite read + per-session cache) and never changes mid-session — prefix-cache stable by construction. Session-internal changes persist to disk + audit only.
 
@@ -127,7 +127,7 @@ The name is **`dsh-memento`** (free on npm and GitHub). Not `dsh-recall` (confus
 
 - **Session events vocabulary is declared, not yet emitted (rc.6).** `memory/added|updated|removed|recalled|snapshot` are merge-declared in `types.d.ts`, but rc.6 has no registration surface for out-of-repo event types (unregistered appends would make persisted sessions unloadable). Audit completeness comes from the approval pair + the audit table; emission turns on automatically once a harness build registers the types. See [ARCHITECTURE.md](ARCHITECTURE.md) decision 4.
 - **`ask` policy needs an answerer.** With no UI/ACP answerer composed, writes fail closed (`unavailable`) — by design, the approval seam's fail-closed stance.
-- **No per-agent scope yet.** V1 layers are `user-global` and `workspace` only.
+- **No FTS5 indexing.** Substring search runs on case-insensitive `instr` (correct for CJK); recall ranking uses per-entry hit counts. FTS5's trigram tokenizer cannot index single-character CJK tokens, so it is not used — see [ARCHITECTURE.md](ARCHITECTURE.md) decision 10.
 
 ## 🧪 Development
 

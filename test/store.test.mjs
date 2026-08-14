@@ -217,6 +217,34 @@ test('consolidateEntries：事务内多子串整合；中途歧义整体回滚�
   assert.throws(() => store.consolidateEntries({ track: 'user', scope: 'workspace', matches: ['a'], text: '' }), InvalidInputError)
 })
 
+test('大小写不敏感：query 与 replace 用 lower(instr) 匹配（ASCII 折叠；CJK 子串语义不变）', (t) => {
+  const { dir, store } = tempStore()
+  t.after(() => closeAndClean({ dir, store }))
+  store.insertEntry({ track: 'user', scope: 'user-global', text: 'Prefer Chinese replies' })
+  assert.equal(store.queryEntries({ text: 'chinese' }).total, 1, 'query 大小写不敏感')
+  assert.equal(store.matchCandidates('user', 'user-global', 'CHINESE').length, 1, '定位同样不敏感')
+  const { entry } = store.replaceEntry({ track: 'user', scope: 'user-global', match: 'CHINESE', text: 'Prefer English replies' })
+  assert.equal(entry.text, 'Prefer English replies')
+  store.insertEntry({ track: 'user', scope: 'user-global', text: '中文回复偏好' })
+  assert.equal(store.queryEntries({ text: '中文' }).total, 1, 'CJK 无大小写，子串语义不受影响')
+})
+
+test('召回排序：query 命中计数 +1，结果按 recall_count DESC, updated_at DESC', (t) => {
+  const { dir, store } = tempStore()
+  t.after(() => closeAndClean({ dir, store }))
+  const a = store.insertEntry({ track: 'agent', scope: 'workspace', text: 'fact alpha' })
+  const b = store.insertEntry({ track: 'agent', scope: 'workspace', text: 'fact beta' })
+  store.queryEntries({ text: 'alpha' })
+  const rows = store.queryEntries({ text: 'fact' })
+  assert.equal(rows.entries[0].id, a.id, '高频条目排前')
+  const listed = store.listEntries()
+  const listedA = listed.find((entry) => entry.id === a.id)
+  const listedB = listed.find((entry) => entry.id === b.id)
+  assert.equal(listedA.recallCount, 2, '两次命中计数')
+  assert.ok(listedA.lastRecalled > 0, 'last_recalled 落地')
+  assert.equal(listedB.recallCount, 1, '一次命中计数')
+})
+
 test('库损坏（非 SQLite 文件）在打开点响亮失败', (t) => {
   const dir = mkdtempSync(path.join(tmpdir(), 'dsh-memento-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
@@ -283,7 +311,7 @@ test('v1 库逐级迁移到 v2：条目/审计数据完好，proposals 表就绪
   v1.close()
 
   const store = openMemoryStore(dbPath)
-  assert.equal(Number(store.db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get().value), 2, '迁移后版本 = 2')
+  assert.equal(Number(store.db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get().value), SCHEMA_VERSION, '迁移后版本 = 当前 SCHEMA_VERSION')
   const entries = store.listEntries()
   assert.equal(entries.length, 1)
   assert.equal(entries[0].text, 'v1 遗留条目', '迁移保留数据')

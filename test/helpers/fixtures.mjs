@@ -19,10 +19,13 @@ export function makeEntries(defs) {
       track: def.track,
       scope: def.scope,
       workspaceKey: def.workspaceKey ?? (def.scope === 'workspace' ? workspaceKeyOf('C:\\work\\proj') : ''),
+      agentKey: def.agentKey ?? '',
       text: def.text,
       source: def.source ?? 'fixture',
       createdAt: clock,
       updatedAt: clock,
+      lastRecalled: null,
+      recallCount: 0,
       sessionId: null,
     }
   })

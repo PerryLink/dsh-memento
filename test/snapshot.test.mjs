@@ -15,6 +15,7 @@ function entry(partial) {
     track: partial.track,
     scope: partial.scope,
     workspaceKey: partial.workspaceKey ?? '',
+    agentKey: partial.agentKey ?? '',
     text: partial.text,
     source: 'test',
     createdAt: partial.createdAt ?? 0,
@@ -64,4 +65,14 @@ test('visibleEntries：user-global 全见；workspace 只匹配 workspaceKey', (
   ]
   const visible = visibleEntries(entries, '/w')
   assert.deepEqual(visible.map((v) => v.id).sort(), ['g', 'w1'])
+})
+
+test('visibleEntries：agentKey 共享层全见，专属层只匹配会话 agentKey', () => {
+  const entries = [
+    entry({ id: 'shared', track: 'user', scope: 'user-global', text: 'shared', agentKey: '' }),
+    entry({ id: 'mine', track: 'user', scope: 'user-global', text: 'mine', agentKey: 'preset-a' }),
+    entry({ id: 'other', track: 'user', scope: 'user-global', text: 'other', agentKey: 'preset-b' }),
+  ]
+  assert.deepEqual(visibleEntries(entries, '/w', 'preset-a').map((v) => v.id).sort(), ['mine', 'shared'])
+  assert.deepEqual(visibleEntries(entries, '/w', '').map((v) => v.id), ['shared'], '无 preset 的会话只见共享层')
 })
