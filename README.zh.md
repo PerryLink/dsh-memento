@@ -95,9 +95,9 @@ dsh plugin --profile <name> remove dsh-memento       # 卸载：库与会话日�
 
 ## 🛠 工具与观察面
 
-- **`memory`** —— add/replace/remove/query，工具描述内嵌 Save/Skip 行为指引（存用户偏好、纠正、环境事实、项目约定、教训；跳过琐碎事实、可再查的百科知识、大数据转储、一次性路径）。写走审批门，读免费；replace/remove 用**唯一子串**定位（歧义时报候选清单）。
+- **`memory`** —— add/replace/remove/consolidate/query，工具描述内嵌 Save/Skip 行为指引（存用户偏好、纠正、环境事实、项目约定、教训；跳过琐碎事实、可再查的百科知识、大数据转储、一次性路径）。写走审批门，读免费；replace/remove 用**唯一子串**定位（歧义时报候选清单）；consolidate 一次审批 + 一次原子写把 1..20 条整合为一条。
 - **`memory_recall`** —— 两段式召回：有界记忆匹配 **+** 经 `ctx.sessionQuery` 的近期会话历史匹配（服务缺失时优雅降级为纯记忆结果）。
-- **`/memory`** —— 用户触发命令（非模型回合）：`list` · `query <词>` · `add [--track=user|agent] [--scope=user-global|workspace] <文本>` · `remove [选项] <子串>` · `budgets` · `audit`。命令写走同一 waterfall 与策略；审计落插件审计表 + `command/done`。
+- **`/memory`** —— 用户触发命令（非模型回合）：`list` · `query <词>` · `add [--track=user|agent] [--scope=user-global|workspace] <文本>` · `remove [选项] <子串>` · `consolidate [选项] <子串...> => <新文本>` · `budgets` · `audit`。命令写走同一 waterfall 与策略；审计落插件审计表 + `command/done`。
 - **Web 面板** —— 零构建 `dsh.client` 抽屉：按轨/层浏览条目、搜索、预算用量条、审计尾。设计上只读：写与审批走 `memory` 工具与内置审批 UI。
 
 ## 🆚 与其它记忆插件的差异

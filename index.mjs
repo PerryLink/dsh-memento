@@ -42,6 +42,7 @@ import { extractEventText } from './lib/extract.mjs'
  * @typedef {import('./types.js').MemoryQueryResult} MemoryQueryResult
  * @typedef {import('./types.js').MemoryWriteContext} MemoryWriteContext
  * @typedef {import('./types.js').MemorySessionLike} MemorySessionLike
+ * @typedef {{track: string, scope: string, used: number, limit: number}} MemoryUsage
  * @typedef {{user: {userGlobal: number, workspace: number}, agent: {userGlobal: number, workspace: number}}} BudgetsConfig
  * @typedef {object} StoreHandle - ctx.memory 依赖的 Provider 面。
  * @property {(filter?: {track?: string, scope?: string, text?: string, limit?: number}) => MemoryQueryResult} queryEntries
@@ -51,6 +52,7 @@ import { extractEventText } from './lib/extract.mjs'
  * @property {(inputs: object[]) => MemoryEntry[]} seedEntries
  * @property {(input: object) => {previous: MemoryEntry, entry: MemoryEntry}} replaceEntry
  * @property {(input: object) => MemoryEntry} removeEntry
+ * @property {(input: object) => {removed: MemoryEntry[], entry: MemoryEntry}} consolidateEntries
  * @property {(row: object) => object} auditAppend
  * @property {(limit?: number) => object[]} auditList
  * @property {() => void} close
@@ -88,6 +90,7 @@ import { extractEventText } from './lib/extract.mjs'
  * @property {boolean} [truncated]
  * @property {number} [total]
  * @property {PublicEntry} [entry]
+ * @property {Array<{id: string, text: string}>} [removed]
  * @property {{used: number, limit: number}} [usage]
  * @typedef {object} RecallToolValue - memory_recall 工具规范结果形状。
  * @property {{total: number, entries: PublicEntry[], truncated: boolean}} memory
@@ -413,6 +416,49 @@ export class MemoryService {
     return { added: entries.length, entries }
   }
 
+  /**
+   * 整合多个条目为一条新条目（写：审批门 + 预算门；一次审批 + Provider 单事务原子执行）。
+   * 零/多命中、超预算、审批拒绝、目标在审批期间消失都响亮失败；任一步失败无部分写入。
+   * @param {{track: string, scope: string, matches: string[], text: string, source?: string, workspaceKey?: string}} input - 整合方案。
+   * @param {MemoryWriteContext} write - {agent, callId?, signal?, gate?}。
+   * @returns {Promise<{removed: MemoryEntry[], entry: MemoryEntry, usage: MemoryUsage}>}。
+   */
+  async consolidate(input, write) {
+    const { track, scope, text } = this.#validateEntry(input, write)
+    this.#assertConsolidateMatches(input)
+    // 审批前先定位全部目标：零/多命中在打扰用户之前就响亮失败。
+    const initial = input.matches.map((match) => this.#resolveMatch({ match }, track, scope))
+    const removalBefore = initial.reduce((sum, entry) => sum + entry.text.length, 0)
+    this.#assertBudget(track, scope, this.store.usage(track, scope), text.length - removalBefore)
+    const plan = `${input.matches.map((match) => `remove: ${match}`).join('\n')}\nnew text: ${text}`
+    const via = await this.#ask({ action: 'consolidate', track, scope, text: plan }, write)
+    this.#throwIfAborted(write)
+    // 审批等待期间目标可能被并发写改动：重新定位并以此刻为权威重算净变化。
+    const current = input.matches.map((match) => this.#resolveMatch({ match }, track, scope))
+    const removalNow = current.reduce((sum, entry) => sum + entry.text.length, 0)
+    this.#assertBudget(track, scope, this.store.usage(track, scope), text.length - removalNow)
+    const { removed, entry } = this.store.consolidateEntries({
+      track, scope, matches: input.matches, text,
+      source: input.source ?? this.sourceLabel,
+      workspaceKey: input.workspaceKey ?? this.#workspaceKeyOf(write),
+      sessionId: write.agent.session?.id ?? null,
+    })
+    const sessionId = write.agent.session?.id ?? null
+    for (const old of removed) {
+      this.store.auditAppend({
+        action: 'consolidate-remove', track, scope, entryId: old.id, text: old.text,
+        outcome: this.#outcomeLabel(via), source: old.source, sessionId,
+      })
+      this.#appendWriteEvent(write, SESSION_EVENTS.removed, { entry: old, source: old.source })
+    }
+    this.store.auditAppend({
+      action: 'consolidate-add', track, scope, entryId: entry.id, text: entry.text,
+      outcome: this.#outcomeLabel(via), source: entry.source, sessionId,
+    })
+    this.#appendWriteEvent(write, SESSION_EVENTS.added, { entry, source: entry.source })
+    return { removed, entry, usage: this.#usage(track, scope) }
+  }
+
   /** 写路径必须有 agent（审批路由与审计归属）：缺失即失败封闭。 */
   #assertAgent(/** @type {MemoryWriteContext} */ write) {
     if (write === null || typeof write !== 'object' || write.agent === undefined || write.agent === null) {
@@ -431,6 +477,18 @@ export class MemoryService {
   #assertMatch(/** @type {{match?: unknown}} */ input) {
     if (typeof input.match !== 'string' || input.match.length === 0) {
       throw new InvalidInputError('replace/remove match must be a non-empty string')
+    }
+  }
+
+  /** consolidate matches 校验（1..20 个非空字符串）。 */
+  #assertConsolidateMatches(/** @type {{matches?: unknown}} */ input) {
+    if (!Array.isArray(input.matches) || input.matches.length === 0 || input.matches.length > 20) {
+      throw new InvalidInputError('consolidate matches must be an array of 1..20 non-empty strings')
+    }
+    for (const match of input.matches) {
+      if (typeof match !== 'string' || match.length === 0) {
+        throw new InvalidInputError('consolidate matches must be an array of 1..20 non-empty strings')
+      }
     }
   }
 
@@ -550,7 +608,7 @@ const MEMORY_TOOL_DESCRIPTION = [
   'SAVE: user preferences and corrections; environment facts and project conventions; lessons learned from mistakes; summaries of completed work; anything the user explicitly asks you to remember.',
   'SKIP: trivial or re-derivable facts; encyclopedia knowledge a fresh search can answer; large data dumps or logs; one-off file paths; content already available in the current workspace.',
   '',
-  'Writes (add/replace/remove) require approval under the configured policy and are audited; reads (query) are free. replace/remove target an entry by a UNIQUE case-sensitive substring — an ambiguous match fails with the candidate list, so use a longer substring. Each session receives a frozen snapshot of current memory at startup; the snapshot never changes mid-session.',
+  'Writes (add/replace/remove/consolidate) require approval under the configured policy and are audited; reads (query) are free. replace/remove target an entry by a UNIQUE case-sensitive substring — an ambiguous match fails with the candidate list, so use a longer substring. consolidate merges 1..20 existing entries (unique substrings) into ONE new entry with a single approval and one atomic write — use it when a layer is over budget. Each session receives a frozen snapshot of current memory at startup; the snapshot never changes mid-session.',
 ].join('\n')
 
 /**
@@ -567,8 +625,8 @@ export function makeMemoryTool(service) {
       action: {
         type: 'string',
         required: true,
-        enum: ['add', 'replace', 'remove', 'query'],
-        description: 'add = insert a new entry; replace = rewrite one existing entry; remove = delete one existing entry; query = substring search over existing entries.',
+        enum: ['add', 'replace', 'remove', 'consolidate', 'query'],
+        description: 'add = insert a new entry; replace = rewrite one existing entry; remove = delete one existing entry; consolidate = merge 1..20 existing entries into one new entry (single approval, atomic); query = substring search over existing entries.',
       },
       track: {
         type: 'string',
@@ -588,6 +646,11 @@ export function makeMemoryTool(service) {
         type: 'string',
         description: 'replace/remove: a UNIQUE case-sensitive substring of the existing entry to target.',
       },
+      matches: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'consolidate: 1..20 UNIQUE case-sensitive substrings of the entries to merge into the new text.',
+      },
       limit: {
         type: 'integer',
         description: 'query: maximum entries to return (default 20; hard-capped at 1000).',
@@ -598,7 +661,7 @@ export function makeMemoryTool(service) {
         type: 'object',
         additionalProperties: false,
         properties: {
-          action: { type: 'string', required: true, enum: ['add', 'replace', 'remove', 'query'] },
+          action: { type: 'string', required: true, enum: ['add', 'replace', 'remove', 'consolidate', 'query'] },
           ok: { type: 'boolean', required: true },
           entry: {
             type: 'object',
@@ -609,6 +672,17 @@ export function makeMemoryTool(service) {
               scope: { type: 'string', required: true },
               text: { type: 'string', required: true },
               source: { type: 'string', required: true },
+            },
+          },
+          removed: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                id: { type: 'string', required: true },
+                text: { type: 'string', required: true },
+              },
             },
           },
           previous: {
@@ -739,6 +813,25 @@ export function makeMemoryTool(service) {
             )
             return { action: 'remove', ok: true, entry: publicEntry(result.entry), usage: result.usage }
           }
+          case 'consolidate': {
+            const result = await service.consolidate(
+              {
+                track: args.track ?? 'user',
+                scope: args.scope ?? 'workspace',
+                matches: args.matches,
+                text: args.text,
+                source: 'memory-tool',
+              },
+              write,
+            )
+            return {
+              action: 'consolidate',
+              ok: true,
+              entry: publicEntry(result.entry),
+              removed: result.removed.map((old) => ({ id: old.id, text: old.text })),
+              usage: result.usage,
+            }
+          }
           default: {
             throw new InvalidInputError(`unknown memory action ${JSON.stringify(args.action)}`)
           }
@@ -788,6 +881,8 @@ export function renderMemoryResult(/** @type {object} */ _args, /** @type {Memor
       return [{ type: 'text', text: `memory entry replaced (${value.entry.track}/${value.entry.scope}): ${value.entry.text}\nbudget: ${value.usage.used}/${value.usage.limit} chars used` }]
     case 'remove':
       return [{ type: 'text', text: `memory entry removed (${value.entry.track}/${value.entry.scope}): ${value.entry.text}\nbudget: ${value.usage.used}/${value.usage.limit} chars used` }]
+    case 'consolidate':
+      return [{ type: 'text', text: `memory entries consolidated (${value.entry.track}/${value.entry.scope}): ${value.removed.length} removed → ${value.entry.text}\nbudget: ${value.usage.used}/${value.usage.limit} chars used` }]
     default:
       return [{ type: 'text', text: `memory ${value.action}: ok` }]
   }
@@ -998,8 +1093,8 @@ export function registerCommands(ctx, service) {
     if (typeof commands?.register !== 'function') return
     commands.register({
       name: 'memory',
-      description: '查看/管理 dsh-memento 记忆：list | query <词> | add [--track=user|agent] [--scope=user-global|workspace] <文本> | remove <唯一子串> | budgets | audit',
-      input: { hint: 'list | query <词> | add <文本> | remove <唯一子串> | budgets | audit' },
+      description: '查看/管理 dsh-memento 记忆：list | query <词> | add [--track=user|agent] [--scope=user-global|workspace] <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | budgets | audit',
+      input: { hint: 'list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | budgets | audit' },
       handler: async (/** @type {{rawInput?: unknown, agent?: unknown, signal?: AbortSignal}} */ invocation) => handleMemoryCommand(ctx, service, invocation),
     })
   })
@@ -1033,7 +1128,7 @@ async function runMemoryCommand(ctx, service, invocation) {
   const raw = String(invocation?.rawInput ?? '').trim()
   const [verb, ...rest] = raw.split(/\s+/)
   if (verb === undefined || verb.length === 0) {
-    return { kind: 'success', text: '用法：/memory list | query <词> | add <文本> | remove <唯一子串> | budgets | audit' }
+    return { kind: 'success', text: '用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | budgets | audit' }
   }
   switch (verb) {
     case 'list': {
@@ -1086,8 +1181,33 @@ async function runMemoryCommand(ctx, service, invocation) {
       )
       return { kind: 'success', text: `已删除（${parsed.track}/${parsed.scope}）：${result.entry.text}\n该层用量：${result.usage.used}/${result.usage.limit}` }
     }
+    case 'consolidate': {
+      const joined = rest.join(' ')
+      const separator = joined.indexOf(' => ')
+      if (separator === -1) {
+        return { kind: 'error', text: 'consolidate 用法：/memory consolidate [--track=user|agent] [--scope=user-global|workspace] <唯一子串1> [<唯一子串2> ...] => <新文本>' }
+      }
+      let track = 'user'
+      let scope = 'workspace'
+      const matches = []
+      for (const part of joined.slice(0, separator).split(/\s+/)) {
+        const trackMatch = /^--track=(user|agent)$/.exec(part)
+        if (trackMatch !== null) { track = trackMatch[1]; continue }
+        const scopeMatch = /^--scope=(user-global|workspace)$/.exec(part)
+        if (scopeMatch !== null) { scope = scopeMatch[1]; continue }
+        if (part.length > 0) matches.push(part)
+      }
+      const text = joined.slice(separator + 4).trim()
+      if (matches.length === 0 || matches.length > 20) return { kind: 'error', text: 'consolidate 需要 1..20 个唯一子串（=> 左侧）' }
+      if (text.length === 0) return { kind: 'error', text: 'consolidate 需要新文本（=> 右侧）' }
+      const result = await service.consolidate(
+        { track, scope, matches, text, source: 'command' },
+        { agent: invocation?.agent, gate: makeCommandGate(ctx, invocation) },
+      )
+      return { kind: 'success', text: `已整合（${track}/${scope}）：删除 ${result.removed.length} 条，新增 1 条。\n新条目：${result.entry.text}\n该层用量：${result.usage.used}/${result.usage.limit}` }
+    }
     default:
-      return { kind: 'error', text: `未知子命令「${verb}」。用法：/memory list | query <词> | add <文本> | remove <唯一子串> | budgets | audit` }
+      return { kind: 'error', text: `未知子命令「${verb}」。用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | budgets | audit` }
   }
 }
 

@@ -15,7 +15,7 @@ export type MemoryScope = 'user-global' | 'workspace'
 
 export type MemoryWritePolicy = 'ask' | 'auto' | 'off'
 
-export type MemoryAction = 'add' | 'replace' | 'remove' | 'query' | 'seed'
+export type MemoryAction = 'add' | 'replace' | 'remove' | 'consolidate' | 'query' | 'seed'
 
 /** 落盘条目（审计/会话事件的载荷形状）。 */
 export interface MemoryEntry {
@@ -114,6 +114,9 @@ export interface MemoryService {
 
   /** 按唯一子串删除（审批门；零/多命中报错）。 */
   remove(input: { track: MemoryTrack; scope: MemoryScope; match: string }, write: MemoryWriteContext): Promise<{ entry: MemoryEntry; usage: MemoryUsage }>
+
+  /** 整合多条为一条（一次审批 + Provider 单事务原子执行；零/多命中或超预算响亮失败）。 */
+  consolidate(input: { track: MemoryTrack; scope: MemoryScope; matches: string[]; text: string; source?: string; workspaceKey?: string }, write: MemoryWriteContext): Promise<{ removed: MemoryEntry[]; entry: MemoryEntry; usage: MemoryUsage }>
 
   /** 批量种子（一次 ask 审批整批；任一条超预算整批拒绝）。 */
   seed(inputs: MemoryEntryInput[], write: MemoryWriteContext): Promise<{ added: number; entries: MemoryEntry[] }>

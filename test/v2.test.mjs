@@ -314,6 +314,27 @@ test('F11：recall 默认值可配置——historyLimitDefault 控制未传参�
   assert.equal(result.history.sessions.length, 2, '默认 historyLimitDefault=2 生效')
 })
 
+test('F10：命令 consolidate 走 turn 外审批门并单事务整合', async (t) => {
+  const mounted = mount({ writePolicy: 'auto' })
+  t.after(() => teardown(mounted))
+  const { mock } = mounted
+  const service = mock.services.get('memory')
+  const agent = makeAgent(makeSession())
+  await service.add({ track: 'agent', scope: 'workspace', text: '约定一' }, { agent })
+  await service.add({ track: 'agent', scope: 'workspace', text: '约定二' }, { agent })
+  const invocation = { agent: makeAgent(makeSession()), signal: new AbortController().signal }
+  const done = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'consolidate --track=agent --scope=workspace 约定一 约定二 => 约定一二（整合）' })
+  assert.equal(done.kind, 'success')
+  assert.ok(done.text.includes('删除 2 条'))
+  assert.equal(service.query({ track: 'agent', scope: 'workspace' }).total, 1)
+  assert.equal(service.query({ track: 'agent', scope: 'workspace' }).entries[0].text, '约定一二（整合）')
+  const audit = service.store.auditList()
+  assert.equal(audit[0].action, 'consolidate-add')
+  assert.equal(audit[0].outcome, 'allowed-once (via write gate)', '命令路径 audit 标注 gate 来源')
+  const malformed = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'consolidate 无分隔符' })
+  assert.equal(malformed.kind, 'error')
+})
+
 test('S3：enabled:false 时 V2 观察面一并消失', (t) => {
   const mounted = mount({ enabled: false })
   t.after(() => teardown(mounted))

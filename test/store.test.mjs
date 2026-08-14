@@ -192,6 +192,30 @@ test('auditRetentionDays：>0 裁剪过期审计行，0 保留全部', (t) => {
   unlimited.close()
 })
 
+test('consolidateEntries：事务内多子串整合；中途歧义整体回滚（无部分写入）', (t) => {
+  const { dir, store } = tempStore()
+  t.after(() => closeAndClean({ dir, store }))
+  store.insertEntry({ track: 'user', scope: 'workspace', text: '偏好中文回复' })
+  store.insertEntry({ track: 'user', scope: 'workspace', text: '偏好中文注释' })
+  const { removed, entry } = store.consolidateEntries({
+    track: 'user', scope: 'workspace', matches: ['回复', '注释'], text: '偏好中文风格（合并）', sessionId: 's-c',
+  })
+  assert.equal(removed.length, 2)
+  assert.equal(entry.text, '偏好中文风格（合并）')
+  assert.equal(entry.sessionId, 's-c')
+  assert.equal(store.queryEntries({ track: 'user', scope: 'workspace' }).total, 1)
+
+  store.insertEntry({ track: 'user', scope: 'workspace', text: '偏好中文回复' })
+  store.insertEntry({ track: 'user', scope: 'workspace', text: '偏好中文注释' })
+  assert.throws(
+    () => store.consolidateEntries({ track: 'user', scope: 'workspace', matches: ['回复', '偏好中文'], text: 'x' }),
+    (error) => error instanceof AmbiguousMatchError,
+  )
+  assert.equal(store.queryEntries({ track: 'user', scope: 'workspace' }).total, 3, '回滚：先删除的条目恢复，其余原文不动')
+  assert.throws(() => store.consolidateEntries({ track: 'user', scope: 'workspace', matches: [], text: 'x' }), InvalidInputError)
+  assert.throws(() => store.consolidateEntries({ track: 'user', scope: 'workspace', matches: ['a'], text: '' }), InvalidInputError)
+})
+
 test('库损坏（非 SQLite 文件）在打开点响亮失败', (t) => {
   const dir = mkdtempSync(path.join(tmpdir(), 'dsh-memento-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))

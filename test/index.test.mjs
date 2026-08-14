@@ -14,6 +14,7 @@ import {
   InvalidInputError,
   BudgetExceededError,
   EntryNotFoundError,
+  AmbiguousMatchError,
   WriteDeniedError,
   NoAgentError,
   renderMemoryResult,
@@ -430,6 +431,51 @@ test('F12：seed 一次 ask 批量落盘；超预算整批拒绝零部分写入'
     (error) => error instanceof BudgetExceededError,
   )
   assert.equal(service.query({ track: 'agent', scope: 'workspace' }).total, 2, '超限批次零部分写入')
+})
+
+test('consolidate：一次审批整合多条；预算净变化；拒绝零落盘', async (t) => {
+  const mounted = mount({ writePolicy: 'auto' })
+  t.after(() => teardown(mounted))
+  const { mock } = mounted
+  const service = mock.services.get('memory')
+  const write = { agent: makeAgent(makeSession({ id: 's-cons' })) }
+  await service.add({ track: 'user', scope: 'user-global', text: '偏好中文回复' }, write)
+  await service.add({ track: 'user', scope: 'user-global', text: '偏好中文注释' }, write)
+  const asksBefore = mounted.approval.asked.length
+
+  const result = await service.consolidate(
+    { track: 'user', scope: 'user-global', matches: ['回复', '注释'], text: '偏好中文风格（整合）', source: 'memory-tool' },
+    write,
+  )
+  assert.equal(result.removed.length, 2)
+  assert.equal(result.entry.text, '偏好中文风格（整合）')
+  assert.equal(mounted.approval.asked.length, asksBefore + 1, '整个整合方案只 ask 一次')
+  assert.equal(parseWriteReason(mounted.approval.asked.at(-1).reason).action, 'consolidate')
+  assert.equal(service.query({ track: 'user', scope: 'user-global' }).total, 1)
+  const auditActions = service.store.auditList().slice(0, 3).map((row) => row.action)
+  assert.deepEqual(auditActions, ['consolidate-add', 'consolidate-remove', 'consolidate-remove'], '审计逐条记录 add/remove，同一 outcome')
+
+  // 歧义在审批前响亮失败，零 ask 零落盘
+  await service.add({ track: 'user', scope: 'user-global', text: '偏好中文回复A' }, write)
+  await service.add({ track: 'user', scope: 'user-global', text: '偏好中文回复B' }, write)
+  const asksAmbiguous = mounted.approval.asked.length
+  await assert.rejects(
+    () => service.consolidate({ track: 'user', scope: 'user-global', matches: ['偏好中文回复'], text: 'x' }, write),
+    (error) => error instanceof AmbiguousMatchError,
+  )
+  assert.equal(mounted.approval.asked.length, asksAmbiguous, '歧义不打扰用户')
+  assert.equal(service.query({ track: 'user', scope: 'user-global' }).total, 3)
+})
+
+test('consolidate：off 策略拒绝时零落盘', async (t) => {
+  const mounted = mount({ writePolicy: 'off' })
+  t.after(() => teardown(mounted))
+  const service = mounted.mock.services.get('memory')
+  await assert.rejects(
+    () => service.consolidate({ track: 'user', scope: 'workspace', matches: ['不存在'], text: 'x' }, { agent: makeAgent(makeSession()) }),
+    (error) => error instanceof EntryNotFoundError,
+  )
+  assert.equal(service.query({}).total, 0, '目标不存在即失败，任何情况都不落盘')
 })
 
 test('S5：无 agent 的服务直写失败封闭（不产生任何写/审计）', async (t) => {

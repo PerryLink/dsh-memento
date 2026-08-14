@@ -95,9 +95,9 @@ Todo campo é um `Config` Schemastery validado; valores inválidos falham ruidos
 
 ## 🛠 Ferramentas e superfícies
 
-- **`memory`** — add/replace/remove/query com orientação de Salvar/Pular embutida na descrição (salve preferências do usuário, correções, fatos do ambiente, convenções, lições; pule trivialidades, fatos rederiváveis, despejos, caminhos de uso único). Escritas passam pelo portão de aprovação; leituras são livres; replace/remove miram uma **substring única** (correspondências ambíguas falham com a lista de candidatos).
+- **`memory`** — add/replace/remove/consolidate/query com orientação de Salvar/Pular embutida na descrição (salve preferências do usuário, correções, fatos do ambiente, convenções, lições; pule trivialidades, fatos rederiváveis, despejos, caminhos de uso único). Escritas passam pelo portão de aprovação; leituras são livres; replace/remove miram uma **substring única** (correspondências ambíguas falham com a lista de candidatos); consolidate mescla 1..20 entradas em uma com uma única aprovação e uma escrita atômica.
 - **`memory_recall`** — recuperação em duas partes: correspondências de memória limitadas **mais** correspondências recentes do histórico da sessão via `ctx.sessionQuery` (degrada graciosamente para somente memória onde o serviço está ausente).
-- **`/memory`** — comando acionado pelo usuário (não um turno do modelo): `list` · `query <word>` · `add [--track=user|agent] [--scope=user-global|workspace] <text>` · `remove [flags] <substring>` · `budgets` · `audit`. Escritas por comando passam pela mesma cascata + política; a auditoria cai na tabela de auditoria do plugin + `command/done`.
+- **`/memory`** — comando acionado pelo usuário (não um turno do modelo): `list` · `query <word>` · `add [--track=user|agent] [--scope=user-global|workspace] <text>` · `remove [flags] <substring>` · `consolidate [flags] <substring...> => <text>` · `budgets` · `audit`. Escritas por comando passam pela mesma cascata + política; a auditoria cai na tabela de auditoria do plugin + `command/done`.
 - **Painel Web** — gaveta `dsh.client` sem build: navegue pelas entradas por trilha/camada, pesquise, veja barras de orçamento e o fim da auditoria. Somente leitura por design: escritas e aprovação acontecem pela ferramenta `memory` e pela UI de aprovação embutida.
 
 ## 🆚 Como ele é diferente
