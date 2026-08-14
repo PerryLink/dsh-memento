@@ -229,6 +229,41 @@ test('F9：面板路由只读——entries（含预算）与 audit（上限钳�
   assert.ok(auditData.rows.length <= 20, 'limit 钳制到 20')
 })
 
+test('F9：面板 entries 路由解析 limit——显式大页返回全部，缺省/非法值回退默认并报 truncated', async (t) => {
+  const routes = []
+  const mounted = mount({ webServer: { register(route) { routes.push(route); return () => {} } } })
+  t.after(() => teardown(mounted))
+  const service = mounted.mock.services.get('memory')
+  const agent = makeAgent(makeSession())
+  for (let i = 0; i < 25; i += 1) {
+    await service.add({ track: 'agent', scope: 'workspace', text: `批量条目 ${i}` }, { agent })
+  }
+  const entriesRoute = routes.find((route) => route.path === '/api/memento/entries')
+
+  const fetchPage = async (query) => {
+    let captured = ''
+    await entriesRoute.handler({ url: `/api/memento/entries${query}`, method: 'GET' }, { writeHead() {}, end(body) { captured = body } })
+    return JSON.parse(captured)
+  }
+
+  const full = await fetchPage('?limit=200')
+  assert.equal(full.total, 25)
+  assert.equal(full.entries.length, 25)
+  assert.equal(full.truncated, false)
+
+  const defaulted = await fetchPage('')
+  assert.equal(defaulted.total, 25)
+  assert.equal(defaulted.entries.length, 20, '缺省 limit 回退 maxEntriesPerQuery=20')
+  assert.equal(defaulted.truncated, true)
+
+  const invalid = await fetchPage('?limit=abc')
+  assert.equal(invalid.entries.length, 20, '非法 limit 同样回退默认')
+  assert.equal(invalid.truncated, true)
+
+  const oversized = await fetchPage('?limit=500')
+  assert.equal(oversized.entries.length, 25, '超大 limit 钳制到 200 后仍足以覆盖 25 条')
+})
+
 test('S3：enabled:false 时 V2 观察面一并消失', (t) => {
   const mounted = mount({ enabled: false })
   t.after(() => teardown(mounted))

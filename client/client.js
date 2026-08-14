@@ -78,6 +78,8 @@ function installPanel() {
   const filter = document.getElementById('mem-filter')
   let entries = []
   let lastFilter = ''
+  let lastTotal = 0
+  let lastTruncated = false
 
   const render = () => {
     const visible = entries.filter((entry) => entry.text.toLowerCase().includes(lastFilter.toLowerCase()))
@@ -92,7 +94,9 @@ function installPanel() {
       body.innerHTML = '<div class="mem-empty">记忆为空（或没有匹配当前过滤）。写操作请用 memory 工具（审批在 DS 内置审批 UI 完成）。</div>'
       return
     }
-    let html = ''
+    let html = lastTruncated
+      ? `<div class="mem-empty">仅显示前 ${entries.length} 条，共 ${lastTotal} 条——用过滤框缩小范围。</div>`
+      : ''
     for (const [key, list] of groups) {
       html += `<div class="mem-group">${key}（${list.length} 条）</div>`
       for (const entry of list) {
@@ -132,6 +136,8 @@ function installPanel() {
       const data = await response.json()
       if (data.error !== undefined) throw new Error(data.error)
       entries = Array.isArray(data.entries) ? data.entries : []
+      lastTotal = Number.isInteger(data.total) ? data.total : entries.length
+      lastTruncated = data.truncated === true
       render()
       renderBudget(data.budgets)
       void fetch('/api/memento/audit?limit=20')

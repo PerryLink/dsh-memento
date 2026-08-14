@@ -1221,7 +1221,13 @@ export function registerWebRoutes(ctx, service) {
             ...(url.searchParams.get('track') ? { track: url.searchParams.get('track') } : {}),
             ...(url.searchParams.get('scope') ? { scope: url.searchParams.get('scope') } : {}),
           }
-          const { entries, total, truncated } = service.query(filter)
+          const rawParam = url.searchParams.get('limit')
+          const raw = rawParam === null ? undefined : Number(rawParam)
+          const limit = raw === undefined ? undefined : (Number.isInteger(raw) && raw > 0 ? Math.min(raw, 200) : undefined)
+          const { entries, total, truncated } = service.query({
+            ...filter,
+            ...(limit === undefined ? {} : { limit }),
+          })
           sendPanelJson(res, 200, { entries, total, truncated, budgets: service.budgets() })
         } catch (error) {
           sendPanelJson(res, 500, { error: error instanceof Error ? error.message : String(error) })
