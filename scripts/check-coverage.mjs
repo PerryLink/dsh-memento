@@ -12,9 +12,9 @@ import path from 'node:path'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const THRESHOLDS = [
-  { predicate: (name) => name.startsWith('lib/'), line: 90, label: 'lib/*' },
-  { predicate: (name) => name === 'index.mjs', line: 85, label: 'index.mjs' },
-  { predicate: (name) => name === 'all files', line: 90, label: 'all files' },
+  { predicate: (/** @type {string} */ name) => name.startsWith('lib/'), line: 90, label: 'lib/*' },
+  { predicate: (/** @type {string} */ name) => name === 'index.mjs', line: 85, label: 'index.mjs' },
+  { predicate: (/** @type {string} */ name) => name === 'all files', line: 90, label: 'all files' },
 ]
 
 const result = spawnSync(
@@ -31,7 +31,7 @@ if (result.status !== 0) {
 }
 
 /** 解析覆盖报告行：返回 { groups, rows }，rows = [{qualified, line}]。 */
-function parseReport(stdout) {
+function parseReport(/** @type {string} */ stdout) {
   const rows = []
   const stack = []
   let sawAny = false
@@ -39,7 +39,7 @@ function parseReport(stdout) {
     if (!raw.startsWith('# ')) continue
     const body = raw.slice(2)
     const indent = (body.match(/^ */)[0]).length
-    const cells = body.split('|').map((cell) => cell.trim())
+    const cells = body.split('|').map((/** @type {string} */ cell) => cell.trim())
     const name = cells[0]
     if (name.startsWith('-')) continue // 表格分隔线
     if (!body.includes(' | ')) {

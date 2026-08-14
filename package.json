@@ -7,8 +7,14 @@
   "main": "./index.mjs",
   "types": "./types.d.ts",
   "exports": {
-    ".": "./index.mjs",
-    "./client": "./client/client.js",
+    ".": {
+      "types": "./types.d.ts",
+      "default": "./index.mjs"
+    },
+    "./client": {
+      "types": "./client/client.d.ts",
+      "default": "./client/client.js"
+    },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
@@ -24,9 +30,18 @@
     "README.pt.md",
     "README.hi.md",
     "ARCHITECTURE.md",
+    "CHANGELOG.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PerryLink/dsh-memento.git"
+  },
+  "homepage": "https://github.com/PerryLink/dsh-memento#readme",
+  "bugs": {
+    "url": "https://github.com/PerryLink/dsh-memento/issues"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
