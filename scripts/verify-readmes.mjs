@@ -25,10 +25,14 @@ for (const file of FILES) {
     ['topic dsh', /`dsh`/.test(text)],
     ['topic dsh-plugin', /`dsh-plugin`/.test(text)],
     ['install cmd', text.includes('dsh plugin --profile')],
+    ['install gh url', text.includes('git+https://github.com/PerryLink/dsh-memento.git')],
+    ['no unpublished npm claim', !text.includes('once published')],
     ['db path', text.includes('$DSH_HOME/dsh-memento/memory.db')],
     ['license link', text.includes('[LICENSE](LICENSE)')],
     ['writePolicy token', text.includes('`writePolicy`')],
     ['memory_recall token', text.includes('`memory_recall`')],
+    ['commandListLimit token', text.includes('`commandListLimit`')],
+    ['commandAuditLimit token', text.includes('`commandAuditLimit`')],
     ['trailing newline', text.endsWith('\n') && !text.endsWith('\n\n')],
   ]
   const bad = checks.filter(([, ok]) => !ok).map(([name]) => name)

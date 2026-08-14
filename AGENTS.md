@@ -9,16 +9,22 @@
 ```
 index.mjs            插件入口（唯一 host 面文件）：服务/审批门/工具/快照段注册
 types.d.ts           类型契约：ctx.memory 服务与 memory/* SessionEventMap 声明合并
-lib/constants.mjs    词汇表与协议常量（轨道/作用域/错误码/schema 版本，零依赖）
+lib/constants.mjs    词汇表与协议常量（轨道/作用域/错误码/schema 版本/硬上限，零依赖）
 lib/errors.mjs       结构化领域错误（code + details，零依赖）
 lib/budget.mjs       每轨每层硬字符预算（纯函数，零依赖）
 lib/match.mjs        唯一子串匹配（零/多命中语义，零依赖）
 lib/gate.mjs         审批门策略与 reason 编解码（零依赖）
 lib/snapshot.mjs     冻结快照渲染（纯函数，零依赖）
 lib/workspace.mjs    工作区键规范化（Windows 大小写不敏感，零依赖）
+lib/extract.mjs      会话事件文本抽取（memory_recall 历史片段用，零依赖）
 lib/store.mjs        node:sqlite Provider：条目表+审计账本+迁移（零依赖）
+client/client.js     Web 面板（零构建 vanilla，只读；经 dsh.client 注入）
+scripts/             机械门：verify-readmes.mjs（五语一致性）、check-coverage.mjs（覆盖率）
 cordis.patch.yml     bundle 声明（insert memento）
 package.json         npm 元数据；files 白名单 = 发布内容
+package-lock.json    锁文件（CI 用，不进 npm 包）
+tsconfig.check.json  tsc --checkJs 类型检查门
+.github/workflows/   CI（三平台×双 Node）与每周 next-rc 兼容探针
 README.md            英文主介绍（GitHub 默认页；五语源文）
 README.{zh,es,pt,hi}.md   中/西/葡/印地语介绍（顶部互链，与英文同 commit 更新）
 ARCHITECTURE.md      三角色 seam 架构图与全部设计决策
@@ -34,8 +40,12 @@ dev/                 ❌ 本地工程面：冒烟脚本、夹具、演示——�
 ## 命令
 
 ```sh
-npm install   # 安装 peer 依赖（@deepseek-ai/dsh-tools@0.1.0-rc.6、schemastery 等）
-npm test      # node --test 跑 test/*.test.mjs
+npm install             # 安装 peer 依赖（@deepseek-ai/dsh-tools、schemastery 等）
+npm test                # node --test 跑 test/*.test.mjs
+npm run coverage        # 展示内置覆盖率报告
+npm run check:coverage  # 覆盖率门：lib ≥90%、index.mjs ≥85%、all files ≥90%
+npm run typecheck       # tsc --checkJs 类型检查门
+npm run check:readmes   # 五语 README 一致性门
 ```
 
 无构建步骤：纯 ESM，`index.mjs`/`lib/` 即发布产物。
