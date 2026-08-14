@@ -1087,9 +1087,10 @@ export function makeMemoryRecallTool(service, ctx) {
     description: [
       'Two-part recall over memory and session history: returns (1) bounded memory entries matching the query from the dsh-memento store, and (2) recent session-history matches via the session-query service.',
       'Use when a memory query alone is ambiguous or when the answer may live in an earlier conversation rather than in memory. For plain memory lookup prefer the memory tool with action=query.',
+      'The query is a case-sensitive substring for memory entries (same as the memory tool) and a case-insensitive semantic-text scan for session history.',
     ].join('\n'),
     parameters: {
-      query: { type: 'string', required: true, description: 'Case-insensitive search terms for both sources.' },
+      query: { type: 'string', required: true, description: 'Search terms: case-sensitive for memory entries; case-insensitive for session history.' },
       memoryLimit: { type: 'integer', description: 'Max memory entries to return (default 10).' },
       historyLimit: { type: 'integer', description: 'Max history sessions to scan (default 8).' },
     },
