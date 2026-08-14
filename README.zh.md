@@ -67,7 +67,7 @@ Provider: lib/store.mjs —— node:sqlite（WAL，0600），条目表+审计表
 
 ```sh
 dsh plugin --profile <name> add ./dsh-memento        # 本地 checkout（无构建步骤）
-dsh plugin --profile <name> add dsh-memento          # 发布到 npm 后
+dsh plugin --profile <name> add git+https://github.com/PerryLink/dsh-memento.git   # GitHub 安装；npm 首发后可用
 dsh plugin --profile <name> remove dsh-memento       # 卸载：库与会话日志保留
 ```
 
@@ -125,7 +125,7 @@ dsh plugin --profile <name> remove dsh-memento       # 卸载：库与会话日�
 
 ```sh
 npm install
-npm test    # node --test：66 个测试——预算、唯一子串、审批策略、store、快照、mock ctx 集成（S2/S3 不变量）、V2 命令/召回/面板
+npm test    # node --test：68 个测试——预算、唯一子串、审批策略、store、快照、mock ctx 集成（S2/S3 不变量）、V2 命令/召回/面板
 ```
 
 `lib/` 零 DSH 依赖（仅 node: 内置模块）；DSH 依赖只出现在 `index.mjs`。完整纪律见 [AGENTS.md](AGENTS.md)；设计决策见 [ARCHITECTURE.md](ARCHITECTURE.md)。

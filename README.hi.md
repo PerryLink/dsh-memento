@@ -67,7 +67,7 @@ Provider: lib/store.mjs — node:sqlite (WAL, 0600), entries + audit tables, uni
 
 ```sh
 dsh plugin --profile <name> add ./dsh-memento        # local checkout (no build step)
-dsh plugin --profile <name> add dsh-memento          # npm, once published
+dsh plugin --profile <name> add git+https://github.com/PerryLink/dsh-memento.git   # GitHub इंस्टॉल; npm पहले release के बाद
 dsh plugin --profile <name> remove dsh-memento       # uninstall: DB + session logs are kept
 ```
 
@@ -125,7 +125,7 @@ dsh plugin --profile <name> remove dsh-memento       # uninstall: DB + session l
 
 ```sh
 npm install
-npm test    # node --test: 66 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel
+npm test    # node --test: 68 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel
 ```
 
 `lib/` शून्य-DSH-निर्भरता है (केवल node: बिल्ट-इन); DSH आयात केवल `index.mjs` में मौजूद हैं। पूर्ण अनुशासन [AGENTS.md](AGENTS.md) में; डिज़ाइन निर्णय [ARCHITECTURE.md](ARCHITECTURE.md) में।

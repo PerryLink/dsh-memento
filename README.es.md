@@ -67,7 +67,7 @@ Provider: lib/store.mjs — node:sqlite (WAL, 0600), entries + audit tables, uni
 
 ```sh
 dsh plugin --profile <name> add ./dsh-memento        # local checkout (no build step)
-dsh plugin --profile <name> add dsh-memento          # npm, once published
+dsh plugin --profile <name> add git+https://github.com/PerryLink/dsh-memento.git   # GitHub; npm tras el primer release
 dsh plugin --profile <name> remove dsh-memento       # uninstall: DB + session logs are kept
 ```
 
@@ -125,7 +125,7 @@ El nombre es **`dsh-memento`** (libre en npm y GitHub). No `dsh-recall` (confund
 
 ```sh
 npm install
-npm test    # node --test: 66 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel
+npm test    # node --test: 68 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel
 ```
 
 `lib/` no tiene dependencias de DSH (solo builtins de node:); las importaciones de DSH solo existen en `index.mjs`. Disciplina completa en [AGENTS.md](AGENTS.md); decisiones de diseño en [ARCHITECTURE.md](ARCHITECTURE.md).
