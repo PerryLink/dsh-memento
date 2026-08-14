@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, rmSync, readFileSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { openMemoryStore, resolveDbPath } from '../lib/store.mjs'
+import { openMemoryStore, resolveDbPath, chmodOwned } from '../lib/store.mjs'
 import { SCHEMA_VERSION, ERROR_CODES } from '../lib/constants.mjs'
 import { StoreError, InvalidInputError, EntryNotFoundError, AmbiguousMatchError } from '../lib/errors.mjs'
 
@@ -30,6 +30,17 @@ test('打开即建库：schema 版本落地，0600（POSIX）', (t) => {
     const mode = statSync(store.path).mode & 0o777
     assert.equal(mode, 0o600)
   }
+})
+
+test('chmodOwned：POSIX 收紧主库与已存在边车为 0600，缺失边车跳过，win32 不动作', () => {
+  const calls = []
+  const chmod = (p, mode) => calls.push([p, mode])
+  const exists = (p) => p.endsWith('-wal')
+  chmodOwned('/d/memory.db', { platform: 'linux', chmod, exists })
+  assert.deepEqual(calls, [['/d/memory.db', 0o600], ['/d/memory.db-wal', 0o600]])
+  calls.length = 0
+  chmodOwned('/d/memory.db', { platform: 'win32', chmod, exists })
+  assert.deepEqual(calls, [])
 })
 
 test('insert/query/list：CRUD 基本行为与元数据', (t) => {
