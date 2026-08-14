@@ -84,6 +84,7 @@ Cada campo es un `Config` de Schemastery validado; los valores inválidos fallan
 | `budgets.user.userGlobal` / `budgets.user.workspace` | `2000` / `2000` | presupuesto estricto de caracteres por capa de la pista de usuario |
 | `budgets.agent.userGlobal` / `budgets.agent.workspace` | `4000` / `4000` | presupuesto estricto de caracteres por capa de la pista de agente |
 | `writePolicy` | `'ask'` | `'ask'` = aprobación del usuario; `'auto'` = dejar pasar (se registra el origen de la aprobación); `'off'` = rechazar. Invisible para el modelo |
+| `writePolicies` | `{}` | anulaciones por pista/capa o por fuente: claves `user/workspace`, `agent/user-global`, `source:claude`, … → `ask`/`auto`/`off`; sin coincidencia cae a `writePolicy` |
 | `snapshotOrder` | `-50` | orden de la sección de la instantánea: después de la identidad del harness (`-100`), antes de la persona (`0`) |
 | `maxEntriesPerQuery` | `20` | tope de resultados por consulta por defecto (`limit` explícito permitido, tope duro 1000) |
 | `commandListLimit` | `50` | entradas mostradas por comando `/memory list` / `query` |

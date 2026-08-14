@@ -2,7 +2,7 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { isMemoryWriteRequest, buildWriteReason, parseWriteReason, applyWritePolicy, normalizeWritePolicy } from '../lib/gate.mjs'
+import { isMemoryWriteRequest, buildWriteReason, parseWriteReason, applyWritePolicy, normalizeWritePolicy, resolveWritePolicy, validateWritePolicies } from '../lib/gate.mjs'
 import { InvalidInputError } from '../lib/errors.mjs'
 
 test('isMemoryWriteRequest 只认领 toolName=memory 且带 [dsh-memento] 前缀的请求', () => {
@@ -63,4 +63,27 @@ test('normalizeWritePolicy 接受三态并拒绝其它值', () => {
   assert.equal(normalizeWritePolicy('off'), 'off')
   assert.throws(() => normalizeWritePolicy('always'), InvalidInputError)
   assert.throws(() => normalizeWritePolicy(undefined), InvalidInputError)
+})
+
+test('reason 携带 source 时可无损往返（粒度策略裁决依据）', () => {
+  const reason = buildWriteReason({ action: 'add', track: 'agent', scope: 'workspace', text: 'x', source: 'claude' })
+  assert.ok(reason.includes('[source:claude]'))
+  assert.deepEqual(parseWriteReason(reason), { action: 'add', track: 'agent', scope: 'workspace', source: 'claude', text: 'x' })
+  const without = buildWriteReason({ action: 'add', track: 'user', scope: 'workspace', text: 'x' })
+  assert.deepEqual(parseWriteReason(without), { action: 'add', track: 'user', scope: 'workspace', text: 'x' }, '无 source 时形状不变')
+})
+
+test('resolveWritePolicy：source 精确键 > track/scope 键 > 全局回退', () => {
+  const table = { 'agent/user-global': 'auto', 'user/workspace': 'off', 'source:claude': 'auto' }
+  assert.equal(resolveWritePolicy(table, 'ask', 'user', 'workspace', undefined), 'off', 'track/scope 键命中')
+  assert.equal(resolveWritePolicy(table, 'ask', 'user', 'user-global', undefined), 'ask', '未命中回退全局')
+  assert.equal(resolveWritePolicy(table, 'ask', 'user', 'workspace', 'claude'), 'auto', 'source 键优先于 track/scope')
+  assert.equal(resolveWritePolicy({}, 'auto', 'user', 'workspace', undefined), 'auto', '空表纯回退（旧 Config 兼容）')
+})
+
+test('validateWritePolicies：合法键值通过，非法键/值加载期响亮', () => {
+  assert.deepEqual(validateWritePolicies({ 'user/workspace': 'off', 'source:claude': 'auto' }), { 'user/workspace': 'off', 'source:claude': 'auto' })
+  assert.throws(() => validateWritePolicies({ 'bad/key': 'ask' }), InvalidInputError)
+  assert.throws(() => validateWritePolicies({ 'user/workspace': 'always' }), InvalidInputError)
+  assert.throws(() => validateWritePolicies(null), InvalidInputError)
 })

@@ -84,6 +84,7 @@ dsh plugin --profile <name> remove dsh-memento       # uninstall: DB + session l
 | `budgets.user.userGlobal` / `budgets.user.workspace` | `2000` / `2000` | user ट्रैक की हर लेयर का कठोर वर्ण बजट |
 | `budgets.agent.userGlobal` / `budgets.agent.workspace` | `4000` / `4000` | agent ट्रैक की हर लेयर का कठोर वर्ण बजट |
 | `writePolicy` | `'ask'` | `'ask'` = उपयोगकर्ता अनुमोदन; `'auto'` = अनुमति दें (अनुमोदन स्रोत रिकॉर्ड किया गया); `'off'` = अस्वीकार करें। मॉडल-अदृश्य |
+| `writePolicies` | `{}` | प्रति-ट्रैक/स्कोप या प्रति-स्रोत ओवरराइड: कुंजियाँ `user/workspace`, `agent/user-global`, `source:claude`, … → `ask`/`auto`/`off`; बेमेल `writePolicy` पर गिरता है |
 | `snapshotOrder` | `-50` | स्नैपशॉट सेक्शन क्रम: harness आइडेंटिटी (`-100`) के बाद, persona (`0`) से पहले |
 | `maxEntriesPerQuery` | `20` | प्रति-क्वेरी परिणाम की डिफ़ॉल्ट सीमा (स्पष्ट `limit` अनुमत, कठोर सीमा 1000) |
 | `commandListLimit` | `50` | प्रति `/memory list` / `query` कमांड दिखाई गई प्रविष्टियाँ |

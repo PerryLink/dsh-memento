@@ -48,6 +48,7 @@ function mount(opts = {}) {
     dbPath,
     budgets: opts.budgets ?? DEFAULT_BUDGETS,
     writePolicy: opts.writePolicy ?? 'ask',
+    writePolicies: opts.writePolicies ?? {},
     snapshotOrder: opts.snapshotOrder ?? -50,
     maxEntriesPerQuery: opts.maxEntriesPerQuery ?? 20,
   }
@@ -309,7 +310,7 @@ test('S2：审批 reason 可无损重建写变更（approval/asked 审计对路�
   )
   const asked = mounted.approval.asked[0]
   const parsed = parseWriteReason(asked.reason)
-  assert.deepEqual(parsed, { action: 'add', track: 'user', scope: 'workspace', text: '第二行\n第三行' })
+  assert.deepEqual(parsed, { action: 'add', track: 'user', scope: 'workspace', source: 'dsh-memento', text: '第二行\n第三行' })
   assert.equal(asked.toolName, 'memory')
 })
 
@@ -465,6 +466,41 @@ test('consolidate：一次审批整合多条；预算净变化；拒绝零落盘
   )
   assert.equal(mounted.approval.asked.length, asksAmbiguous, '歧义不打扰用户')
   assert.equal(service.query({ track: 'user', scope: 'user-global' }).total, 3)
+})
+
+test('P2-7：writePolicies 粒度裁决——track/scope 键与 source 键优先于全局', async (t) => {
+  const mounted = mount({
+    writePolicy: 'ask',
+    writePolicies: { 'agent/user-global': 'auto', 'user/workspace': 'off', 'source:claude': 'auto' },
+  })
+  t.after(() => teardown(mounted))
+  const { mock } = mounted
+  const service = mock.services.get('memory')
+
+  // 未命中粒度键 → 全局 ask → 无 answerer → 失败封闭
+  await assert.rejects(
+    () => service.add({ track: 'user', scope: 'user-global', text: 'x' }, { agent: makeAgent(makeSession()) }),
+    (error) => error instanceof WriteDeniedError && error.details.outcome === 'unavailable',
+  )
+  // track/scope 键命中：user/workspace → off → 拒绝
+  await assert.rejects(
+    () => service.add({ track: 'user', scope: 'workspace', text: 'x' }, { agent: makeAgent(makeSession()) }),
+    (error) => error instanceof WriteDeniedError && error.details.outcome === 'rejected',
+  )
+  // track/scope 键命中：agent/user-global → auto → 放行
+  const allowed = await service.add({ track: 'agent', scope: 'user-global', text: '环境事实' }, { agent: makeAgent(makeSession()) })
+  assert.equal(allowed.entry.text, '环境事实')
+  // source 键优先于 track/scope：user/workspace 本为 off，但 source:claude → auto
+  const bySource = await service.add({ track: 'user', scope: 'workspace', text: 'claude 导入', source: 'claude' }, { agent: makeAgent(makeSession()) })
+  assert.equal(bySource.entry.text, 'claude 导入')
+})
+
+test('P2-7：非法 writePolicies 键/值在加载期响亮失败', (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'dsh-memento-it-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const mk = () => createMockCtx({ approval: makeBusApproval(null) })
+  assert.throws(() => apply(mk().ctx, { dbPath: path.join(dir, 'm.db'), writePolicies: { 'bad/key': 'ask' } }), InvalidInputError)
+  assert.throws(() => apply(mk().ctx, { dbPath: path.join(dir, 'm.db'), writePolicies: { 'user/workspace': 'always' } }), InvalidInputError)
 })
 
 test('consolidate：off 策略拒绝时零落盘', async (t) => {

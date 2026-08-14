@@ -84,6 +84,7 @@ dsh plugin --profile <name> remove dsh-memento       # 卸载：库与会话日�
 | `budgets.user.userGlobal` / `budgets.user.workspace` | `2000` / `2000` | user 轨每层硬字符预算 |
 | `budgets.agent.userGlobal` / `budgets.agent.workspace` | `4000` / `4000` | agent 轨每层硬字符预算 |
 | `writePolicy` | `'ask'` | `'ask'`=用户审批；`'auto'`=放行但记录审批来源；`'off'`=拒绝。模型不可见 |
+| `writePolicies` | `{}` | 按 track/scope 或来源覆盖：键 `user/workspace`、`agent/user-global`、`source:claude` 等 → `ask`/`auto`/`off`；未命中回退 `writePolicy` |
 | `snapshotOrder` | `-50` | 快照段注入顺序：harness identity(`-100`) 之后、persona(`0`) 之前 |
 | `maxEntriesPerQuery` | `20` | query 默认返回上限（显式 `limit` 可超出，硬钳 1000） |
 | `commandListLimit` | `50` | `/memory list`/`query` 命令单次渲染条目上限 |

@@ -32,7 +32,7 @@ import {
   ProposalNotFoundError,
 } from './lib/errors.mjs'
 import { checkBudget, budgetReport, budgetLimits, validateBudgets } from './lib/budget.mjs'
-import { buildWriteReason, isMemoryWriteRequest, applyWritePolicy, normalizeWritePolicy } from './lib/gate.mjs'
+import { buildWriteReason, isMemoryWriteRequest, applyWritePolicy, normalizeWritePolicy, resolveWritePolicy, validateWritePolicies, parseWriteReason } from './lib/gate.mjs'
 import { renderSnapshot, visibleEntries, visibleProposals } from './lib/snapshot.mjs'
 import { openMemoryStore, resolveDbPath } from './lib/store.mjs'
 import { workspaceKeyOf, agentKeyOf } from './lib/workspace.mjs'
@@ -77,6 +77,7 @@ import { extractEventText } from './lib/extract.mjs'
  * @property {string} [dbPath]
  * @property {{user?: {userGlobal?: number, workspace?: number}, agent?: {userGlobal?: number, workspace?: number}}} [budgets]
  * @property {string} [writePolicy]
+ * @property {Record<string, string>} [writePolicies]
  * @property {number} [snapshotOrder]
  * @property {number} [maxEntriesPerQuery]
  * @property {number} [commandListLimit]
@@ -86,7 +87,7 @@ import { extractEventText } from './lib/extract.mjs'
  * @property {number} [panelAuditLimit]
  * @property {number} [auditRetentionDays]
  * @property {{enabled?: boolean, maxChars?: number, maxPending?: number}} [proposals]
- * @typedef {{action: string, track: string, scope: string, text: string, count?: number}} WritePayload
+ * @typedef {{action: string, track: string, scope: string, text: string, count?: number, source?: string}} WritePayload
  * @typedef {{agent?: {session?: MemorySessionLike | null} | null, callId?: unknown, signal?: AbortSignal}} AskWrite
  * @typedef {{track: string, scope: string, text: string}} PublicEntry
  * @typedef {object} MemoryToolValue - memory 工具规范结果形状。
@@ -128,6 +129,7 @@ export const DEFAULT_SNAPSHOT_ORDER = -50
  * @property {{user: {userGlobal: number, workspace: number}, agent: {userGlobal: number, workspace: number}}} [budgets]
  *   每轨每层硬字符预算。
  * @property {'ask'|'auto'|'off'} [writePolicy] 写审批策略；模型不可见、不可改。
+ * @property {Record<string, 'ask'|'auto'|'off'>} [writePolicies] 粒度写策略（键 `track/scope` 或 `source:<name>`；未命中回退 writePolicy）。
  * @property {number} [snapshotOrder] 快照段注入顺序（默认 -50，靠前负值）。
  * @property {number} [maxEntriesPerQuery] query 默认返回条目上限（显式 limit 可超出，Provider 硬钳 1000）。
  * @property {number} [commandListLimit] /memory list|query 单次渲染条目上限（默认 50）。
@@ -154,6 +156,7 @@ export const Config = Schema.object({
     }),
   }),
   writePolicy: Schema.union(['ask', 'auto', 'off']).default('ask'),
+  writePolicies: Schema.dict(Schema.union(['ask', 'auto', 'off'])).default({}),
   snapshotOrder: Schema.number().default(DEFAULT_SNAPSHOT_ORDER),
   maxEntriesPerQuery: Schema.number().default(20),
   commandListLimit: Schema.number().default(50),
@@ -314,7 +317,7 @@ export class MemoryService {
   async add(input, write) {
     const { track, scope, text } = this.#validateEntry(input, write)
     this.#assertBudget(track, scope, this.store.usage(track, scope), text.length)
-    const via = await this.#ask({ action: 'add', track, scope, text }, write)
+    const via = await this.#ask({ action: 'add', track, scope, text, source: input.source ?? this.sourceLabel }, write)
     this.#throwIfAborted(write)
     // 审批等待期间用量可能变化：以此刻用量为权威复审。
     const now = this.store.usage(track, scope)
@@ -343,7 +346,7 @@ export class MemoryService {
     // 审批前先定位：零/多命中在打扰用户之前就响亮失败。
     const initial = this.#resolveMatch(input, track, scope)
     this.#assertBudget(track, scope, this.store.usage(track, scope), text.length - initial.text.length)
-    const via = await this.#ask({ action: 'replace', track, scope, text }, write)
+    const via = await this.#ask({ action: 'replace', track, scope, text, source: input.source ?? this.sourceLabel }, write)
     this.#throwIfAborted(write)
     // 审批等待期间目标条目可能已被并发写改动：以此刻重新定位的 previous 为权威重算净变化，
     // 再用此刻用量复审。复审与 replaceEntry 之间无 await，判断与实际写入之间不存在窗口。
@@ -375,8 +378,8 @@ export class MemoryService {
     this.#assertScope(input.track, input.scope)
     this.#assertMatch(input)
     // 审批前先定位：零/多命中在打扰用户之前就响亮失败。
-    this.#resolveMatch(input, input.track, input.scope)
-    const via = await this.#ask({ action: 'remove', track: input.track, scope: input.scope, text: input.match }, write)
+    const target = this.#resolveMatch(input, input.track, input.scope)
+    const via = await this.#ask({ action: 'remove', track: input.track, scope: input.scope, text: input.match, source: target.source }, write)
     this.#throwIfAborted(write)
     const removed = this.store.removeEntry({ track: input.track, scope: input.scope, match: input.match })
     this.#auditWrite('remove', input.track, input.scope, removed, write, via)
@@ -448,7 +451,7 @@ export class MemoryService {
     const removalBefore = initial.reduce((sum, entry) => sum + entry.text.length, 0)
     this.#assertBudget(track, scope, this.store.usage(track, scope), text.length - removalBefore)
     const plan = `${input.matches.map((match) => `remove: ${match}`).join('\n')}\nnew text: ${text}`
-    const via = await this.#ask({ action: 'consolidate', track, scope, text: plan }, write)
+    const via = await this.#ask({ action: 'consolidate', track, scope, text: plan, source: input.source ?? this.sourceLabel }, write)
     this.#throwIfAborted(write)
     // 审批等待期间目标可能被并发写改动：重新定位并以此刻为权威重算净变化。
     const current = input.matches.map((match) => this.#resolveMatch({ match }, track, scope))
@@ -522,7 +525,7 @@ export class MemoryService {
 
   /** 审批前定位替换/删除目标（唯一子串语义，大小写不敏感，零/多命中结构化报错）。 */
   #resolveMatch(/** @type {{match: string}} */ input, /** @type {string} */ track, /** @type {string} */ scope) {
-    const hits = /** @type {Array<{text: string}>} */ (this.store.matchCandidates(track, scope, input.match))
+    const hits = /** @type {MemoryEntry[]} */ (this.store.matchCandidates(track, scope, input.match))
       .filter((entry) => entry.text.toLowerCase().includes(input.match.toLowerCase()))
     if (hits.length === 0) throw new EntryNotFoundError({ track, scope, match: input.match })
     if (hits.length > 1) {
@@ -933,6 +936,7 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
       },
     },
     writePolicy: config.writePolicy ?? 'ask',
+    writePolicies: config.writePolicies ?? {},
     snapshotOrder: config.snapshotOrder ?? DEFAULT_SNAPSHOT_ORDER,
     maxEntriesPerQuery: config.maxEntriesPerQuery ?? 20,
     commandListLimit: config.commandListLimit ?? 50,
@@ -956,6 +960,7 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
   const budgetCheck = validateBudgets(resolved.budgets)
   if (!budgetCheck.ok) throw new InvalidInputError(`dsh-memento config: ${/** @type {{message: string}} */ (budgetCheck).message}`)
   normalizeWritePolicy(resolved.writePolicy)
+  validateWritePolicies(resolved.writePolicies)
   if (!Number.isFinite(resolved.snapshotOrder)) {
     throw new InvalidInputError('dsh-memento config: snapshotOrder must be a finite number')
   }
@@ -1004,12 +1009,16 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
   ctx.provide('memory', service)
   ctx.effect(() => () => store.close(), 'dsh-memento.store.close')
 
-  // 审批 answerer：认领本插件的记忆写请求并按 writePolicy 裁决（prepend 保证
-  // auto/off 的确定性先于 UI answerer；会话级 never 策略在审批服务内部先裁决，
-  // 任何 answerer 都无法绕过）。
+  // 审批 answerer：认领本插件的记忆写请求并按粒度策略裁决（writePolicies 精确键 >
+  // track/scope > 全局 writePolicy；prepend 保证 auto/off 的确定性先于 UI answerer；
+  // 会话级 never 策略在审批服务内部先裁决，任何 answerer 都无法绕过）。
   ctx.on('approval/request', async function answerer(req, next) {
     if (!isMemoryWriteRequest(req)) return next()
-    return applyWritePolicy(resolved.writePolicy, req, next)
+    const parsed = parseWriteReason(/** @type {string} */ (/** @type {{reason: string}} */ (req).reason))
+    const effective = parsed === null
+      ? resolved.writePolicy
+      : resolveWritePolicy(resolved.writePolicies, resolved.writePolicy, parsed.track, parsed.scope, parsed.source)
+    return applyWritePolicy(effective, req, next)
   }, { prepend: true })
 
   ctx.tools.register(/** @type {import('@deepseek-ai/dsh-tools').ToolDefinition} */ (makeMemoryTool(service)))
@@ -1625,7 +1634,7 @@ function sendPanelJson(/** @type {PanelResponse} */ res, /** @type {number} */ s
 }
 
 export { MemoryError, InvalidInputError, BudgetExceededError, EntryNotFoundError, AmbiguousMatchError, WriteDeniedError, NoAgentError, ProposalNotFoundError }
-export { buildWriteReason, isMemoryWriteRequest, applyWritePolicy, normalizeWritePolicy }
+export { buildWriteReason, isMemoryWriteRequest, applyWritePolicy, normalizeWritePolicy, resolveWritePolicy, validateWritePolicies, parseWriteReason }
 export { openMemoryStore, resolveDbPath }
 export { renderSnapshot, visibleEntries }
 export { workspaceKeyOf }

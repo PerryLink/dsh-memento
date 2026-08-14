@@ -84,6 +84,7 @@ Every field is a validated Schemastery `Config`; invalid values fail loudly at l
 | `budgets.user.userGlobal` / `budgets.user.workspace` | `2000` / `2000` | hard char budget per layer of the user track |
 | `budgets.agent.userGlobal` / `budgets.agent.workspace` | `4000` / `4000` | hard char budget per layer of the agent track |
 | `writePolicy` | `'ask'` | `'ask'` = user approval; `'auto'` = allow through (approval source recorded); `'off'` = reject. Model-invisible |
+| `writePolicies` | `{}` | per-track/scope or per-source overrides: keys `user/workspace`, `agent/user-global`, `source:claude`, … → `ask`/`auto`/`off`; unmatched falls back to `writePolicy` |
 | `snapshotOrder` | `-50` | snapshot section order: after harness identity (`-100`), before persona (`0`) |
 | `maxEntriesPerQuery` | `20` | default per-query result cap (explicit `limit` allowed, hard-capped at 1000) |
 | `commandListLimit` | `50` | entries rendered per `/memory list` / `query` command |

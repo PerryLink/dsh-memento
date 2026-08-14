@@ -84,6 +84,7 @@ Todo campo é um `Config` Schemastery validado; valores inválidos falham ruidos
 | `budgets.user.userGlobal` / `budgets.user.workspace` | `2000` / `2000` | orçamento rígido de caracteres por camada da trilha user |
 | `budgets.agent.userGlobal` / `budgets.agent.workspace` | `4000` / `4000` | orçamento rígido de caracteres por camada da trilha agent |
 | `writePolicy` | `'ask'` | `'ask'` = aprovação do usuário; `'auto'` = permite passar (fonte da aprovação registrada); `'off'` = rejeita. Invisível ao modelo |
+| `writePolicies` | `{}` | substituições por trilha/camada ou por fonte: chaves `user/workspace`, `agent/user-global`, `source:claude`, … → `ask`/`auto`/`off`; sem correspondência cai para `writePolicy` |
 | `snapshotOrder` | `-50` | ordem da seção do snapshot: depois da identidade do harness (`-100`), antes da persona (`0`) |
 | `maxEntriesPerQuery` | `20` | limite padrão de resultados por consulta (`limit` explícito permitido, teto rígido 1000) |
 | `commandListLimit` | `50` | entradas exibidas por comando `/memory list` / `query` |
