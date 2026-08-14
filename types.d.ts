@@ -49,14 +49,30 @@ export interface MemoryEntryInput {
   workspaceKey?: string
 }
 
+/** 会话最小形状（插件只读这些面；字段宽类型以兼容真实 Session/Agent）。 */
+export interface MemorySessionLike {
+  id?: unknown
+  header?: { cwd?: unknown; agentPreset?: unknown }
+  append?: (type: string, data: unknown) => unknown
+}
+
+/** 审批服务最小形状（插件消费的 seam 面）。 */
+export interface MemoryApprovalLike {
+  request(req: { agent?: unknown; toolName?: string; reason?: string; callId?: unknown; signal?: AbortSignal }): Promise<string>
+  overrideOf?(session: unknown): string | undefined
+  config?: { policy?: string }
+}
+
 /** 写上下文：审批路由与审计归属所必需。agent 缺失时写失败封闭。 */
 export interface MemoryWriteContext {
   /** 发起写的 agent（其 session 承载审批审计对）。 */
-  agent: unknown
+  agent: { session?: MemorySessionLike | null } | null | undefined
   /** 发起写的工具 callId（供 UI answerer 挂靠已流式化的工具调用）。 */
   callId?: unknown
   /** 取消信号：中止即 cancelled，不写任何东西。 */
   signal?: AbortSignal
+  /** 可选自定义审批传输（turn 外命令路径注入；payload 携带完整写载荷）。 */
+  gate?: (payload: { action: string; track: string; scope: string; text: string; count?: number }, write: MemoryWriteContext) => Promise<string>
 }
 
 /** query 结果。 */
@@ -88,7 +104,7 @@ export interface MemoryService {
   budgets(): MemoryBudgetRow[]
 
   /** 子串查询（无审批）；带 sessionId 时记 recalled 审计，带 session 时按已知事件类型自适应派发 memory/recalled。 */
-  query(filter?: { track?: MemoryTrack; scope?: MemoryScope; text?: string; limit?: number }, opts?: { sessionId?: string; session?: unknown }): MemoryQueryResult
+  query(filter?: { track?: MemoryTrack; scope?: MemoryScope; text?: string; limit?: number }, opts?: { sessionId?: string; session?: MemorySessionLike | null }): MemoryQueryResult
 
   /** 新增条目（审批门 + 预算门）。 */
   add(input: MemoryEntryInput, write: MemoryWriteContext): Promise<{ entry: MemoryEntry; usage: MemoryUsage }>
@@ -107,6 +123,16 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     /** dsh-memento 记忆服务（本插件提供；其它插件可读写同一 store）。 */
     memory: MemoryService
+    /** 审批 seam（本插件消费的最小面；由 DSH interaction 能力提供）。 */
+    approval: MemoryApprovalLike
+  }
+  interface Events {
+    /** 审批 waterfall（本插件 answerer 挂链）。 */
+    'approval/request'(req: unknown, next: () => Promise<string>): Promise<string>
+    /** 可选服务就绪通知（withService 用）。 */
+    'internal/service'(name: string): void
+    /** 会话事件桥（auto-capture 等观察面用）。 */
+    'session/event'(session: unknown, event: unknown): void
   }
 }
 
