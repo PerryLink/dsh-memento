@@ -138,6 +138,28 @@ test('audit：动作/结果/来源/会话逐行可查，倒序返回', (t) => {
   assert.equal(rows[1].outcome, 'allowed-once (policy auto)')
 })
 
+test('seedEntries：事务内批量插入，任一条失败整体回滚（无部分写入）', (t) => {
+  const { dir, store } = tempStore()
+  t.after(() => closeAndClean({ dir, store }))
+  assert.throws(
+    () => store.seedEntries([
+      { track: 'user', scope: 'workspace', text: '第 1 条（应被回滚）' },
+      { track: 'invalid-track', scope: 'workspace', text: '第 2 条（非法，触发回滚）' },
+    ]),
+    InvalidInputError,
+  )
+  assert.equal(store.queryEntries({}).total, 0, '事务回滚后第 1 条不得残留')
+  assert.throws(() => store.seedEntries([]), InvalidInputError)
+
+  const seeded = store.seedEntries([
+    { track: 'user', scope: 'user-global', text: 'a', sessionId: 's-batch' },
+    { track: 'agent', scope: 'workspace', text: 'b', sessionId: 's-batch' },
+  ])
+  assert.equal(seeded.length, 2)
+  assert.equal(seeded[0].sessionId, 's-batch')
+  assert.equal(store.queryEntries({}).total, 2, '合法批次全部落盘')
+})
+
 test('库损坏（非 SQLite 文件）在打开点响亮失败', (t) => {
   const dir = mkdtempSync(path.join(tmpdir(), 'dsh-memento-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))

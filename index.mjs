@@ -47,6 +47,7 @@ import { extractEventText } from './lib/extract.mjs'
  * @property {() => MemoryEntry[]} listEntries
  * @property {(track: string, scope: string) => number} usage
  * @property {(input: object) => MemoryEntry} insertEntry
+ * @property {(inputs: object[]) => MemoryEntry[]} seedEntries
  * @property {(input: object) => {previous: MemoryEntry, entry: MemoryEntry}} replaceEntry
  * @property {(input: object) => MemoryEntry} removeEntry
  * @property {(row: object) => object} auditAppend
@@ -366,7 +367,7 @@ export class MemoryService {
       this.#assertBudget(track, scope, used, addition)
     }
     const sessionId = write.agent.session?.id ?? null
-    const entries = normalized.map((entry) => this.store.insertEntry({ ...entry, sessionId }))
+    const entries = this.store.seedEntries(normalized.map((entry) => ({ ...entry, sessionId })))
     this.store.auditAppend({
       action: 'seed',
       track: null, scope: null, entryId: null,
