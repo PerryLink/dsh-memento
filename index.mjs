@@ -293,13 +293,16 @@ export class MemoryService {
     const { track, scope, text } = this.#validateEntry(input, write)
     this.#assertMatch(input)
     // 审批前先定位：零/多命中在打扰用户之前就响亮失败。
-    const previous = this.#resolveMatch(input, track, scope)
-    const net = text.length - previous.text.length
-    this.#assertBudget(track, scope, this.store.usage(track, scope), net)
+    const initial = this.#resolveMatch(input, track, scope)
+    this.#assertBudget(track, scope, this.store.usage(track, scope), text.length - initial.text.length)
     await this.#ask({ action: 'replace', track, scope, text }, write)
     this.#throwIfAborted(write)
+    // 审批等待期间目标条目可能已被并发写改动：以此刻重新定位的 previous 为权威重算净变化，
+    // 再用此刻用量复审。复审与 replaceEntry 之间无 await，判断与实际写入之间不存在窗口。
+    const current = this.#resolveMatch(input, track, scope)
+    const net = text.length - current.text.length
     this.#assertBudget(track, scope, this.store.usage(track, scope), net)
-    // 事务内重新定位+更新：审批期间条目可能已被并发写移除（响亮报错，不静默）。
+    // 事务内重新定位+更新：零/多命中仍会响亮报错（不静默）。
     const replaced = this.store.replaceEntry({
       track, scope, match: input.match, text,
       sessionId: write.agent.session?.id ?? null,

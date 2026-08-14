@@ -13,6 +13,7 @@ import {
   MemoryError,
   InvalidInputError,
   BudgetExceededError,
+  EntryNotFoundError,
   WriteDeniedError,
   NoAgentError,
   renderMemoryResult,
@@ -201,6 +202,68 @@ test('F2：replace/remove 唯一子串——歧义报错给候选，要求更具
   const removed = await service.remove({ track: 'user', scope: 'user-global', match: '中文回复' }, write)
   assert.equal(removed.entry.text, '偏好中文回复')
   assert.equal(service.query({ track: 'user', scope: 'user-global' }).total, 1)
+})
+
+test('P0-4：replace 审批期间并发新增填满预算 → 复审以此刻用量拒绝，零落盘', async (t) => {
+  const mounted = mount({
+    writePolicy: 'ask',
+    budgets: { user: { userGlobal: 10, workspace: 10 }, agent: { userGlobal: 10, workspace: 10 } },
+  })
+  t.after(() => teardown(mounted))
+  const { mock } = mounted
+  const service = mock.services.get('memory')
+  const write = { agent: makeAgent(makeSession()) }
+  // 人类 answerer 先注册（setup 阶段的 add 需要它放行）；审批等待期间的并发写经 duringAsk 注入。
+  let duringAsk = null
+  mock.listeners.get('approval/request').push({
+    fn: async () => {
+      if (duringAsk !== null) duringAsk()
+      return 'allowed-once'
+    },
+  })
+  await service.add({ track: 'user', scope: 'workspace', text: 'ab' }, write)
+  await service.add({ track: 'user', scope: 'workspace', text: 'cd' }, write)
+  duringAsk = () => service.store.insertEntry({ track: 'user', scope: 'workspace', text: 'zzzzzzzz' })
+  // 预检：used 4 + net 6 = 10 ≤ 10 通过；并发后 used 12 + net 6 = 18 → 复审响亮拒绝
+  await assert.rejects(
+    () => service.replace({ track: 'user', scope: 'workspace', match: 'ab', text: 'abcdefgh' }, write),
+    (error) => error instanceof BudgetExceededError && error.details.used === 12 && error.details.needed === 18,
+  )
+  assert.equal(service.query({ track: 'user', scope: 'workspace', text: 'ab' }).total, 1, '目标条目未被替换')
+})
+
+test('P0-4：replace 审批期间目标被并发改写 → 复审以重新定位的 previous 为权威', async (t) => {
+  const mounted = mount({
+    writePolicy: 'ask',
+    budgets: { user: { userGlobal: 10, workspace: 10 }, agent: { userGlobal: 10, workspace: 10 } },
+  })
+  t.after(() => teardown(mounted))
+  const { mock } = mounted
+  const service = mock.services.get('memory')
+  const write = { agent: makeAgent(makeSession()) }
+  let duringAsk = null
+  mock.listeners.get('approval/request').push({
+    fn: async () => {
+      if (duringAsk !== null) duringAsk()
+      return 'allowed-once'
+    },
+  })
+  await service.add({ track: 'user', scope: 'workspace', text: 'ab' }, write)
+  await service.add({ track: 'user', scope: 'workspace', text: 'cd' }, write)
+  // 并发改写：目标仍包含原 match 但长度变化（ab → xabx），复审必须以新 previous 重算净变化
+  duringAsk = () => service.store.replaceEntry({ track: 'user', scope: 'workspace', match: 'ab', text: 'xabx', sessionId: 'concurrent' })
+  const replaced = await service.replace({ track: 'user', scope: 'workspace', match: 'ab', text: 'abcdefgh' }, write)
+  assert.equal(replaced.previous.text, 'xabx', 'previous 是审批后重新定位的结果，而非审批前的陈旧值')
+  assert.equal(replaced.entry.text, 'abcdefgh')
+  assert.equal(service.store.usage('user', 'workspace'), 10, 'cd(2) + abcdefgh(8)；xabx 已被替换')
+
+  // 并发移除目标 → 复审重新定位响亮报错，绝不静默（换 agent 轨避免 user/workspace 已满）
+  await service.add({ track: 'agent', scope: 'workspace', text: 'ef' }, write)
+  duringAsk = () => service.store.removeEntry({ track: 'agent', scope: 'workspace', match: 'ef' })
+  await assert.rejects(
+    () => service.replace({ track: 'agent', scope: 'workspace', match: 'ef', text: 'efgh' }, write),
+    (error) => error instanceof EntryNotFoundError,
+  )
 })
 
 test('F6+S2：冻结快照——会话内变更不更新注入；注入文本与 snapshot 审计逐字一致（可重建）', async (t) => {
