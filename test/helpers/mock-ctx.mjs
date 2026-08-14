@@ -68,7 +68,9 @@ export function createMockCtx(opts = {}) {
     approval,
     logger: { warn() {}, error() {}, info() {}, debug() {} },
     root: null,
-    emit() {},
+    emit(name, ...args) {
+      for (const record of listeners.get(name) ?? []) record.fn(...args)
+    },
     waterfall(name, ...args) {
       const terminal = args.pop()
       const fns = (listeners.get(name) ?? []).slice()

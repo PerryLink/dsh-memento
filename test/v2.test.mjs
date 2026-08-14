@@ -211,8 +211,8 @@ test('F9：面板路由只读——entries（含预算）与 audit（上限钳�
     { track: 'user', scope: 'user-global', text: '面板可见条目' },
     { agent: makeAgent(makeSession()) },
   )
-  assert.equal(routes.length, 2)
-  assert.deepEqual(routes.map((route) => route.path).sort(), ['/api/memento/audit', '/api/memento/entries'])
+  assert.equal(routes.length, 3)
+  assert.deepEqual(routes.map((route) => route.path).sort(), ['/api/memento/audit', '/api/memento/entries', '/api/memento/proposals'])
 
   const entriesRoute = routes.find((route) => route.path === '/api/memento/entries')
   let captured = ''

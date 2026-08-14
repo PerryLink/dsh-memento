@@ -92,12 +92,14 @@ Every field is a validated Schemastery `Config`; invalid values fail loudly at l
 | `panelEntriesLimit` | `200` | web panel entries page size (and clamp) |
 | `panelAuditLimit` | `20` | web panel audit rows by default (ceiling 200) |
 | `auditRetentionDays` | `0` | audit retention: 0 = keep forever, >0 = prune rows older than N days at store open |
+| `proposals.enabled` / `proposals.maxChars` / `proposals.maxPending` | `true` / `2000` / `8` | auto-capture: pending memory proposal after each successful compaction (truncated, one per session); disable or tune caps |
 
 ## 🛠 Tools & surfaces
 
 - **`memory`** — add/replace/remove/consolidate/query with Save/Skip guidance embedded in the description (save user preferences, corrections, environment facts, conventions, lessons; skip trivia, re-derivable facts, dumps, one-off paths). Writes ride the approval gate; reads are free; replace/remove target a **unique substring** (ambiguous matches fail with the candidate list); consolidate merges 1..20 entries into one with a single approval and one atomic write.
 - **`memory_recall`** — two-part recall: bounded memory matches **plus** recent session-history matches via `ctx.sessionQuery` (degrades gracefully to memory-only where the service is absent).
-- **`/memory`** — user-triggered command (not a model turn): `list` · `query <word>` · `add [--track=user|agent] [--scope=user-global|workspace] <text>` · `remove [flags] <substring>` · `consolidate [flags] <substring...> => <text>` · `budgets` · `audit`. Command writes ride the same waterfall + policy; audit lands in the plugin audit table + `command/done`.
+- **`/memory`** — user-triggered command (not a model turn): `list` · `query <word>` · `add [--track=user|agent] [--scope=user-global|workspace] <text>` · `remove [flags] <substring>` · `consolidate [flags] <substring...> => <text>` · `proposals [approve|dismiss <id>]` · `budgets` · `audit`. Command writes ride the same waterfall + policy; audit lands in the plugin audit table + `command/done`.
+- **Auto-capture proposals** — after a successful session compaction, the summary lands as a pending memory proposal (`agent/workspace`); approving writes it through the approval gate, dismissing drops it. Pending proposals appear in the frozen snapshot and the panel.
 - **Web panel** — zero-build `dsh.client` drawer: browse entries by track/layer, search, budget bars, audit tail. Read-only by design: writes and approval happen through the `memory` tool and the built-in approval UI.
 
 ## 🆚 How it's different

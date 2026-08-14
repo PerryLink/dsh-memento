@@ -115,6 +115,8 @@ function installPanel() {
     }
     html += '<div class="mem-group">最近审计</div>'
     html += '<div id="mem-audit-slot"><div class="mem-empty">加载中…</div></div>'
+    html += '<div class="mem-group">待审批提案</div>'
+    html += '<div id="mem-proposal-slot"><div class="mem-empty">加载中…</div></div>'
     body.insertAdjacentHTML('beforeend', html)
   }
 
@@ -127,6 +129,17 @@ function installPanel() {
     }
     slot.innerHTML = rows.map((row) =>
       `<div class="mem-audit">${new Date(row.ts).toLocaleString()} ${escapeHtml(row.action)}${row.track ? ` ${escapeHtml(row.track)}/${escapeHtml(row.scope)}` : ''} · ${escapeHtml(row.outcome ?? '')} · ${escapeHtml(row.source ?? '')}</div>`).join('')
+  }
+
+  const renderProposals = (proposals) => {
+    const slot = document.getElementById('mem-proposal-slot')
+    if (slot === null) return
+    if (!Array.isArray(proposals) || proposals.length === 0) {
+      slot.innerHTML = '<div class="mem-empty">暂无待审批提案（会话压缩后自动生成；用 /memory proposals approve|dismiss 处理）</div>'
+      return
+    }
+    slot.innerHTML = proposals.map((proposal) =>
+      `<div class="mem-audit">[${escapeHtml(proposal.id)}] ${escapeHtml(proposal.track)}/${escapeHtml(proposal.scope)} · ${escapeHtml(proposal.text.length > 160 ? `${proposal.text.slice(0, 160)}…` : proposal.text)}</div>`).join('')
   }
 
   const refresh = async () => {
@@ -144,6 +157,10 @@ function installPanel() {
         .then((res) => res.json())
         .then((audit) => renderAudit(audit.rows))
         .catch(() => renderAudit([]))
+      void fetch('/api/memento/proposals')
+        .then((res) => res.json())
+        .then((data) => renderProposals(data.proposals))
+        .catch(() => renderProposals([]))
     } catch (error) {
       body.innerHTML = `<div class="mem-empty">加载失败：${escapeHtml(String(error && error.message ? error.message : error))}（面板只读；请确认 Web profile 已装载 dsh-memento）</div>`
     }

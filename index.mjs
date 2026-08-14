@@ -29,10 +29,11 @@ import {
   AmbiguousMatchError,
   WriteDeniedError,
   NoAgentError,
+  ProposalNotFoundError,
 } from './lib/errors.mjs'
 import { checkBudget, budgetReport, budgetLimits, validateBudgets } from './lib/budget.mjs'
 import { buildWriteReason, isMemoryWriteRequest, applyWritePolicy, normalizeWritePolicy } from './lib/gate.mjs'
-import { renderSnapshot, visibleEntries } from './lib/snapshot.mjs'
+import { renderSnapshot, visibleEntries, visibleProposals } from './lib/snapshot.mjs'
 import { openMemoryStore, resolveDbPath } from './lib/store.mjs'
 import { workspaceKeyOf } from './lib/workspace.mjs'
 import { extractEventText } from './lib/extract.mjs'
@@ -43,6 +44,7 @@ import { extractEventText } from './lib/extract.mjs'
  * @typedef {import('./types.js').MemoryWriteContext} MemoryWriteContext
  * @typedef {import('./types.js').MemorySessionLike} MemorySessionLike
  * @typedef {{track: string, scope: string, used: number, limit: number}} MemoryUsage
+ * @typedef {{id: string, kind: string, track: string, scope: string, workspaceKey: string, text: string, source: string, sessionId: string | null, status: string, createdAt: number, decidedAt: number | null}} MemoryProposal
  * @typedef {{user: {userGlobal: number, workspace: number}, agent: {userGlobal: number, workspace: number}}} BudgetsConfig
  * @typedef {object} StoreHandle - ctx.memory 依赖的 Provider 面。
  * @property {(filter?: {track?: string, scope?: string, text?: string, limit?: number}) => MemoryQueryResult} queryEntries
@@ -55,6 +57,9 @@ import { extractEventText } from './lib/extract.mjs'
  * @property {(input: object) => {removed: MemoryEntry[], entry: MemoryEntry}} consolidateEntries
  * @property {(row: object) => object} auditAppend
  * @property {(limit?: number) => object[]} auditList
+ * @property {(input: object) => object | null} proposalUpsert
+ * @property {(status?: string, limit?: number) => object[]} proposalList
+ * @property {(id: string, status: string) => object} proposalDecide
  * @property {() => void} close
  * @typedef {{request: (req: object) => Promise<string>, overrideOf?: (session: unknown) => string | undefined, config?: {policy?: string}}} ApprovalLike
  * @typedef {object} ServiceDeps
@@ -79,6 +84,7 @@ import { extractEventText } from './lib/extract.mjs'
  * @property {number} [panelEntriesLimit]
  * @property {number} [panelAuditLimit]
  * @property {number} [auditRetentionDays]
+ * @property {{enabled?: boolean, maxChars?: number, maxPending?: number}} [proposals]
  * @typedef {{action: string, track: string, scope: string, text: string, count?: number}} WritePayload
  * @typedef {{agent?: {session?: MemorySessionLike | null} | null, callId?: unknown, signal?: AbortSignal}} AskWrite
  * @typedef {{track: string, scope: string, text: string}} PublicEntry
@@ -130,6 +136,8 @@ export const DEFAULT_SNAPSHOT_ORDER = -50
  * @property {number} [panelEntriesLimit] 面板条目页上限与钳制（默认 200）。
  * @property {number} [panelAuditLimit] 面板审计默认条数（默认 20；上限 200 为协议常量）。
  * @property {number} [auditRetentionDays] 审计保留天数（默认 0 = 不限）。
+ * @property {{enabled?: boolean, maxChars?: number, maxPending?: number}} [proposals]
+ *   auto-capture 压缩记忆提案（默认 true / 2000 / 8）。
  */
 export const Config = Schema.object({
   enabled: Schema.boolean().default(true),
@@ -157,6 +165,11 @@ export const Config = Schema.object({
   panelEntriesLimit: Schema.number().default(200),
   panelAuditLimit: Schema.number().default(20),
   auditRetentionDays: Schema.number().default(0),
+  proposals: Schema.object({
+    enabled: Schema.boolean().default(true),
+    maxChars: Schema.number().default(2000),
+    maxPending: Schema.number().default(8),
+  }),
 })
 
 /**
@@ -922,6 +935,11 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
     panelEntriesLimit: config.panelEntriesLimit ?? 200,
     panelAuditLimit: config.panelAuditLimit ?? 20,
     auditRetentionDays: config.auditRetentionDays ?? 0,
+    proposals: {
+      enabled: config.proposals?.enabled ?? true,
+      maxChars: config.proposals?.maxChars ?? 2000,
+      maxPending: config.proposals?.maxPending ?? 8,
+    },
   }
   if (resolved.enabled === false) return
   const budgetCheck = validateBudgets(resolved.budgets)
@@ -952,6 +970,12 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
   }
   if (!Number.isInteger(resolved.auditRetentionDays) || resolved.auditRetentionDays < 0) {
     throw new InvalidInputError('dsh-memento config: auditRetentionDays must be a non-negative integer')
+  }
+  if (!Number.isInteger(resolved.proposals.maxChars) || resolved.proposals.maxChars <= 0) {
+    throw new InvalidInputError('dsh-memento config: proposals.maxChars must be a positive integer')
+  }
+  if (!Number.isInteger(resolved.proposals.maxPending) || resolved.proposals.maxPending <= 0) {
+    throw new InvalidInputError('dsh-memento config: proposals.maxPending must be a positive integer')
   }
   const dbPath = resolveDbPath(resolved.dbPath)
   const store = openMemoryStore(dbPath, { retentionDays: resolved.auditRetentionDays })
@@ -999,7 +1023,11 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
           /** @type {Array<{id: string, track: string, scope: string, workspaceKey: string, text: string, createdAt: number}>} */ (store.listEntries()),
           workspaceKey,
         )
-        frozen = renderSnapshot(entries, resolved.budgets)
+        const proposals = visibleProposals(
+          /** @type {MemoryProposal[]} */ (store.proposalList('pending', resolved.proposals.maxPending)),
+          workspaceKey,
+        )
+        frozen = renderSnapshot(entries, resolved.budgets, proposals)
         snapshots.set(session, frozen)
         store.auditAppend({
           action: 'snapshot',
@@ -1026,6 +1054,64 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
   registerCommands(ctx, service)
   ctx.tools.register(/** @type {import('@deepseek-ai/dsh-tools').ToolDefinition} */ (makeMemoryRecallTool(service, ctx, resolved.recall)))
   registerWebRoutes(ctx, service, resolved)
+
+  // auto-capture：监听会话事件火线，压缩结束后生成记忆提案（只落提案，不写记忆、不调模型）。
+  const summaries = new WeakMap()
+  ctx.on('session/event', (session, event) => {
+    handleSessionEvent(store, session, event, resolved.proposals, summaries)
+  })
+}
+
+/**
+ * auto-capture 提案生成：缓存每会话最近的 compaction/summary 文本，compaction/end
+ * 成功时截断落 proposals 表（(session_id, kind) 幂等；pending 满则弃新）。
+ * 本函数不调用任何模型、不写任何记忆条目、不触碰审批 seam——提案是待审批数据。
+ * @param {StoreHandle} store - Provider。
+ * @param {MemorySessionLike | null | undefined} session - 会话。
+ * @param {unknown} event - 会话事件（{type, data}）。
+ * @param {{enabled: boolean, maxChars: number, maxPending: number}} proposals - Config.proposals。
+ * @param {WeakMap<object, string>} summaries - 会话 → 最近 summary 文本缓存。
+ */
+function handleSessionEvent(store, session, event, proposals, summaries) {
+  if (!proposals.enabled || session === null || session === undefined) return
+  if (event === null || typeof event !== 'object') return
+  const record = /** @type {{type?: unknown, data?: unknown}} */ (event)
+  if (record.type === 'compaction/summary') {
+    const text = extractEventText(event)
+    if (text.length > 0) summaries.set(session, text)
+    return
+  }
+  if (record.type !== 'compaction/end') return
+  const data = record.data
+  const error = data !== null && typeof data === 'object' ? /** @type {{error?: unknown}} */ (data).error : undefined
+  if (typeof error === 'string' && error.length > 0) return
+  const text = summaries.get(session)
+  summaries.delete(session)
+  if (typeof text !== 'string' || text.length === 0) return
+  const pending = /** @type {MemoryProposal[]} */ (store.proposalList('pending', proposals.maxPending))
+  if (pending.length >= proposals.maxPending) return // 满则弃新
+  const truncated = text.length > proposals.maxChars ? text.slice(0, proposals.maxChars) : text
+  const proposal = store.proposalUpsert({
+    kind: 'compaction-summary',
+    track: 'agent',
+    scope: 'workspace',
+    workspaceKey: workspaceKeyOf(/** @type {string | undefined} */ (session.header?.cwd)),
+    text: truncated,
+    source: 'compaction',
+    sessionId: typeof session.id === 'string' ? session.id : '',
+  })
+  if (proposal === null) return // 同 session 已提案（幂等）
+  const created = /** @type {MemoryProposal} */ (proposal)
+  store.auditAppend({
+    action: 'proposal',
+    track: 'agent',
+    scope: 'workspace',
+    entryId: created.id,
+    text: truncated,
+    outcome: 'pending',
+    source: 'compaction',
+    sessionId: typeof session.id === 'string' ? session.id : null,
+  })
 }
 
 // ── V2 观察面 ────────────────────────────────────────────────────────────────
@@ -1093,8 +1179,8 @@ export function registerCommands(ctx, service) {
     if (typeof commands?.register !== 'function') return
     commands.register({
       name: 'memory',
-      description: '查看/管理 dsh-memento 记忆：list | query <词> | add [--track=user|agent] [--scope=user-global|workspace] <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | budgets | audit',
-      input: { hint: 'list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | budgets | audit' },
+      description: '查看/管理 dsh-memento 记忆：list | query <词> | add [--track=user|agent] [--scope=user-global|workspace] <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit',
+      input: { hint: 'list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit' },
       handler: async (/** @type {{rawInput?: unknown, agent?: unknown, signal?: AbortSignal}} */ invocation) => handleMemoryCommand(ctx, service, invocation),
     })
   })
@@ -1128,7 +1214,7 @@ async function runMemoryCommand(ctx, service, invocation) {
   const raw = String(invocation?.rawInput ?? '').trim()
   const [verb, ...rest] = raw.split(/\s+/)
   if (verb === undefined || verb.length === 0) {
-    return { kind: 'success', text: '用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | budgets | audit' }
+    return { kind: 'success', text: '用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit' }
   }
   switch (verb) {
     case 'list': {
@@ -1154,6 +1240,32 @@ async function runMemoryCommand(ctx, service, invocation) {
     case 'budgets': {
       const rows = service.budgets()
       return { kind: 'success', text: `预算用量：\n${rows.map((/** @type {{track: string, scope: string, used: number, limit: number}} */ row) => `- ${row.track}/${row.scope}: ${row.used}/${row.limit}`).join('\n')}` }
+    }
+    case 'proposals': {
+      const [sub, id] = rest
+      if (sub === undefined) {
+        const rows = /** @type {MemoryProposal[]} */ (service.store.proposalList('pending', 50))
+        if (rows.length === 0) return { kind: 'success', text: '暂无待审批记忆提案。' }
+        return { kind: 'success', text: `待审批提案（${rows.length} 条）：\n${rows.map((proposal) => `- [${proposal.id}] ${proposal.track}/${proposal.scope}: ${proposal.text.length > 120 ? `${proposal.text.slice(0, 120)}…` : proposal.text}`).join('\n')}\n审批：/memory proposals approve <id>；驳回：/memory proposals dismiss <id>` }
+      }
+      if (id === undefined) return { kind: 'error', text: 'proposals 用法：/memory proposals | proposals approve <id> | proposals dismiss <id>' }
+      if (sub === 'approve') {
+        const proposal = /** @type {MemoryProposal | null} */ (service.store.proposalList('pending', 1000).find((/** @type {MemoryProposal} */ candidate) => candidate.id === id) ?? null)
+        if (proposal === null) {
+          return { kind: 'error', text: `proposal ${JSON.stringify(id)} 不是待审批提案（可能已裁决或不存在）` }
+        }
+        const result = await service.add(
+          { track: proposal.track, scope: proposal.scope, text: proposal.text, source: 'proposal', workspaceKey: proposal.workspaceKey },
+          { agent: invocation?.agent, gate: makeCommandGate(ctx, invocation) },
+        )
+        service.store.proposalDecide(id, 'approved')
+        return { kind: 'success', text: `已批准提案并写入记忆（${proposal.track}/${proposal.scope}）：${result.entry.text}\n该层用量：${result.usage.used}/${result.usage.limit}` }
+      }
+      if (sub === 'dismiss') {
+        service.store.proposalDecide(id, 'dismissed')
+        return { kind: 'success', text: `已驳回提案 ${id}。` }
+      }
+      return { kind: 'error', text: 'proposals 用法：/memory proposals | proposals approve <id> | proposals dismiss <id>' }
     }
     case 'audit': {
       const rows = service.store.auditList(service.commandAuditLimit)
@@ -1207,7 +1319,7 @@ async function runMemoryCommand(ctx, service, invocation) {
       return { kind: 'success', text: `已整合（${track}/${scope}）：删除 ${result.removed.length} 条，新增 1 条。\n新条目：${result.entry.text}\n该层用量：${result.usage.used}/${result.usage.limit}` }
     }
     default:
-      return { kind: 'error', text: `未知子命令「${verb}」。用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | budgets | audit` }
+      return { kind: 'error', text: `未知子命令「${verb}」。用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit` }
   }
 }
 
@@ -1455,6 +1567,18 @@ export function registerWebRoutes(ctx, service, options) {
         }
       },
     })
+    webServer.register({
+      kind: 'exact',
+      path: '/api/memento/proposals',
+      handler: async (/** @type {{url?: string}} */ _req, /** @type {PanelResponse} */ res) => {
+        try {
+          // 只读：仅列出 pending 提案；approve/dismiss 走 /memory 命令（用户动作 + 审批门）。
+          sendPanelJson(res, 200, { proposals: service.store.proposalList('pending', 50) })
+        } catch (error) {
+          sendPanelJson(res, 500, { error: error instanceof Error ? error.message : String(error) })
+        }
+      },
+    })
   })
 }
 
@@ -1464,7 +1588,7 @@ function sendPanelJson(/** @type {PanelResponse} */ res, /** @type {number} */ s
   res.end(JSON.stringify(value))
 }
 
-export { MemoryError, InvalidInputError, BudgetExceededError, EntryNotFoundError, AmbiguousMatchError, WriteDeniedError, NoAgentError }
+export { MemoryError, InvalidInputError, BudgetExceededError, EntryNotFoundError, AmbiguousMatchError, WriteDeniedError, NoAgentError, ProposalNotFoundError }
 export { buildWriteReason, isMemoryWriteRequest, applyWritePolicy, normalizeWritePolicy }
 export { openMemoryStore, resolveDbPath }
 export { renderSnapshot, visibleEntries }

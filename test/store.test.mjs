@@ -5,9 +5,10 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, rmSync, readFileSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { openMemoryStore, resolveDbPath, chmodOwned } from '../lib/store.mjs'
 import { SCHEMA_VERSION, ERROR_CODES } from '../lib/constants.mjs'
-import { StoreError, InvalidInputError, EntryNotFoundError, AmbiguousMatchError } from '../lib/errors.mjs'
+import { StoreError, InvalidInputError, EntryNotFoundError, AmbiguousMatchError, ProposalNotFoundError } from '../lib/errors.mjs'
 
 /** 每次测试独立的临时库。 */
 function tempStore() {
@@ -238,6 +239,74 @@ test('schema 版本高于本插件 → 响亮拒绝（防降级读坏数据）',
     () => openMemoryStore(dbPath),
     (error) => error instanceof StoreError && error.code === ERROR_CODES.STORE_UNSUPPORTED_VERSION,
   )
+})
+
+test('v1 库逐级迁移到 v2：条目/审计数据完好，proposals 表就绪', (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'dsh-memento-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const dbPath = path.join(dir, 'memory.db')
+  // 合成 v1 库（历史 schema 快照，纯合成数据；迁移 fixture 模式的第一块样本）。
+  const v1 = new DatabaseSync(dbPath)
+  v1.exec(`
+    CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE entries (
+      id TEXT PRIMARY KEY,
+      track TEXT NOT NULL CHECK (track IN ('user', 'agent')),
+      scope TEXT NOT NULL CHECK (scope IN ('user-global', 'workspace')),
+      workspace_key TEXT NOT NULL DEFAULT '',
+      text TEXT NOT NULL,
+      source TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      session_id TEXT
+    );
+    CREATE INDEX entries_track_scope ON entries (track, scope);
+    CREATE TABLE audit (
+      seq INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts INTEGER NOT NULL,
+      action TEXT NOT NULL,
+      track TEXT,
+      scope TEXT,
+      entry_id TEXT,
+      text TEXT,
+      outcome TEXT,
+      source TEXT,
+      session_id TEXT
+    );
+    CREATE INDEX audit_ts ON audit (ts);
+    INSERT INTO meta (key, value) VALUES ('schema_version', '1');
+  `)
+  v1.prepare(`INSERT INTO entries (id, track, scope, workspace_key, text, source, created_at, updated_at, session_id)
+    VALUES ('e-v1', 'user', 'user-global', '', 'v1 遗留条目', 'dsh-memento', 1, 1, 's-v1')`).run()
+  v1.prepare(`INSERT INTO audit (ts, action, track, scope, entry_id, text, outcome, source, session_id)
+    VALUES (1, 'add', 'user', 'user-global', 'e-v1', 'v1 遗留条目', 'ok', 'dsh-memento', 's-v1')`).run()
+  v1.close()
+
+  const store = openMemoryStore(dbPath)
+  assert.equal(Number(store.db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get().value), 2, '迁移后版本 = 2')
+  const entries = store.listEntries()
+  assert.equal(entries.length, 1)
+  assert.equal(entries[0].text, 'v1 遗留条目', '迁移保留数据')
+  assert.equal(store.auditList().length, 1)
+  const proposal = store.proposalUpsert({ kind: 'compaction-summary', track: 'agent', scope: 'workspace', text: '迁移后可用', sessionId: 's-v1' })
+  assert.ok(proposal, 'proposals 表就绪')
+  store.close()
+})
+
+test('proposals：幂等 upsert、列表过滤、裁决与非法裁决响亮', (t) => {
+  const { dir, store } = tempStore()
+  t.after(() => closeAndClean({ dir, store }))
+  const p1 = store.proposalUpsert({ kind: 'compaction-summary', track: 'agent', scope: 'workspace', text: '甲', source: 'compaction', sessionId: 's1' })
+  assert.ok(p1)
+  assert.equal(p1.status, 'pending')
+  assert.equal(store.proposalUpsert({ kind: 'compaction-summary', track: 'agent', scope: 'workspace', text: '乙', source: 'compaction', sessionId: 's1' }), null, '同 (session_id, kind) 幂等')
+  assert.equal(store.proposalList('pending').length, 1)
+  store.proposalDecide(p1.id, 'approved')
+  assert.equal(store.proposalList('pending').length, 0)
+  assert.equal(store.proposalList('approved').length, 1)
+  assert.throws(() => store.proposalDecide(p1.id, 'dismissed'), (error) => error instanceof ProposalNotFoundError)
+  assert.throws(() => store.proposalDecide('nope', 'approved'), (error) => error instanceof ProposalNotFoundError)
+  assert.throws(() => store.proposalDecide(p1.id, 'maybe'), InvalidInputError)
 })
 
 test('resolveDbPath：显式绝对/相对路径与 $DSH_HOME 缺省，缺失 DSH_HOME 响亮失败', () => {

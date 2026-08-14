@@ -92,12 +92,14 @@ Todo campo é um `Config` Schemastery validado; valores inválidos falham ruidos
 | `panelEntriesLimit` | `200` | tamanho da página de entradas do painel web (e teto) |
 | `panelAuditLimit` | `20` | linhas de auditoria do painel web por padrão (teto 200) |
 | `auditRetentionDays` | `0` | retenção de auditoria: 0 = para sempre, >0 = poda ao abrir a loja |
+| `proposals.enabled` / `proposals.maxChars` / `proposals.maxPending` | `true` / `2000` / `8` | auto-captura: proposta de memória pendente após cada compactação bem-sucedida (truncada, uma por sessão); desativar ou ajustar limites |
 
 ## 🛠 Ferramentas e superfícies
 
 - **`memory`** — add/replace/remove/consolidate/query com orientação de Salvar/Pular embutida na descrição (salve preferências do usuário, correções, fatos do ambiente, convenções, lições; pule trivialidades, fatos rederiváveis, despejos, caminhos de uso único). Escritas passam pelo portão de aprovação; leituras são livres; replace/remove miram uma **substring única** (correspondências ambíguas falham com a lista de candidatos); consolidate mescla 1..20 entradas em uma com uma única aprovação e uma escrita atômica.
 - **`memory_recall`** — recuperação em duas partes: correspondências de memória limitadas **mais** correspondências recentes do histórico da sessão via `ctx.sessionQuery` (degrada graciosamente para somente memória onde o serviço está ausente).
-- **`/memory`** — comando acionado pelo usuário (não um turno do modelo): `list` · `query <word>` · `add [--track=user|agent] [--scope=user-global|workspace] <text>` · `remove [flags] <substring>` · `consolidate [flags] <substring...> => <text>` · `budgets` · `audit`. Escritas por comando passam pela mesma cascata + política; a auditoria cai na tabela de auditoria do plugin + `command/done`.
+- **`/memory`** — comando acionado pelo usuário (não um turno do modelo): `list` · `query <word>` · `add [--track=user|agent] [--scope=user-global|workspace] <text>` · `remove [flags] <substring>` · `consolidate [flags] <substring...> => <text>` · `proposals [approve|dismiss <id>]` · `budgets` · `audit`. Escritas por comando passam pela mesma cascata + política; a auditoria cai na tabela de auditoria do plugin + `command/done`.
+- **Propostas auto-capturadas** — após uma compactação de sessão bem-sucedida, o resumo vira uma proposta de memória pendente (`agent/workspace`); aprovar a escreve pelo portão de aprovação, descartar a remove. Propostas pendentes aparecem no snapshot congelado e no painel.
 - **Painel Web** — gaveta `dsh.client` sem build: navegue pelas entradas por trilha/camada, pesquise, veja barras de orçamento e o fim da auditoria. Somente leitura por design: escritas e aprovação acontecem pela ferramenta `memory` e pela UI de aprovação embutida.
 
 ## 🆚 Como ele é diferente
