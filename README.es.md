@@ -86,6 +86,8 @@ Cada campo es un `Config` de Schemastery validado; los valores inválidos fallan
 | `writePolicy` | `'ask'` | `'ask'` = aprobación del usuario; `'auto'` = dejar pasar (se registra el origen de la aprobación); `'off'` = rechazar. Invisible para el modelo |
 | `snapshotOrder` | `-50` | orden de la sección de la instantánea: después de la identidad del harness (`-100`), antes de la persona (`0`) |
 | `maxEntriesPerQuery` | `20` | tope de resultados por consulta |
+| `commandListLimit` | `50` | entradas mostradas por comando `/memory list` / `query` |
+| `commandAuditLimit` | `10` | filas de auditoría mostradas por comando `/memory audit` |
 
 ## 🛠 Herramientas y superficies
 

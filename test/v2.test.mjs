@@ -45,7 +45,9 @@ function mount(opts = {}) {
     budgets: opts.budgets ?? DEFAULT_BUDGETS,
     writePolicy: opts.writePolicy ?? 'auto',
     snapshotOrder: -50,
-    maxEntriesPerQuery: 20,
+    maxEntriesPerQuery: opts.maxEntriesPerQuery ?? 20,
+    commandListLimit: opts.commandListLimit ?? 50,
+    commandAuditLimit: opts.commandAuditLimit ?? 10,
   })
   return { dir, dbPath, mock, approval, commands }
 }
@@ -71,7 +73,7 @@ test('F10：/memory 命令注册；list/query/budgets/audit 直接读', async (t
   assert.equal(list.kind, 'success')
   assert.ok(list.text.includes('项目约定：测试先于实现'))
   const query = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'query 测试' })
-  assert.ok(query.text.includes('命中 1 条'))
+  assert.ok(query.text.includes('命中（1 条）'))
   const budgets = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'budgets' })
   assert.ok(budgets.text.includes('agent/workspace'))
   const audit = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'audit' })
@@ -262,6 +264,31 @@ test('F9：面板 entries 路由解析 limit——显式大页返回全部，缺
 
   const oversized = await fetchPage('?limit=500')
   assert.equal(oversized.entries.length, 25, '超大 limit 钳制到 200 后仍足以覆盖 25 条')
+})
+
+test('F10：list/query 超过 commandListLimit 时标注截断且行数受控；audit 上限可配置', async (t) => {
+  const mounted = mount({ commandListLimit: 5, commandAuditLimit: 3 })
+  t.after(() => teardown(mounted))
+  const { mock } = mounted
+  const service = mock.services.get('memory')
+  const agent = makeAgent(makeSession())
+  for (let i = 0; i < 7; i += 1) {
+    await service.add({ track: 'agent', scope: 'workspace', text: `条目编号 ${i}` }, { agent })
+  }
+  const invocation = { rawInput: '', agent: makeAgent(makeSession()), signal: new AbortController().signal }
+
+  const list = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'list' })
+  assert.equal(list.kind, 'success')
+  assert.ok(list.text.includes('共 7 条，显示前 5 条'), 'list 标注截断')
+  const listLines = list.text.split('\n').filter((line) => line.startsWith('- '))
+  assert.equal(listLines.length, 5)
+
+  const query = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'query 条目' })
+  assert.ok(query.text.includes('共 7 条，显示前 5 条'), 'query 标注截断')
+  assert.equal(query.text.split('\n').filter((line) => line.startsWith('- ')).length, 5)
+
+  const audit = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'audit' })
+  assert.ok(audit.text.includes('最近审计（3 条）'), 'audit 上限取 commandAuditLimit')
 })
 
 test('S3：enabled:false 时 V2 观察面一并消失', (t) => {

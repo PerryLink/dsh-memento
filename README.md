@@ -86,6 +86,8 @@ Every field is a validated Schemastery `Config`; invalid values fail loudly at l
 | `writePolicy` | `'ask'` | `'ask'` = user approval; `'auto'` = allow through (approval source recorded); `'off'` = reject. Model-invisible |
 | `snapshotOrder` | `-50` | snapshot section order: after harness identity (`-100`), before persona (`0`) |
 | `maxEntriesPerQuery` | `20` | per-query result cap |
+| `commandListLimit` | `50` | entries rendered per `/memory list` / `query` command |
+| `commandAuditLimit` | `10` | audit rows rendered per `/memory audit` command |
 
 ## 🛠 Tools & surfaces
 

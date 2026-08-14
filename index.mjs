@@ -58,6 +58,8 @@ import { extractEventText } from './lib/extract.mjs'
  * @property {BudgetsConfig} budgets
  * @property {string} writePolicy
  * @property {number} maxEntriesPerQuery
+ * @property {number} commandListLimit
+ * @property {number} commandAuditLimit
  * @property {ApprovalLike} approval
  * @property {string} [sourceLabel]
  * @typedef {object} PluginConfig - apply 的宽松配置形状（cordis loader 已套 schema 默认值）。
@@ -67,6 +69,8 @@ import { extractEventText } from './lib/extract.mjs'
  * @property {string} [writePolicy]
  * @property {number} [snapshotOrder]
  * @property {number} [maxEntriesPerQuery]
+ * @property {number} [commandListLimit]
+ * @property {number} [commandAuditLimit]
  * @typedef {{action: string, track: string, scope: string, text: string, count?: number}} WritePayload
  * @typedef {{agent?: {session?: MemorySessionLike | null} | null, callId?: unknown, signal?: AbortSignal}} AskWrite
  * @typedef {{track: string, scope: string, text: string}} PublicEntry
@@ -110,6 +114,8 @@ export const DEFAULT_SNAPSHOT_ORDER = -50
  * @property {'ask'|'auto'|'off'} [writePolicy] 写审批策略；模型不可见、不可改。
  * @property {number} [snapshotOrder] 快照段注入顺序（默认 -50，靠前负值）。
  * @property {number} [maxEntriesPerQuery] query 单次返回条目上限。
+ * @property {number} [commandListLimit] /memory list|query 单次渲染条目上限（默认 50）。
+ * @property {number} [commandAuditLimit] /memory audit 单次渲染审计行上限（默认 10）。
  */
 export const Config = Schema.object({
   enabled: Schema.boolean().default(true),
@@ -127,6 +133,8 @@ export const Config = Schema.object({
   writePolicy: Schema.union(['ask', 'auto', 'off']).default('ask'),
   snapshotOrder: Schema.number().default(DEFAULT_SNAPSHOT_ORDER),
   maxEntriesPerQuery: Schema.number().default(20),
+  commandListLimit: Schema.number().default(50),
+  commandAuditLimit: Schema.number().default(10),
 })
 
 /**
@@ -185,6 +193,8 @@ export class MemoryService {
     this.limits = budgetLimits(deps.budgets)
     this.writePolicy = normalizeWritePolicy(deps.writePolicy)
     this.maxEntriesPerQuery = deps.maxEntriesPerQuery
+    this.commandListLimit = deps.commandListLimit
+    this.commandAuditLimit = deps.commandAuditLimit
     this.approval = deps.approval
     this.sourceLabel = deps.sourceLabel ?? DEFAULT_SOURCE
   }
@@ -774,6 +784,8 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
     writePolicy: config.writePolicy ?? 'ask',
     snapshotOrder: config.snapshotOrder ?? DEFAULT_SNAPSHOT_ORDER,
     maxEntriesPerQuery: config.maxEntriesPerQuery ?? 20,
+    commandListLimit: config.commandListLimit ?? 50,
+    commandAuditLimit: config.commandAuditLimit ?? 10,
   }
   if (resolved.enabled === false) return
   const budgetCheck = validateBudgets(resolved.budgets)
@@ -785,6 +797,12 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
   if (!Number.isInteger(resolved.maxEntriesPerQuery) || resolved.maxEntriesPerQuery <= 0) {
     throw new InvalidInputError('dsh-memento config: maxEntriesPerQuery must be a positive integer')
   }
+  if (!Number.isInteger(resolved.commandListLimit) || resolved.commandListLimit <= 0) {
+    throw new InvalidInputError('dsh-memento config: commandListLimit must be a positive integer')
+  }
+  if (!Number.isInteger(resolved.commandAuditLimit) || resolved.commandAuditLimit <= 0) {
+    throw new InvalidInputError('dsh-memento config: commandAuditLimit must be a positive integer')
+  }
   const dbPath = resolveDbPath(resolved.dbPath)
   const store = openMemoryStore(dbPath)
   const service = new MemoryService({
@@ -792,6 +810,8 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
     budgets: resolved.budgets,
     writePolicy: resolved.writePolicy,
     maxEntriesPerQuery: resolved.maxEntriesPerQuery,
+    commandListLimit: resolved.commandListLimit,
+    commandAuditLimit: resolved.commandAuditLimit,
     approval: ctx.approval,
     sourceLabel: DEFAULT_SOURCE,
   })
@@ -962,24 +982,31 @@ async function runMemoryCommand(ctx, service, invocation) {
   }
   switch (verb) {
     case 'list': {
-      const { entries, total } = service.query({}, { sessionId: /** @type {string | undefined} */ (invocation?.agent?.session?.id), session: invocation?.agent?.session })
+      const { entries, total, truncated } = service.query(
+        { limit: service.commandListLimit },
+        { sessionId: /** @type {string | undefined} */ (invocation?.agent?.session?.id), session: invocation?.agent?.session },
+      )
       if (total === 0) return { kind: 'success', text: '记忆为空。' }
-      return { kind: 'success', text: `记忆条目（${total} 条）：\n${entries.map(renderEntryLine).join('\n')}` }
+      const note = truncated ? `（共 ${total} 条，显示前 ${entries.length} 条）` : `（${total} 条）`
+      return { kind: 'success', text: `记忆条目${note}：\n${entries.map(renderEntryLine).join('\n')}` }
     }
     case 'query': {
       const text = rest.join(' ')
       if (text.length === 0) return { kind: 'error', text: 'query 需要一个关键词：/memory query <词>' }
-      const { entries, total, truncated } = service.query({ text }, { sessionId: /** @type {string | undefined} */ (invocation?.agent?.session?.id), session: invocation?.agent?.session })
+      const { entries, total, truncated } = service.query(
+        { text, limit: service.commandListLimit },
+        { sessionId: /** @type {string | undefined} */ (invocation?.agent?.session?.id), session: invocation?.agent?.session },
+      )
       if (total === 0) return { kind: 'success', text: `没有条目包含「${text}」。` }
-      return { kind: 'success', text: `命中 ${total} 条${truncated ? '（已截断）' : ''}：\n${entries.map(renderEntryLine).join('\n')}` }
+      const note = truncated ? `（共 ${total} 条，显示前 ${entries.length} 条）` : `（${total} 条）`
+      return { kind: 'success', text: `命中${note}：\n${entries.map(renderEntryLine).join('\n')}` }
     }
     case 'budgets': {
       const rows = service.budgets()
       return { kind: 'success', text: `预算用量：\n${rows.map((/** @type {{track: string, scope: string, used: number, limit: number}} */ row) => `- ${row.track}/${row.scope}: ${row.used}/${row.limit}`).join('\n')}` }
     }
     case 'audit': {
-      const limit = 10
-      const rows = service.store.auditList(limit)
+      const rows = service.store.auditList(service.commandAuditLimit)
       if (rows.length === 0) return { kind: 'success', text: '审计为空。' }
       return { kind: 'success', text: `最近审计（${rows.length} 条）：\n${rows.map((/** @type {{ts: number, action: string, track?: string | null, scope?: string | null, outcome?: string | null, source?: string | null}} */ row) => `- ${new Date(row.ts).toISOString()} ${row.action}${row.track ? ` ${row.track}/${row.scope}` : ''} ${row.outcome ?? ''} (${row.source ?? ''})`.trim()).join('\n')}` }
     }

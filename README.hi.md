@@ -86,6 +86,8 @@ dsh plugin --profile <name> remove dsh-memento       # uninstall: DB + session l
 | `writePolicy` | `'ask'` | `'ask'` = उपयोगकर्ता अनुमोदन; `'auto'` = अनुमति दें (अनुमोदन स्रोत रिकॉर्ड किया गया); `'off'` = अस्वीकार करें। मॉडल-अदृश्य |
 | `snapshotOrder` | `-50` | स्नैपशॉट सेक्शन क्रम: harness आइडेंटिटी (`-100`) के बाद, persona (`0`) से पहले |
 | `maxEntriesPerQuery` | `20` | प्रति-क्वेरी परिणाम सीमा |
+| `commandListLimit` | `50` | प्रति `/memory list` / `query` कमांड दिखाई गई प्रविष्टियाँ |
+| `commandAuditLimit` | `10` | प्रति `/memory audit` कमांड दिखाई गई ऑडिट पंक्तियाँ |
 
 ## 🛠 टूल और सतहें
 
