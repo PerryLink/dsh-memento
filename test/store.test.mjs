@@ -160,6 +160,17 @@ test('seedEntries：事务内批量插入，任一条失败整体回滚（无部
   assert.equal(store.queryEntries({}).total, 2, '合法批次全部落盘')
 })
 
+test('queryEntries 显式 limit 被硬钳到 MAX_QUERY_LIMIT（1000）', (t) => {
+  const { dir, store } = tempStore()
+  t.after(() => closeAndClean({ dir, store }))
+  const inputs = Array.from({ length: 1005 }, (_, i) => ({ track: 'agent', scope: 'workspace', text: `fact ${i}` }))
+  store.seedEntries(inputs)
+  const capped = store.queryEntries({ track: 'agent', scope: 'workspace', limit: 5000 })
+  assert.equal(capped.entries.length, 1000)
+  assert.equal(capped.total, 1005)
+  assert.equal(capped.truncated, true)
+})
+
 test('库损坏（非 SQLite 文件）在打开点响亮失败', (t) => {
   const dir = mkdtempSync(path.join(tmpdir(), 'dsh-memento-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))

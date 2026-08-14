@@ -85,7 +85,7 @@ Todo campo é um `Config` Schemastery validado; valores inválidos falham ruidos
 | `budgets.agent.userGlobal` / `budgets.agent.workspace` | `4000` / `4000` | orçamento rígido de caracteres por camada da trilha agent |
 | `writePolicy` | `'ask'` | `'ask'` = aprovação do usuário; `'auto'` = permite passar (fonte da aprovação registrada); `'off'` = rejeita. Invisível ao modelo |
 | `snapshotOrder` | `-50` | ordem da seção do snapshot: depois da identidade do harness (`-100`), antes da persona (`0`) |
-| `maxEntriesPerQuery` | `20` | limite de resultados por consulta |
+| `maxEntriesPerQuery` | `20` | limite padrão de resultados por consulta (`limit` explícito permitido, teto rígido 1000) |
 | `commandListLimit` | `50` | entradas exibidas por comando `/memory list` / `query` |
 | `commandAuditLimit` | `10` | linhas de auditoria exibidas por comando `/memory audit` |
 

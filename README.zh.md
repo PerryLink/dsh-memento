@@ -85,7 +85,7 @@ dsh plugin --profile <name> remove dsh-memento       # 卸载：库与会话日�
 | `budgets.agent.userGlobal` / `budgets.agent.workspace` | `4000` / `4000` | agent 轨每层硬字符预算 |
 | `writePolicy` | `'ask'` | `'ask'`=用户审批；`'auto'`=放行但记录审批来源；`'off'`=拒绝。模型不可见 |
 | `snapshotOrder` | `-50` | 快照段注入顺序：harness identity(`-100`) 之后、persona(`0`) 之前 |
-| `maxEntriesPerQuery` | `20` | query 单次返回上限 |
+| `maxEntriesPerQuery` | `20` | query 默认返回上限（显式 `limit` 可超出，硬钳 1000） |
 | `commandListLimit` | `50` | `/memory list`/`query` 命令单次渲染条目上限 |
 | `commandAuditLimit` | `10` | `/memory audit` 命令单次渲染审计行上限 |
 

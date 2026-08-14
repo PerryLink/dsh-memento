@@ -114,7 +114,7 @@ export const DEFAULT_SNAPSHOT_ORDER = -50
  *   每轨每层硬字符预算。
  * @property {'ask'|'auto'|'off'} [writePolicy] 写审批策略；模型不可见、不可改。
  * @property {number} [snapshotOrder] 快照段注入顺序（默认 -50，靠前负值）。
- * @property {number} [maxEntriesPerQuery] query 单次返回条目上限。
+ * @property {number} [maxEntriesPerQuery] query 默认返回条目上限（显式 limit 可超出，Provider 硬钳 1000）。
  * @property {number} [commandListLimit] /memory list|query 单次渲染条目上限（默认 50）。
  * @property {number} [commandAuditLimit] /memory audit 单次渲染审计行上限（默认 10）。
  */
@@ -207,6 +207,8 @@ export class MemoryService {
 
   /**
    * 查询条目（无审批；带 sessionId 时记一条 recalled 审计）。
+   * 显式合法 limit 生效但被 Provider 硬钳到 MAX_QUERY_LIMIT（1000）；缺省/非法 limit 用
+   * maxEntriesPerQuery（Config 默认 20，语义是"默认返回上限"而非硬顶）。
    * @param {{track?: string, scope?: string, text?: string, limit?: number}} [filter] - {track, scope, text, limit}。
    * @param {{sessionId?: string, session?: MemorySessionLike | null}} [opts] - {sessionId, session}；session 用于 memory/recalled
    *   事件的按已知类型自适应派发（与写事件同一 maybeAppendSessionEvent 门）。
@@ -570,7 +572,7 @@ export function makeMemoryTool(service) {
       },
       limit: {
         type: 'integer',
-        description: 'query: maximum entries to return (default 20).',
+        description: 'query: maximum entries to return (default 20; hard-capped at 1000).',
       },
     },
     output: {
