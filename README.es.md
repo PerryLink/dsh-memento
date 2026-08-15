@@ -162,6 +162,10 @@ npm run check:readmes   # puerta de coherencia de los cinco README
 
 Temas sugeridos para GitHub: `dsh` · `dsh-plugin` · `deepseek-harness` · `memory` · `agent-memory` · `approval` · `audit` · `sqlite` · `cordis` · `llm`
 
+## 🙏 Agradecimientos
+
+Agradecimiento especial a [@Niuniu-Sir](https://github.com/Niuniu-Sir) por el issue [#1](https://github.com/PerryLink/dsh-memento/issues/1) — el detallado informe del fallo de arranque que llevó al respaldo `~/.dsh` publicado en 0.3.1.
+
 ## 📄 Licencia
 
 Licencia Apache 2.0 — véase [LICENSE](LICENSE). No se redistribuye código de terceros; véase [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

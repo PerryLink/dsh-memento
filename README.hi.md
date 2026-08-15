@@ -162,6 +162,10 @@ npm run check:readmes   # पाँच-भाषा README संगति द�
 
 सुझाए गए GitHub विषय: `dsh` · `dsh-plugin` · `deepseek-harness` · `memory` · `agent-memory` · `approval` · `audit` · `sqlite` · `cordis` · `llm`
 
+## 🙏 धन्यवाद
+
+[@Niuniu-Sir](https://github.com/Niuniu-Sir) का विशेष आभार — issue [#1](https://github.com/PerryLink/dsh-memento/issues/1) की विस्तृत बूट-क्रैश रिपोर्ट के लिए, जिसने 0.3.1 में `~/.dsh` फ़ॉलबैक को जन्म दिया।
+
 ## 📄 लाइसेंस
 
 Apache License 2.0 — देखें [LICENSE](LICENSE)। कोई तृतीय-पक्ष कोड पुनर्वितरित नहीं किया जाता; देखें [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)।

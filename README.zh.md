@@ -162,6 +162,10 @@ npm run check:readmes   # 五语 README 一致性门
 
 建议的 GitHub topics：`dsh` · `dsh-plugin` · `deepseek-harness` · `memory` · `agent-memory` · `approval` · `audit` · `sqlite` · `cordis` · `llm`
 
+## 🙏 致谢
+
+特别感谢 [@Niuniu-Sir](https://github.com/Niuniu-Sir) 的 issue [#1](https://github.com/PerryLink/dsh-memento/issues/1)——这份详尽的启动崩溃报告促成了 0.3.1 中 `~/.dsh` 回退的落地。
+
 ## 📄 许可证
 
 Apache License 2.0——见 [LICENSE](LICENSE)。不分发任何第三方代码；见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

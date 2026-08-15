@@ -162,6 +162,10 @@ npm run check:readmes   # portão de coerência dos cinco README
 
 Tópicos sugeridos para o GitHub: `dsh` · `dsh-plugin` · `deepseek-harness` · `memory` · `agent-memory` · `approval` · `audit` · `sqlite` · `cordis` · `llm`
 
+## 🙏 Agradecimentos
+
+Agradecimento especial a [@Niuniu-Sir](https://github.com/Niuniu-Sir) pelo issue [#1](https://github.com/PerryLink/dsh-memento/issues/1) — o detalhado relatório de falha na inicialização que levou ao fallback `~/.dsh` lançado na 0.3.1.
+
 ## 📄 Licença
 
 Apache License 2.0 — veja [LICENSE](LICENSE). Nenhum código de terceiros é redistribuído; veja [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

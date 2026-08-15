@@ -162,6 +162,10 @@ npm run check:readmes   # five-language README consistency gate
 
 Suggested GitHub topics: `dsh` · `dsh-plugin` · `deepseek-harness` · `memory` · `agent-memory` · `approval` · `audit` · `sqlite` · `cordis` · `llm`
 
+## 🙏 Thanks
+
+Special thanks to [@Niuniu-Sir](https://github.com/Niuniu-Sir) for issue [#1](https://github.com/PerryLink/dsh-memento/issues/1) — the thorough boot-crash report that led to the `~/.dsh` fallback shipped in 0.3.1.
+
 ## 📄 License
 
 Apache License 2.0 — see [LICENSE](LICENSE). No third-party code is redistributed; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
