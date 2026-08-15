@@ -3,7 +3,7 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import {
@@ -12,6 +12,7 @@ import {
   renderMemoryRecallResult,
   MemoryService,
   WriteDeniedError,
+  ProposalNotFoundError,
   DEFAULT_BUDGETS,
 } from '../index.mjs'
 import { createMockCtx, makeSession, makeAgent, makeExec } from './helpers/mock-ctx.mjs'
@@ -247,6 +248,108 @@ test('F10：/memory export 只读 JSON 导出全部条目 + 预算（备份/迁�
   // 带多余参数时报用法
   const usage = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'export extra' })
   assert.equal(usage.kind, 'error')
+})
+
+test('F10：/memory import——export 回程（文件路径与内联 JSON；seed 单审批）', async (t) => {
+  const mounted = mount({ writePolicy: 'auto' })
+  t.after(() => teardown(mounted))
+  const { mock } = mounted
+  const service = mock.services.get('memory')
+  const session = makeSession({ id: 's-imp', cwd: 'C:\\work\\imp' })
+  await service.add(
+    { track: 'agent', scope: 'workspace', text: '导出条目甲' },
+    { agent: makeAgent(session) },
+  )
+  const exported = await handleMemoryCommand(mock.ctx, service, {
+    agent: makeAgent(session), signal: new AbortController().signal, rawInput: 'export',
+  })
+  const document = exported.text
+
+  // 文件路径导入到独立库（备份恢复/迁移场景）
+  const target = mount({ writePolicy: 'auto' })
+  t.after(() => teardown(target))
+  const targetService = target.mock.services.get('memory')
+  const file = path.join(target.dir, 'memory-export.json')
+  writeFileSync(file, document, 'utf8')
+  const viaFile = await handleMemoryCommand(target.mock.ctx, targetService, {
+    agent: makeAgent(makeSession({ id: 's-imp2', cwd: 'C:\\work\\imp' })),
+    signal: new AbortController().signal,
+    rawInput: `import ${file}`,
+  })
+  assert.equal(viaFile.kind, 'success')
+  assert.ok(viaFile.text.includes('已导入 1 条'))
+  const imported = targetService.query({}).entries[0]
+  assert.equal(imported.text, '导出条目甲')
+  assert.equal(imported.track, 'agent')
+  assert.equal(imported.scope, 'workspace')
+  assert.equal(imported.source, 'dsh-memento', 'source 随导出保留')
+  assert.ok(imported.id !== JSON.parse(document).entries[0].id, '导入条目获得新 id（审计归属导入会话）')
+
+  // 内联 JSON 导入（以 { 开头）
+  const inline = await handleMemoryCommand(target.mock.ctx, targetService, {
+    agent: makeAgent(makeSession({ id: 's-imp3' })),
+    signal: new AbortController().signal,
+    rawInput: 'import {"plugin":"dsh-memento","schema":"memory-export-v1","entries":[{"track":"user","scope":"user-global","text":"内联偏好"}]}',
+  })
+  assert.equal(inline.kind, 'success')
+  assert.equal(targetService.query({ track: 'user', scope: 'user-global' }).total, 1)
+})
+
+test('F10：/memory import 校验——坏 JSON/坏 schema/超上限/坏条目响亮失败，零落盘', async (t) => {
+  const mounted = mount({ writePolicy: 'auto' })
+  t.after(() => teardown(mounted))
+  const { mock } = mounted
+  const service = mock.services.get('memory')
+  const invocation = { agent: makeAgent(makeSession()), signal: new AbortController().signal }
+
+  const noArg = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'import' })
+  assert.equal(noArg.kind, 'error')
+  assert.ok(noArg.text.includes('import 从导出文档恢复条目'))
+  const badJson = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'import {oops' })
+  assert.equal(badJson.kind, 'error')
+  assert.ok(badJson.text.includes('内联 JSON 无法解析'))
+  const badSchema = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'import {"plugin":"other","schema":"memory-export-v1","entries":[]}' })
+  assert.equal(badSchema.kind, 'error')
+  assert.ok(badSchema.text.includes('不是 dsh-memento 导出文档'))
+  const unknownSchema = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'import {"plugin":"dsh-memento","schema":"memory-export-v2","entries":[]}' })
+  assert.equal(unknownSchema.kind, 'error')
+  assert.ok(unknownSchema.text.includes('不是 dsh-memento 导出文档'), '未来 schema 版本响亮拒绝')
+  const noEntries = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'import {"plugin":"dsh-memento","schema":"memory-export-v1","entries":[]}' })
+  assert.equal(noEntries.kind, 'error')
+  assert.ok(noEntries.text.includes('没有任何条目'))
+  const tooMany = await handleMemoryCommand(mock.ctx, service, {
+    ...invocation,
+    rawInput: `import {"plugin":"dsh-memento","schema":"memory-export-v1","entries":[${Array.from({ length: 1001 }, (_, i) => `{"track":"user","scope":"user-global","text":"e${i}"}`).join(',')}]}`,
+  })
+  assert.equal(tooMany.kind, 'error')
+  assert.ok(tooMany.text.includes('超过 1000 条'))
+  const badEntry = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'import {"plugin":"dsh-memento","schema":"memory-export-v1","entries":[{"track":"user"}]}' })
+  assert.equal(badEntry.kind, 'error')
+  assert.ok(badEntry.text.includes('需要字符串 track、scope'))
+  const missingFile = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'import /no/such/file.json' })
+  assert.equal(missingFile.kind, 'error')
+  assert.ok(missingFile.text.includes('无法读取'))
+  assert.equal(service.query({}).total, 0, '所有失败路径零落盘')
+})
+
+test('F10：proposals approve 写入成功后提案被并发裁决 → 仍报成功（不掩盖成功写）', async (t) => {
+  const mounted = mount({ writePolicy: 'auto' })
+  t.after(() => teardown(mounted))
+  const { mock } = mounted
+  const service = mock.services.get('memory')
+  const session = makeSession({ id: 's-prop' })
+  const proposal = service.store.proposalUpsert({
+    kind: 'compaction-summary', track: 'agent', scope: 'workspace',
+    workspaceKey: '', agentKey: '', text: '提案内容', source: 'compaction', sessionId: session.id,
+  })
+  assert.ok(proposal, '提案已落库')
+  const original = service.store.proposalDecide
+  service.store.proposalDecide = () => { throw new ProposalNotFoundError(proposal.id, 'already approved') }
+  const invocation = { agent: makeAgent(session), signal: new AbortController().signal }
+  const result = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: `proposals approve ${proposal.id}` })
+  service.store.proposalDecide = original
+  assert.equal(result.kind, 'success', '写已成功：提案被并发裁决不算命令失败')
+  assert.equal(service.query({ track: 'agent', scope: 'workspace', text: '提案内容' }).total, 1, '条目已写入')
 })
 
 test('F10 语言面：language=en 命令输出英文（默认），zh 输出中文；recall 渲染随语言', async (t) => {

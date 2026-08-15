@@ -13,6 +13,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import { KNOWN_SESSION_EVENT_TYPES } from '@deepseek-ai/dsh-session'
+import { readFileSync } from 'node:fs'
 import {
   TRACKS,
   SCOPES,
@@ -20,6 +21,8 @@ import {
   DEFAULT_SOURCE,
   SESSION_EVENTS,
   PANEL_AUDIT_CEILING,
+  EXPORT_SCHEMA,
+  MAX_IMPORT_ENTRIES,
 } from './lib/constants.mjs'
 import {
   MemoryError,
@@ -1319,12 +1322,20 @@ function makeCommandGate(ctx, write) {
  * @property {string} consolidateNeedsText
  * @property {(track: string, scope: string, removed: number, text: string, used: number, limit: number) => string} consolidated
  * @property {string} exportUsage
+ * @property {string} importUsage
+ * @property {string} importBadJson
+ * @property {(path: string, message: string) => string} importReadFailed
+ * @property {(schema: string) => string} importBadSchema
+ * @property {string} importNoEntries
+ * @property {(max: number) => string} importTooMany
+ * @property {string} importBadEntry
+ * @property {(n: number) => string} imported
  * @property {(verb: string) => string} unknownVerb
  * @property {(message: string) => string} commandFailed
  */
 const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} */ ({
   en: {
-    usage: 'Usage: /memory list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | export',
+    usage: 'Usage: /memory list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | export | import <path>',
     memoryEmpty: 'Memory is empty.',
     entries: (total, shown) => `Memory entries (${total} total, showing first ${shown}):`,
     entriesFull: (total) => `Memory entries (${total}):`,
@@ -1350,11 +1361,19 @@ const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} 
     consolidateNeedsText: 'consolidate needs new text (right of =>)',
     consolidated: (track, scope, removed, text, used, limit) => `Consolidated (${track}/${scope}): removed ${removed}, added 1.\nNew entry: ${text}\nLayer usage: ${used}/${limit}`,
     exportUsage: 'export dumps all entries + budgets as one JSON document (read-only; redirect it to a file for backup/migration): /memory export',
-    unknownVerb: (verb) => `Unknown subcommand "${verb}". Usage: /memory list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | export`,
+    importUsage: 'import restores entries from an export document (a file path, or inline JSON starting with {): /memory import <path> | /memory import \'{"plugin":"dsh-memento",...}\'',
+    importBadJson: 'import: inline JSON could not be parsed',
+    importReadFailed: (path, message) => `import: cannot read ${JSON.stringify(path)}: ${message}`,
+    importBadSchema: (schema) => `import: not a dsh-memento export document (expected schema "${schema}")`,
+    importNoEntries: 'import: the export document contains no entries',
+    importTooMany: (max) => `import: the export document has more than ${max} entries; split it and import in batches`,
+    importBadEntry: 'import: every entry needs a string track, scope, and non-empty text',
+    imported: (n) => `Imported ${n} entries into memory (single approval; budgets re-checked). Entries get fresh ids and timestamps; proposals, audit rows and recall counts are not migrated.`,
+    unknownVerb: (verb) => `Unknown subcommand "${verb}". Usage: /memory list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | export | import <path>`,
     commandFailed: (message) => `memory command failed: ${message}`,
   },
   zh: {
-    usage: '用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | export',
+    usage: '用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | export | import <路径>',
     memoryEmpty: '记忆为空。',
     entries: (total, shown) => `记忆条目（共 ${total} 条，显示前 ${shown} 条）：`,
     entriesFull: (total) => `记忆条目（${total} 条）：`,
@@ -1380,7 +1399,15 @@ const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} 
     consolidateNeedsText: 'consolidate 需要新文本（=> 右侧）',
     consolidated: (track, scope, removed, text, used, limit) => `已整合（${track}/${scope}）：删除 ${removed} 条，新增 1 条。\n新条目：${text}\n该层用量：${used}/${limit}`,
     exportUsage: 'export 把所有条目 + 预算导出为一份 JSON 文档（只读；可重定向到文件做备份/迁移）：/memory export',
-    unknownVerb: (verb) => `未知子命令「${verb}」。用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | export`,
+    importUsage: 'import 从导出文档恢复条目（文件路径，或以 { 开头的内联 JSON）：/memory import <路径> | /memory import \'{"plugin":"dsh-memento",...}\'',
+    importBadJson: 'import：内联 JSON 无法解析',
+    importReadFailed: (path, message) => `import：无法读取 ${JSON.stringify(path)}：${message}`,
+    importBadSchema: (schema) => `import：不是 dsh-memento 导出文档（要求 schema "${schema}"）`,
+    importNoEntries: 'import：导出文档没有任何条目',
+    importTooMany: (max) => `import：导出文档超过 ${max} 条；请拆分后分批导入`,
+    importBadEntry: 'import：每条都需要字符串 track、scope 与非空 text',
+    imported: (n) => `已导入 ${n} 条记忆（单次审批；预算已复检）。条目获得新 id 与新时间戳；提案、审计行与召回计数不迁移。`,
+    unknownVerb: (verb) => `未知子命令「${verb}」。用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | export | import <路径>`,
     commandFailed: (message) => `memory 命令失败：${message}`,
   },
 })
@@ -1388,12 +1415,12 @@ const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} 
 /** 命令注册描述与输入提示（双语）。 */
 const COMMAND_DESCRIPTION = /** @type {{en: {description: string, hint: string}, zh: {description: string, hint: string}}} */ ({
   en: {
-    description: 'View/manage dsh-memento memory: list | query <word> | add [--track=user|agent] [--scope=user-global|workspace] <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | export',
-    hint: 'list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | export',
+    description: 'View/manage dsh-memento memory: list | query <word> | add [--track=user|agent] [--scope=user-global|workspace] <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | export | import <path>',
+    hint: 'list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | export | import <path>',
   },
   zh: {
-    description: '查看/管理 dsh-memento 记忆：list | query <词> | add [--track=user|agent] [--scope=user-global|workspace] <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | export',
-    hint: 'list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | export',
+    description: '查看/管理 dsh-memento 记忆：list | query <词> | add [--track=user|agent] [--scope=user-global|workspace] <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | export | import <路径>',
+    hint: 'list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | export | import <路径>',
   },
 })
 
@@ -1492,7 +1519,12 @@ async function runMemoryCommand(ctx, service, invocation) {
           { track: proposal.track, scope: proposal.scope, text: proposal.text, source: 'proposal', workspaceKey: proposal.workspaceKey, agentKey: proposal.agentKey },
           { agent: invocation?.agent, gate: makeCommandGate(ctx, invocation) },
         )
-        service.store.proposalDecide(id, 'approved')
+        try {
+          service.store.proposalDecide(id, 'approved')
+        } catch (error) {
+          // 并发裁决（面板/另一命令已 approve/dismiss）：写已成功，别用提案状态错误掩盖它。
+          if (!(error instanceof ProposalNotFoundError)) throw error
+        }
         return { kind: 'success', text: text.proposalApproved(proposal.track, proposal.scope, result.entry.text, result.usage.used, result.usage.limit) }
       }
       if (sub === 'dismiss') {
@@ -1511,7 +1543,7 @@ async function runMemoryCommand(ctx, service, invocation) {
       const entries = service.store.listEntries()
       const payload = {
         plugin: 'dsh-memento',
-        schema: 'memory-export-v1',
+        schema: EXPORT_SCHEMA,
         exportedAt: new Date().toISOString(),
         budgets: service.budgets(),
         entries: entries.map((/** @type {MemoryEntry} */ entry) => ({
@@ -1529,6 +1561,50 @@ async function runMemoryCommand(ctx, service, invocation) {
         })),
       }
       return { kind: 'success', text: JSON.stringify(payload, null, 2) }
+    }
+    case 'import': {
+      const arg = rest.join(' ').trim()
+      if (arg.length === 0) return { kind: 'error', text: text.importUsage }
+      let payload
+      if (arg.startsWith('{')) {
+        try {
+          payload = JSON.parse(arg)
+        } catch {
+          return { kind: 'error', text: text.importBadJson }
+        }
+      } else {
+        try {
+          payload = JSON.parse(readFileSync(arg, 'utf8'))
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          return { kind: 'error', text: text.importReadFailed(arg, message) }
+        }
+      }
+      const shape = payload !== null && typeof payload === 'object' ? /** @type {{plugin?: unknown, schema?: unknown, entries?: unknown}} */ (payload) : undefined
+      const valid = shape !== undefined && shape.plugin === 'dsh-memento' && shape.schema === EXPORT_SCHEMA && Array.isArray(shape.entries)
+      if (!valid) return { kind: 'error', text: text.importBadSchema(EXPORT_SCHEMA) }
+      const rawEntries = /** @type {unknown[]} */ (shape.entries)
+      if (rawEntries.length === 0) return { kind: 'error', text: text.importNoEntries }
+      if (rawEntries.length > MAX_IMPORT_ENTRIES) return { kind: 'error', text: text.importTooMany(MAX_IMPORT_ENTRIES) }
+      const entries = []
+      for (const raw of rawEntries) {
+        if (raw === null || typeof raw !== 'object') return { kind: 'error', text: text.importBadEntry }
+        const entry = /** @type {{track?: unknown, scope?: unknown, text?: unknown, source?: unknown, workspaceKey?: unknown, agentKey?: unknown}} */ (raw)
+        if (typeof entry.track !== 'string' || typeof entry.scope !== 'string' || typeof entry.text !== 'string' || entry.text.length === 0) {
+          return { kind: 'error', text: text.importBadEntry }
+        }
+        entries.push({
+          track: entry.track,
+          scope: entry.scope,
+          text: entry.text,
+          ...(typeof entry.source === 'string' && entry.source.length > 0 ? { source: entry.source } : {}),
+          ...(typeof entry.workspaceKey === 'string' && entry.workspaceKey.length > 0 ? { workspaceKey: entry.workspaceKey } : {}),
+          ...(typeof entry.agentKey === 'string' && entry.agentKey.length > 0 ? { agentKey: entry.agentKey } : {}),
+        })
+      }
+      // seed 单次审批 + 全量预算预检 + 单事务原子落盘；条目重获新 id 与新时间戳，召回计数归零。
+      const result = await service.seed(entries, { agent: invocation?.agent, gate: makeCommandGate(ctx, invocation) })
+      return { kind: 'success', text: text.imported(result.added) }
     }
     case 'add': {
       const parsed = parseCommandWrite(rest, true)
