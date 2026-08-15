@@ -7,6 +7,9 @@
 [![node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-339933)](https://nodejs.org/)
 [![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)]()
 [![no build step](https://img.shields.io/badge/build-none%20%28pure%20ESM%29-8a6d3b)]()
+[![npm version](https://img.shields.io/npm/v/dsh-memento)](https://www.npmjs.com/package/dsh-memento)
+[![npm downloads](https://img.shields.io/npm/dm/dsh-memento)](https://www.npmjs.com/package/dsh-memento)
+[![CI](https://github.com/PerryLink/dsh-memento/actions/workflows/ci.yml/badge.svg)](https://github.com/PerryLink/dsh-memento/actions/workflows/ci.yml)
 
 [English](README.md) · [中文](README.zh.md) · [Español](README.es.md) · [Português](README.pt.md) · [हिन्दी](README.hi.md)
 
@@ -162,7 +165,7 @@ npm run check:readmes   # five-language README consistency gate
 
 Suggested GitHub topics: `dsh` · `dsh-plugin` · `deepseek-harness` · `memory` · `agent-memory` · `approval` · `audit` · `sqlite` · `cordis` · `llm`
 
-## 🙏 Thanks
+## 👥 Contributors
 
 Special thanks to [@Niuniu-Sir](https://github.com/Niuniu-Sir) for issue [#1](https://github.com/PerryLink/dsh-memento/issues/1) — the thorough boot-crash report that led to the `~/.dsh` fallback shipped in 0.3.1.
 
