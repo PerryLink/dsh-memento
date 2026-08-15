@@ -1,0 +1,74 @@
+name: Bug report
+description: Report a bug in dsh-memento
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug!
+
+        **Before pasting anything: redact all secrets. Never include tokens, API keys, credentials, or request headers in this form.**
+  - type: input
+    id: plugin-version
+    attributes:
+      label: dsh-memento version
+      description: The plugin package version (e.g. `0.3.1`; check the profile's package.json or `npm ls dsh-memento`).
+      placeholder: "0.3.1"
+    validations:
+      required: true
+  - type: input
+    id: dsh-version
+    attributes:
+      label: DeepSeek Harness version
+      description: The harness/CLI version you are running.
+      placeholder: "0.1.0-rc.6"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: OS / Node version
+      description: Operating system and Node.js version.
+      placeholder: "Windows 11 / Node 22.22.3"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal, ordered steps that reliably trigger the bug.
+      placeholder: |
+        1. Install dsh-memento into the profile
+        2. Run ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: |
+        What actually happened, including error messages.
+
+        **Redact tokens, keys, credentials, and request headers before pasting.**
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (optional)
+      description: |
+        Relevant logs or command output.
+
+        **⚠️ Warning: redact everything sensitive before pasting — no tokens, no API keys, no credentials, no request headers.**
+      render: text
+    validations:
+      required: false

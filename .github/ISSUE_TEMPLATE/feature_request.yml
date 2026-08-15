@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest an improvement for dsh-memento
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What problem would this feature solve? Describe the scenario.
+      placeholder: "When the memory layer fills up, I have to consolidate entries by hand…"
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected behavior
+      description: What should the feature do?
+      placeholder: "A /memory suggest command that proposes consolidation candidates."
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered (optional)
+      description: Workarounds or alternative designs you have tried or thought about.
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context (optional)
+      description: Anything else that helps — screenshots, links, related discussions.
+    validations:
+      required: false
