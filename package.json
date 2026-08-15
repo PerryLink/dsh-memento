@@ -50,6 +50,49 @@
       "immediately": true
     }
   },
+  "dshWorkshop": {
+    "schema": "omdsh-workshop-package/v1",
+    "type": "plugin",
+    "integration": {
+      "protocol": "harness-profile",
+      "artifact": "package.json"
+    },
+    "install": {
+      "mode": "transactional",
+      "adapter": "profile-bundle",
+      "failurePolicy": "generation-rollback",
+      "touchesCurrentBeforeActivation": false
+    },
+    "lifecycle": {
+      "activation": "restart-profile",
+      "dispose": "supported"
+    },
+    "permissions": [
+      "harness:tool",
+      "filesystem:read",
+      "filesystem:write",
+      "network:none",
+      "subprocess:none",
+      "shell:none",
+      "python:none",
+      "credentials:none"
+    ],
+    "compatibility": {
+      "dshVersions": ["0.1.0-rc.6"]
+    },
+    "capability": {
+      "id": "memory",
+      "kind": "tool",
+      "invocation": "memory action=query text=preferences",
+      "expected": "structured result listing entries matching the query in the local memory store"
+    },
+    "evidence": {
+      "install": "docs/OMDSH_REVIEW.md",
+      "failureIsolation": null,
+      "hotReload": null,
+      "remove": null
+    }
+  },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-session": ">=0.1.0-rc.6",
