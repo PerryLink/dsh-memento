@@ -156,7 +156,8 @@ function installPanel() {
     for (const [key, list] of groups) {
       html += `<div class="mem-group">${key}${S.groupCount(list.length)}</div>`
       for (const entry of list) {
-        html += `<div class="mem-entry"><span class="t">${escapeHtml(entry.text)}</span><span class="m">${escapeHtml(entry.source)} · ${new Date(entry.createdAt).toLocaleString()}</span></div>`
+        const agentTag = typeof entry.agentKey === 'string' && entry.agentKey.length > 0 ? ` · agent ${escapeHtml(entry.agentKey)}` : ''
+        html += `<div class="mem-entry"><span class="t">${escapeHtml(entry.text)}</span><span class="m">${escapeHtml(entry.source)}${agentTag} · ${new Date(entry.createdAt).toLocaleString()}</span></div>`
       }
     }
     body.innerHTML = html

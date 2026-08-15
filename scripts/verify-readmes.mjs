@@ -37,6 +37,7 @@ for (const file of FILES) {
     ['memory_recall token', text.includes('`memory_recall`')],
     ['commandListLimit token', text.includes('`commandListLimit`')],
     ['commandAuditLimit token', text.includes('`commandAuditLimit`')],
+    ['import token', /`import </.test(text)],
     ['trailing newline', text.endsWith('\n') && !text.endsWith('\n\n')],
   ]
   const bad = checks.filter(([, ok]) => !ok).map(([name]) => name)

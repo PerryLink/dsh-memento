@@ -67,7 +67,8 @@ Provider: lib/store.mjs — node:sqlite (WAL, 0600), entries + audit tables, uni
 
 ```sh
 dsh plugin --profile <name> add ./dsh-memento        # local checkout (no build step)
-dsh plugin --profile <name> add git+https://github.com/PerryLink/dsh-memento.git   # GitHub; npm tras el primer release
+dsh plugin --profile <name> add dsh-memento          # paquete npm (publicado desde 0.2.0)
+dsh plugin --profile <name> add git+https://github.com/PerryLink/dsh-memento.git   # instalación desde GitHub
 dsh plugin --profile <name> remove dsh-memento       # uninstall: DB + session logs are kept
 ```
 
@@ -130,7 +131,7 @@ Y las partes que rechazamos deliberadamente: la auto-resumición oculta en estad
 | dsh-external/Recall | memoria externa de agente | local primero, cero red, se apoya en la propia costura de aprobación de DSH |
 | Ejemplos oficiales de memoria MCP | la postura declarada de DSH de "memoria = MCP externo" | el complemento **nativo de primera parte**: mismo objetivo, sin servidor externo; ambos coexisten |
 
-El nombre es **`dsh-memento`** (libre en npm y GitHub). No `dsh-recall` (confundible con dsh-external/Recall), ni el nombre heredado eliminado `dsh-memory`.
+El nombre es **`dsh-memento`** (publicado en npm y GitHub). No `dsh-recall` (confundible con dsh-external/Recall), ni el nombre heredado eliminado `dsh-memory`.
 
 ## 🔒 Límites de seguridad
 
@@ -149,7 +150,7 @@ El nombre es **`dsh-memento`** (libre en npm y GitHub). No `dsh-recall` (confund
 
 ```sh
 npm install
-npm test                # node --test: 103 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel
+npm test                # node --test: 112 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel/import
 npm run typecheck       # puerta tsc --checkJs sobre index.mjs / lib / scripts
 npm run check:coverage  # puerta de cobertura de líneas: lib ≥90 %, index.mjs ≥85 %, todos ≥90 %
 npm run check:readmes   # puerta de coherencia de los cinco README

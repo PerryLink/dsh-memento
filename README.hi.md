@@ -67,7 +67,8 @@ Provider: lib/store.mjs — node:sqlite (WAL, 0600), entries + audit tables, uni
 
 ```sh
 dsh plugin --profile <name> add ./dsh-memento        # local checkout (no build step)
-dsh plugin --profile <name> add git+https://github.com/PerryLink/dsh-memento.git   # GitHub इंस्टॉल; npm पहले release के बाद
+dsh plugin --profile <name> add dsh-memento          # npm पैकेज (0.2.0 से प्रकाशित)
+dsh plugin --profile <name> add git+https://github.com/PerryLink/dsh-memento.git   # GitHub इंस्टॉल
 dsh plugin --profile <name> remove dsh-memento       # uninstall: DB + session logs are kept
 ```
 
@@ -130,7 +131,7 @@ dsh-memento Claude Code, Codex या Hermes का पोर्ट नहीं
 | dsh-external/Recall | बाहरी एजेंट मेमोरी | लोकल-फर्स्ट, शून्य-नेटवर्क, DSH के अपने अनुमोदन सीम पर चलता है |
 | Official MCP memory examples | DSH की घोषित "memory = external MCP" स्थिति | **नेटिव फर्स्ट-पार्टी** पूरक: समान लक्ष्य, कोई बाहरी सर्वर नहीं; दोनों सह-अस्तित्व में रहते हैं |
 
-नाम **`dsh-memento`** है (npm और GitHub पर निःशुल्क)। `dsh-recall` नहीं (dsh-external/Recall से भ्रमित होने वाला), और न ही हटाया गया पुराना नाम `dsh-memory`।
+नाम **`dsh-memento`** है (npm और GitHub पर प्रकाशित)। `dsh-recall` नहीं (dsh-external/Recall से भ्रमित होने वाला), और न ही हटाया गया पुराना नाम `dsh-memory`।
 
 ## 🔒 सुरक्षा सीमाएँ
 
@@ -149,7 +150,7 @@ dsh-memento Claude Code, Codex या Hermes का पोर्ट नहीं
 
 ```sh
 npm install
-npm test                # node --test: 103 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel
+npm test                # node --test: 112 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel/import
 npm run typecheck       # index.mjs / lib / scripts पर tsc --checkJs द्वार
 npm run check:coverage  # लाइन-कवरेज द्वार: lib ≥90%, index.mjs ≥85%, सभी ≥90%
 npm run check:readmes   # पाँच-भाषा README संगति द्वार

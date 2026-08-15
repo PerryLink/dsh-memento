@@ -2,6 +2,7 @@ name: release
 
 # 打 v* 标签即发布 npm：先全量门禁（测试/类型/覆盖率/五语 README），再 npm publish。
 # 需要仓库 secret：NPM_TOKEN（npm 自动化 token，类型 Automation 或 Publish）。
+# 幂等：标签版本已在 npm 上时跳过 publish——重推旧标签/补标签不会红。
 on:
   push:
     tags: ['v*']
@@ -23,6 +24,18 @@ jobs:
       - run: npm run typecheck
       - run: npm run check:coverage
       - run: npm run check:readmes
-      - run: npm publish
+      - name: 跳过已发布版本
+        id: published
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          if npm view "dsh-memento@${VERSION}" version >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "dsh-memento@${VERSION} 已在 npm 上，跳过发布"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.published.outputs.skip != 'true'
+        run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

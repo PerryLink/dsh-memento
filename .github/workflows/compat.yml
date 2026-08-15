@@ -17,7 +17,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm install --save-dev @deepseek-ai/dsh-session@next @deepseek-ai/dsh-tools@next
+      - run: npm install --save-dev @deepseek-ai/cordis@next @deepseek-ai/dsh-session@next @deepseek-ai/dsh-tools@next
       - run: npm test
       - name: 兼容失败指引
         if: failure()

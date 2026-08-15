@@ -67,7 +67,8 @@ Provider: lib/store.mjs — node:sqlite (WAL, 0600), entries + audit tables, uni
 
 ```sh
 dsh plugin --profile <name> add ./dsh-memento        # checkout local (sem etapa de build)
-dsh plugin --profile <name> add git+https://github.com/PerryLink/dsh-memento.git   # GitHub; npm após o primeiro release
+dsh plugin --profile <name> add dsh-memento          # pacote npm (publicado desde 0.2.0)
+dsh plugin --profile <name> add git+https://github.com/PerryLink/dsh-memento.git   # instalação pelo GitHub
 dsh plugin --profile <name> remove dsh-memento       # desinstalar: o BD + os logs de sessão são mantidos
 ```
 
@@ -130,7 +131,7 @@ E as partes que recusamos deliberadamente: auto-resumir de forma oculta para est
 | dsh-external/Recall | memória de agente externo | local em primeiro lugar, zero rede, usa a própria emenda de aprovação do DSH |
 | Exemplos oficiais de memória MCP | a posição declarada do DSH de "memória = MCP externo" | o complemento **nativo de primeira parte**: mesmo objetivo, sem servidor externo; ambos coexistem |
 
-O nome é **`dsh-memento`** (livre no npm e no GitHub). Não `dsh-recall` (confundível com dsh-external/Recall), não o nome legado excluído `dsh-memory`.
+O nome é **`dsh-memento`** (publicado no npm e no GitHub). Não `dsh-recall` (confundível com dsh-external/Recall), não o nome legado excluído `dsh-memory`.
 
 ## 🔒 Limites de segurança
 
@@ -149,7 +150,7 @@ O nome é **`dsh-memento`** (livre no npm e no GitHub). Não `dsh-recall` (confu
 
 ```sh
 npm install
-npm test                # node --test: 103 testes — orçamento, substring única, política do portão, armazenamento, snapshot, integração com mock-ctx (invariantes S2/S3), comando/recuperação/painel V2
+npm test                # node --test: 112 testes — orçamento, substring única, política do portão, armazenamento, snapshot, integração com mock-ctx (invariantes S2/S3), comando/recuperação/painel/importação V2
 npm run typecheck       # portão tsc --checkJs sobre index.mjs / lib / scripts
 npm run check:coverage  # portão de cobertura de linhas: lib ≥90%, index.mjs ≥85%, todos ≥90%
 npm run check:readmes   # portão de coerência dos cinco README

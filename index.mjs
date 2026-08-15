@@ -1676,9 +1676,11 @@ function parseCommandWrite(/** @type {string[]} */ args, /** @type {boolean} */ 
   return { kind: 'ok', track, scope, text }
 }
 
-/** 条目渲染行（命令/面板共用格式）。 */
-function renderEntryLine(/** @type {{track: string, scope: string, workspaceKey?: string, text: string}} */ entry) {
-  return `- [${entry.track}/${entry.scope}${entry.scope === 'workspace' ? ` @${entry.workspaceKey}` : ''}] ${entry.text}`
+/** 条目渲染行（命令/面板共用格式；workspace 条目带 @工作区键，非共享 agent 条目带 #agent 键）。 */
+function renderEntryLine(/** @type {{track: string, scope: string, workspaceKey?: string, agentKey?: string, text: string}} */ entry) {
+  const workspaceTag = entry.scope === 'workspace' ? ` @${entry.workspaceKey}` : ''
+  const agentTag = typeof entry.agentKey === 'string' && entry.agentKey.length > 0 ? ` #${entry.agentKey}` : ''
+  return `- [${entry.track}/${entry.scope}${workspaceTag}${agentTag}] ${entry.text}`
 }
 
 /**

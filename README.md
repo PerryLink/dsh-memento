@@ -67,7 +67,8 @@ Provider: lib/store.mjs — node:sqlite (WAL, 0600), entries + audit tables, uni
 
 ```sh
 dsh plugin --profile <name> add ./dsh-memento        # local checkout (no build step)
-dsh plugin --profile <name> add git+https://github.com/PerryLink/dsh-memento.git   # GitHub install; npm after first release
+dsh plugin --profile <name> add dsh-memento          # npm package (0.2.0+, published)
+dsh plugin --profile <name> add git+https://github.com/PerryLink/dsh-memento.git   # GitHub install
 dsh plugin --profile <name> remove dsh-memento       # uninstall: DB + session logs are kept
 ```
 
@@ -130,7 +131,7 @@ And the parts we deliberately refused: hidden auto-summarization into model-priv
 | dsh-external/Recall | external agent memory | local-first, zero-network, rides DSH's own approval seam |
 | Official MCP memory examples | DSH's stated "memory = external MCP" position | the **native first-party** complement: same goal, no external server; both coexist |
 
-The name is **`dsh-memento`** (free on npm and GitHub). Not `dsh-recall` (confusable with dsh-external/Recall), not the deleted legacy name `dsh-memory`.
+The name is **`dsh-memento`** (published on npm and GitHub). Not `dsh-recall` (confusable with dsh-external/Recall), not the deleted legacy name `dsh-memory`.
 
 ## 🔒 Security boundaries
 
@@ -149,7 +150,7 @@ The name is **`dsh-memento`** (free on npm and GitHub). Not `dsh-recall` (confus
 
 ```sh
 npm install
-npm test                # node --test: 103 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel
+npm test                # node --test: 112 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel/import
 npm run typecheck       # tsc --checkJs gate over index.mjs / lib / scripts
 npm run check:coverage  # line-coverage gate: lib ≥90%, index.mjs ≥85%, all files ≥90%
 npm run check:readmes   # five-language README consistency gate

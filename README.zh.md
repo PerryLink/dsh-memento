@@ -67,7 +67,8 @@ Provider: lib/store.mjs —— node:sqlite（WAL，0600），条目表+审计表
 
 ```sh
 dsh plugin --profile <name> add ./dsh-memento        # 本地 checkout（无构建步骤）
-dsh plugin --profile <name> add git+https://github.com/PerryLink/dsh-memento.git   # GitHub 安装；npm 首发后可用
+dsh plugin --profile <name> add dsh-memento          # npm 包（0.2.0 起已发布）
+dsh plugin --profile <name> add git+https://github.com/PerryLink/dsh-memento.git   # GitHub 安装
 dsh plugin --profile <name> remove dsh-memento       # 卸载：库与会话日志保留
 ```
 
@@ -130,7 +131,7 @@ dsh-memento 不是 Claude Code、Codex 或 Hermes 的移植版——但它的设
 | dsh-external/Recall | 外部 agent 记忆 | 本地优先、零网络，走 DSH 自己的审批 seam |
 | 官方 MCP 记忆示例 | 官方"记忆 = 外接 MCP"立场 | **原生第一方**补充：目标一致、无需外部服务，两者可共存 |
 
-命名已定 **`dsh-memento`**（npm 与 GitHub 均空闲）。不用 `dsh-recall`（与 dsh-external/Recall 混淆），不用已删除的旧名 `dsh-memory`。
+命名已定 **`dsh-memento`**（npm 与 GitHub 均已发布）。不用 `dsh-recall`（与 dsh-external/Recall 混淆），不用已删除的旧名 `dsh-memory`。
 
 ## 🔒 安全边界
 
@@ -149,7 +150,7 @@ dsh-memento 不是 Claude Code、Codex 或 Hermes 的移植版——但它的设
 
 ```sh
 npm install
-npm test                # node --test：103 个测试——预算、唯一子串、审批策略、store、快照、mock ctx 集成（S2/S3 不变量）、V2 命令/召回/面板
+npm test                # node --test：112 个测试——预算、唯一子串、审批策略、store、快照、mock ctx 集成（S2/S3 不变量）、V2 命令/召回/面板/导入
 npm run typecheck       # tsc --checkJs 类型检查门（index.mjs / lib / scripts）
 npm run check:coverage  # 行覆盖率门：lib ≥90%、index.mjs ≥85%、全部 ≥90%
 npm run check:readmes   # 五语 README 一致性门
