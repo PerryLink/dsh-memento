@@ -49,7 +49,7 @@ import { extractEventText } from './lib/extract.mjs'
  * @typedef {object} StoreHandle - ctx.memory 依赖的 Provider 面。
  * @property {(filter?: {track?: string, scope?: string, text?: string, limit?: number}) => MemoryQueryResult} queryEntries
  * @property {() => MemoryEntry[]} listEntries
- * @property {(track: string, scope: string, match: string) => MemoryEntry[]} matchCandidates
+ * @property {(track: string, scope: string, match: string, opts?: {agentKey?: string, workspaceKey?: string}) => MemoryEntry[]} matchCandidates
  * @property {(track: string, scope: string) => number} usage
  * @property {(input: object) => MemoryEntry} insertEntry
  * @property {(inputs: object[]) => MemoryEntry[]} seedEntries
@@ -253,8 +253,10 @@ export class MemoryService {
    * 查询条目（无审批；带 sessionId 时记一条 recalled 审计）。
    * 显式合法 limit 生效但被 Provider 硬钳到 MAX_QUERY_LIMIT（1000）；缺省/非法 limit 用
    * maxEntriesPerQuery（Config 默认 20，语义是"默认返回上限"而非硬顶）。
+   * opts.agentKey 给定时按会话可见集过滤（共享层 + 指定 agent 键）；缺省不过滤——
+   * 管理面（/memory 命令、面板）与无会话上下文的插件调用保持全量视图。
    * @param {{track?: string, scope?: string, text?: string, limit?: number}} [filter] - {track, scope, text, limit}。
-   * @param {{sessionId?: string, session?: MemorySessionLike | null}} [opts] - {sessionId, session}；session 用于 memory/recalled
+   * @param {{sessionId?: string, session?: MemorySessionLike | null, agentKey?: string}} [opts] - {sessionId, session, agentKey}；session 用于 memory/recalled
    *   事件的按已知类型自适应派发（与写事件同一 maybeAppendSessionEvent 门）。
    * @returns {MemoryQueryResult}。
    */
@@ -264,6 +266,7 @@ export class MemoryService {
       ...(filter.scope === undefined ? {} : { scope: filter.scope }),
       ...(typeof filter.text === 'string' && filter.text.length > 0 ? { text: filter.text } : {}),
       limit: Number.isInteger(filter.limit) && filter.limit > 0 ? filter.limit : this.maxEntriesPerQuery,
+      ...(typeof opts.agentKey === 'string' ? { agentKey: opts.agentKey } : {}),
     })
     if (opts.sessionId !== undefined) {
       this.store.auditAppend({
@@ -291,19 +294,40 @@ export class MemoryService {
    * approval/decided 审计对）。write.gate 为可选自定义传输（/memory 命令在
    * turn 外使用：同一 approval/request waterfall + 同一 answerer 链裁决，
    * 会话级 never 策略由调用方预检；审计落在插件审计表 + command/done）。
+   * 被拒（rejected/cancelled/unavailable/off）一律落 `<action>-denied` 审计行再抛——
+   * turn 外 gate 路径没有审批审计对，这是拒绝的唯一证据链。
    * @param {WritePayload} payload - {action, track, scope, text, count?}。
    * @param {MemoryWriteContext} write - {agent, callId?, signal?, gate?}。
    * @returns {Promise<{outcome: string, source: 'approval'|'gate'}>} 实际裁决结果与传输来源（审计标签用）。
+   * 被拒（rejected/cancelled/unavailable/off）一律落 `<action>-denied` 审计行再抛——
+   * turn 外 gate 路径没有审批审计对，这是拒绝的唯一证据链。
    */
   async #ask(payload, write) {
-    if (typeof write.gate === 'function') {
-      const outcome = await write.gate(payload, write)
-      this.#assertOutcome(outcome)
-      return { outcome, source: 'gate' }
+    try {
+      const via = typeof write.gate === 'function'
+        ? { outcome: await write.gate(payload, write), source: /** @type {'approval'|'gate'} */ ('gate') }
+        : { outcome: await askApproval(this.approval, payload, write), source: /** @type {'approval'|'gate'} */ ('approval') }
+      this.#assertOutcome(via.outcome)
+      return via
+    } catch (error) {
+      if (error instanceof WriteDeniedError) {
+        const outcome = typeof error.details.outcome === 'string' ? error.details.outcome : 'denied'
+        const viaLabel = typeof write.gate === 'function'
+          ? `${outcome} (via write gate)`
+          : `${outcome} (via approval, writePolicy ${this.writePolicy})`
+        this.store.auditAppend({
+          action: `${payload.action}-denied`,
+          track: payload.track,
+          scope: payload.scope,
+          entryId: null,
+          text: payload.text,
+          outcome: viaLabel,
+          source: payload.source ?? this.sourceLabel,
+          sessionId: write.agent?.session?.id ?? null,
+        })
+      }
+      throw error
     }
-    const outcome = await askApproval(this.approval, payload, write)
-    this.#assertOutcome(outcome)
-    return { outcome, source: 'approval' }
   }
 
   /** 审计 outcome 标签：审批传输标注策略，gate 传输标注 gate（真实裁决来源，不张冠李戴）。 */
@@ -349,13 +373,18 @@ export class MemoryService {
     const { track, scope, text } = this.#validateEntry(input, write)
     this.#assertMatch(input)
     // 审批前先定位：零/多命中在打扰用户之前就响亮失败。
-    const initial = this.#resolveMatch(input, track, scope)
+    const initial = this.#resolveMatch(input, track, scope, write)
     this.#assertBudget(track, scope, this.store.usage(track, scope), text.length - initial.text.length)
-    const via = await this.#ask({ action: 'replace', track, scope, text, source: input.source ?? this.sourceLabel }, write)
+    // 审批载荷携带将被改写的旧条目全文（approve-what-you-see：人批准的不是抽象动作，是具体变更）。
+    const via = await this.#ask({
+      action: 'replace', track, scope,
+      text: `from:\n${initial.text}\n\nto:\n${text}`,
+      source: input.source ?? this.sourceLabel,
+    }, write)
     this.#throwIfAborted(write)
     // 审批等待期间目标条目可能已被并发写改动：以此刻重新定位的 previous 为权威重算净变化，
     // 再用此刻用量复审。复审与 replaceEntry 之间无 await，判断与实际写入之间不存在窗口。
-    const current = this.#resolveMatch(input, track, scope)
+    const current = this.#resolveMatch(input, track, scope, write)
     const net = text.length - current.text.length
     this.#assertBudget(track, scope, this.store.usage(track, scope), net)
     // 事务内重新定位+更新：零/多命中仍会响亮报错（不静默）。
@@ -383,8 +412,9 @@ export class MemoryService {
     this.#assertScope(input.track, input.scope)
     this.#assertMatch(input)
     // 审批前先定位：零/多命中在打扰用户之前就响亮失败。
-    const target = this.#resolveMatch(input, input.track, input.scope)
-    const via = await this.#ask({ action: 'remove', track: input.track, scope: input.scope, text: input.match, source: target.source }, write)
+    const target = this.#resolveMatch(input, input.track, input.scope, write)
+    // 审批载荷携带将被删除的条目全文（approve-what-you-see），而非裸子串。
+    const via = await this.#ask({ action: 'remove', track: input.track, scope: input.scope, text: target.text, source: target.source }, write)
     this.#throwIfAborted(write)
     const removed = this.store.removeEntry({ track: input.track, scope: input.scope, match: input.match })
     this.#auditWrite('remove', input.track, input.scope, removed, write, via)
@@ -452,14 +482,21 @@ export class MemoryService {
     const { track, scope, text } = this.#validateEntry(input, write)
     this.#assertConsolidateMatches(input)
     // 审批前先定位全部目标：零/多命中在打扰用户之前就响亮失败。
-    const initial = input.matches.map((match) => this.#resolveMatch({ match }, track, scope))
+    const initial = input.matches.map((match) => this.#resolveMatch({ match }, track, scope, write))
     const removalBefore = initial.reduce((sum, entry) => sum + entry.text.length, 0)
     this.#assertBudget(track, scope, this.store.usage(track, scope), text.length - removalBefore)
-    const plan = `${input.matches.map((match) => `remove: ${match}`).join('\n')}\nnew text: ${text}`
+    // 审批载荷携带每个目标的定位条目原文（单条超长只截前 300 字，避免 20×满预算条目撑爆载荷）。
+    const plan = [
+      ...initial.map((entry, index) => {
+        const body = entry.text.length > 300 ? `${entry.text.slice(0, 300)}…` : entry.text
+        return `remove: ${input.matches[index]}\n${body}`
+      }),
+      `new text: ${text}`,
+    ].join('\n')
     const via = await this.#ask({ action: 'consolidate', track, scope, text: plan, source: input.source ?? this.sourceLabel }, write)
     this.#throwIfAborted(write)
     // 审批等待期间目标可能被并发写改动：重新定位并以此刻为权威重算净变化。
-    const current = input.matches.map((match) => this.#resolveMatch({ match }, track, scope))
+    const current = input.matches.map((match) => this.#resolveMatch({ match }, track, scope, write))
     const removalNow = current.reduce((sum, entry) => sum + entry.text.length, 0)
     this.#assertBudget(track, scope, this.store.usage(track, scope), text.length - removalNow)
     const { removed, entry } = this.store.consolidateEntries({
@@ -528,9 +565,18 @@ export class MemoryService {
     return { track: input.track, scope: input.scope, text: input.text }
   }
 
-  /** 审批前定位替换/删除目标（唯一子串语义，大小写不敏感，零/多命中结构化报错）。 */
-  #resolveMatch(/** @type {{match: string}} */ input, /** @type {string} */ track, /** @type {string} */ scope) {
-    const hits = /** @type {MemoryEntry[]} */ (this.store.matchCandidates(track, scope, input.match))
+  /**
+   * 审批前定位替换/删除目标（唯一子串语义，大小写不敏感，零/多命中结构化报错）。
+   * 写定位 = 会话可见集：agentKey 共享 + 写方会话键（显式 input 覆盖）；scope='workspace'
+   * 时按写方会话 cwd 键过滤——跨 agent/跨工作区条目对本会话不可见、也不可被误改。
+   */
+  #resolveMatch(/** @type {{match: string, agentKey?: string, workspaceKey?: string}} */ input, /** @type {string} */ track, /** @type {string} */ scope, /** @type {MemoryWriteContext} */ write) {
+    const agentKey = typeof input.agentKey === 'string' && input.agentKey.length > 0 ? input.agentKey : this.#agentKeyOf(write)
+    const workspaceKey = typeof input.workspaceKey === 'string' && input.workspaceKey.length > 0 ? input.workspaceKey : this.#workspaceKeyOf(write)
+    const hits = /** @type {MemoryEntry[]} */ (this.store.matchCandidates(track, scope, input.match, {
+      agentKey,
+      workspaceKey: scope === 'workspace' ? workspaceKey : undefined,
+    }))
       .filter((entry) => entry.text.toLowerCase().includes(input.match.toLowerCase()))
     if (hits.length === 0) throw new EntryNotFoundError({ track, scope, match: input.match })
     if (hits.length > 1) {
@@ -830,7 +876,12 @@ export function makeMemoryTool(service, language = 'en') {
                 ...(args.text === undefined ? {} : { text: args.text }),
                 ...(args.limit === undefined ? {} : { limit: args.limit }),
               },
-              { sessionId: exec.agent?.session?.id, session: exec.agent?.session },
+              {
+                sessionId: exec.agent?.session?.id,
+                session: exec.agent?.session,
+                // 会话内读按可见集过滤（共享 + 本 agent），与冻结快照同一语义。
+                agentKey: agentKeyOf(/** @type {string | undefined} */ (exec.agent?.session?.header?.agentPreset)),
+              },
             )
             return {
               action: 'query',
@@ -1654,7 +1705,12 @@ export function makeMemoryRecallTool(service, ctx, recall, language = 'en') {
       exec.signal.throwIfAborted()
       const memory = service.query(
         { text: args.query, limit: args.memoryLimit ?? 10 },
-        { sessionId: exec.agent?.session?.id, session: exec.agent?.session },
+        {
+          sessionId: exec.agent?.session?.id,
+          session: exec.agent?.session,
+          // 与 memory 工具一致：会话内召回按可见集过滤（共享 + 本 agent）。
+          agentKey: agentKeyOf(/** @type {string | undefined} */ (exec.agent?.session?.header?.agentPreset)),
+        },
       )
       const history = await recallHistory(
         ctx,

@@ -337,6 +337,35 @@ test('proposals：幂等 upsert、列表过滤、裁决与非法裁决响亮', (
   assert.throws(() => store.proposalDecide(p1.id, 'maybe'), InvalidInputError)
 })
 
+test('matchCandidates 隔离过滤：agentKey 限共享层+指定键；workspace 层按 cwd 键精确过滤', (t) => {
+  const { dir, store } = tempStore()
+  t.after(() => closeAndClean({ dir, store }))
+  store.insertEntry({ track: 'user', scope: 'user-global', text: '共享偏好', agentKey: '' })
+  store.insertEntry({ track: 'user', scope: 'user-global', text: 'alpha 偏好', agentKey: 'alpha' })
+  store.insertEntry({ track: 'user', scope: 'user-global', text: 'beta 偏好', agentKey: 'beta' })
+  store.insertEntry({ track: 'agent', scope: 'workspace', text: '项目 A 约定', workspaceKey: '/w-a', agentKey: 'alpha' })
+  store.insertEntry({ track: 'agent', scope: 'workspace', text: '项目 B 约定', workspaceKey: '/w-b', agentKey: 'alpha' })
+
+  assert.equal(store.matchCandidates('user', 'user-global', '偏好', { agentKey: 'alpha' }).length, 2, '共享 + alpha')
+  assert.equal(store.matchCandidates('user', 'user-global', '偏好', { agentKey: 'beta' }).length, 2, '共享 + beta')
+  assert.equal(store.matchCandidates('user', 'user-global', '偏好', { agentKey: 'unknown' }).length, 1, '未知 agent 只见共享层')
+  assert.equal(store.matchCandidates('user', 'user-global', '偏好').length, 3, '不带过滤向后兼容（全量）')
+  assert.equal(store.matchCandidates('agent', 'workspace', '约定', { agentKey: 'alpha', workspaceKey: '/w-a' }).length, 1, '本工作区本 agent')
+  assert.equal(store.matchCandidates('agent', 'workspace', '约定', { agentKey: 'alpha', workspaceKey: '/w-other' }).length, 0, '跨工作区零命中')
+  assert.equal(store.matchCandidates('agent', 'workspace', '约定', { agentKey: 'beta', workspaceKey: '/w-a' }).length, 0, '跨 agent 零命中')
+})
+
+test('queryEntries agentKey 过滤：共享 + 指定键；不带过滤全量（管理面视图）', (t) => {
+  const { dir, store } = tempStore()
+  t.after(() => closeAndClean({ dir, store }))
+  store.insertEntry({ track: 'user', scope: 'user-global', text: '共享偏好' })
+  store.insertEntry({ track: 'user', scope: 'user-global', text: 'alpha 偏好', agentKey: 'alpha' })
+  const filtered = store.queryEntries({ track: 'user', scope: 'user-global', agentKey: 'alpha' })
+  assert.equal(filtered.total, 2, '共享 + alpha')
+  assert.equal(store.queryEntries({ track: 'user', scope: 'user-global', agentKey: 'unknown' }).total, 1, '未知 agent 只见共享层')
+  assert.equal(store.queryEntries({ track: 'user', scope: 'user-global' }).total, 2, '不带过滤全量')
+})
+
 test('resolveDbPath：显式绝对/相对路径与 $DSH_HOME 缺省，缺失 DSH_HOME 响亮失败', () => {
   assert.equal(resolveDbPath('C:\\x\\m.db', 'ignored'), path.normalize('C:\\x\\m.db'))
   assert.equal(resolveDbPath('rel/m.db', '/home/u'), path.resolve('/home/u', 'rel/m.db'))

@@ -114,17 +114,19 @@ export interface MemoryService {
   /** 每轨每层当前用量与上限。 */
   budgets(): MemoryBudgetRow[]
 
-  /** 子串查询（无审批）；带 sessionId 时记 recalled 审计，带 session 时按已知事件类型自适应派发 memory/recalled。 */
-  query(filter?: { track?: MemoryTrack; scope?: MemoryScope; text?: string; limit?: number }, opts?: { sessionId?: string; session?: MemorySessionLike | null }): MemoryQueryResult
+  /** 子串查询（无审批）；带 sessionId 时记 recalled 审计，带 session 时按已知事件类型自适应派发 memory/recalled。
+   *  opts.agentKey 给定时按会话可见集过滤（共享层 + 指定 agent 键）；缺省不过滤（管理面全量视图）。 */
+  query(filter?: { track?: MemoryTrack; scope?: MemoryScope; text?: string; limit?: number }, opts?: { sessionId?: string; session?: MemorySessionLike | null; agentKey?: string }): MemoryQueryResult
 
   /** 新增条目（审批门 + 预算门）。 */
   add(input: MemoryEntryInput, write: MemoryWriteContext): Promise<{ entry: MemoryEntry; usage: MemoryUsage }>
 
-  /** 按唯一子串替换（审批门 + 预算门；零/多命中报错）。 */
-  replace(input: { track: MemoryTrack; scope: MemoryScope; match: string; text: string; source?: string }, write: MemoryWriteContext): Promise<{ previous: MemoryEntry; entry: MemoryEntry; usage: MemoryUsage }>
+  /** 按唯一子串替换（审批门 + 预算门；零/多命中报错）。写定位 = 会话可见集：
+   *  agentKey/workspaceKey 显式给定则覆盖写方会话的推导值。审批载荷携带将被改写的旧条目全文。 */
+  replace(input: { track: MemoryTrack; scope: MemoryScope; match: string; text: string; source?: string; agentKey?: string; workspaceKey?: string }, write: MemoryWriteContext): Promise<{ previous: MemoryEntry; entry: MemoryEntry; usage: MemoryUsage }>
 
-  /** 按唯一子串删除（审批门；零/多命中报错）。 */
-  remove(input: { track: MemoryTrack; scope: MemoryScope; match: string }, write: MemoryWriteContext): Promise<{ entry: MemoryEntry; usage: MemoryUsage }>
+  /** 按唯一子串删除（审批门；零/多命中报错）。写定位 = 会话可见集；审批载荷携带将被删除的条目全文。 */
+  remove(input: { track: MemoryTrack; scope: MemoryScope; match: string; agentKey?: string; workspaceKey?: string }, write: MemoryWriteContext): Promise<{ entry: MemoryEntry; usage: MemoryUsage }>
 
   /** 整合多条为一条（一次审批 + Provider 单事务原子执行；零/多命中或超预算响亮失败）。 */
   consolidate(input: { track: MemoryTrack; scope: MemoryScope; matches: string[]; text: string; source?: string; workspaceKey?: string; agentKey?: string }, write: MemoryWriteContext): Promise<{ removed: MemoryEntry[]; entry: MemoryEntry; usage: MemoryUsage }>

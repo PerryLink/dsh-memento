@@ -142,9 +142,12 @@ test('S3：直接调 ctx.memory 服务（不经工具）仍被审批门拦截—
   assert.equal(mounted.approval.asked.length, 1, '审批门被咨询过（服务层强制）')
   assert.equal(mounted.approval.asked[0].toolName, 'memory')
   assert.ok(mounted.approval.asked[0].reason.startsWith('[dsh-memento]'))
-  // 审计表记录拒绝来源可重建
+  // 被拒写零条目落盘，但落 denied 审计行（拒绝证据链：turn 内另有 approval/decided 审计对）
   const audit = mounted.mock.services.get('memory').store.auditList()
-  assert.equal(audit.length, 0, '未放行不写审计行；拒绝由 approval/decided 审计对记录')
+  assert.equal(audit.length, 1, '被拒写落 denied 审计行')
+  assert.equal(audit[0].action, 'add-denied')
+  assert.equal(audit[0].outcome, 'rejected (via approval, writePolicy off)')
+  assert.equal(audit[0].text, '不该落盘')
 })
 
 test('S3：ask 策略下服务直写，人类 answerer 批准 → 落盘；拒绝 → 不落盘', async (t) => {
@@ -244,6 +247,93 @@ test('F2：replace/remove 唯一子串——歧义报错给候选，要求更具
   const removed = await service.remove({ track: 'user', scope: 'user-global', match: '中文回复' }, write)
   assert.equal(removed.entry.text, '偏好中文回复')
   assert.equal(service.query({ track: 'user', scope: 'user-global' }).total, 1)
+})
+
+test('S2：replace/remove/consolidate 审批载荷携带被改旧条目全文（approve-what-you-see）', async (t) => {
+  const mounted = mount({ writePolicy: 'auto' })
+  t.after(() => teardown(mounted))
+  const { mock } = mounted
+  const service = mock.services.get('memory')
+  const write = { agent: makeAgent(makeSession({ id: 's-payload' })) }
+  await service.add({ track: 'user', scope: 'user-global', text: '旧偏好：中文回复' }, write)
+  await service.add({ track: 'user', scope: 'user-global', text: '旧偏好：中文注释' }, write)
+
+  // replace：载荷携带 from（旧全文）+ to（新文本），人批准的是具体变更而非抽象动作
+  await service.replace({ track: 'user', scope: 'user-global', match: '中文回复', text: '新偏好：中文回复' }, write)
+  const replaceReason = mounted.approval.asked[2].reason
+  assert.ok(replaceReason.includes('from:\n旧偏好：中文回复'), 'replace 载荷携带旧条目全文')
+  assert.ok(replaceReason.includes('to:\n新偏好：中文回复'), 'replace 载荷携带新文本')
+
+  // remove：载荷是被删条目全文，不再是裸子串
+  await service.remove({ track: 'user', scope: 'user-global', match: '中文注释' }, write)
+  const removeParsed = parseWriteReason(mounted.approval.asked[3].reason)
+  assert.equal(removeParsed.text, '旧偏好：中文注释', 'remove 载荷是被删条目全文')
+
+  // consolidate：载荷含每个目标的定位原文 + 新文本
+  await service.add({ track: 'user', scope: 'user-global', text: '碎片一' }, write)
+  await service.add({ track: 'user', scope: 'user-global', text: '碎片二' }, write)
+  await service.consolidate({ track: 'user', scope: 'user-global', matches: ['碎片一', '碎片二'], text: '合并后的偏好' }, write)
+  const consolidateReason = mounted.approval.asked[6].reason
+  assert.ok(consolidateReason.includes('remove: 碎片一\n碎片一'), 'consolidate 载荷含目标原文')
+  assert.ok(consolidateReason.includes('remove: 碎片二\n碎片二'))
+  assert.ok(consolidateReason.includes('new text: 合并后的偏好'))
+})
+
+test('隔离：写定位 = 会话可见集——跨 agent / 跨工作区零命中，不误改他人记忆', async (t) => {
+  const mounted = mount({ writePolicy: 'auto' })
+  t.after(() => teardown(mounted))
+  const { mock } = mounted
+  const service = mock.services.get('memory')
+  const alpha = makeAgent(makeSession({ id: 'alpha-s', cwd: 'C:\\work\\proj-a', agentPreset: 'alpha' }))
+  const beta = makeAgent(makeSession({ id: 'beta-s', cwd: 'C:\\work\\proj-b', agentPreset: 'beta' }))
+  await service.add({ track: 'user', scope: 'user-global', text: 'alpha 的全局偏好' }, { agent: alpha })
+  await service.add({ track: 'agent', scope: 'workspace', text: '项目 A 的约定' }, { agent: alpha })
+  await service.add({ track: 'user', scope: 'user-global', text: '共享偏好' }, { agent: makeAgent(makeSession({ id: 'shared' })) })
+
+  // 跨 agent：beta 看不到（也改不到）alpha 的全局条目
+  await assert.rejects(
+    () => service.replace({ track: 'user', scope: 'user-global', match: 'alpha 的全局偏好', text: '篡改' }, { agent: beta }),
+    (error) => error instanceof MemoryError && error.code === 'ENTRY_NOT_FOUND',
+  )
+  // 同 agent 不同工作区：看不到项目 A 的 workspace 条目
+  const alphaElsewhere = makeAgent(makeSession({ id: 'alpha-2', cwd: 'C:\\work\\proj-other', agentPreset: 'alpha' }))
+  await assert.rejects(
+    () => service.remove({ track: 'agent', scope: 'workspace', match: '项目 A' }, { agent: alphaElsewhere }),
+    (error) => error instanceof MemoryError && error.code === 'ENTRY_NOT_FOUND',
+  )
+  // 本工作区本 agent：命中
+  const removed = await service.remove({ track: 'agent', scope: 'workspace', match: '项目 A' }, { agent: alpha })
+  assert.equal(removed.entry.text, '项目 A 的约定')
+  // 共享层任何 agent 都能定位
+  const shared = await service.remove({ track: 'user', scope: 'user-global', match: '共享偏好' }, { agent: beta })
+  assert.equal(shared.entry.text, '共享偏好')
+})
+
+test('读过滤：会话内 query 按 agentKey 可见集过滤（共享 + 本 agent）；管理面不过滤', async (t) => {
+  const mounted = mount({ writePolicy: 'auto' })
+  t.after(() => teardown(mounted))
+  const { mock } = mounted
+  const service = mock.services.get('memory')
+  const coder = makeAgent(makeSession({ id: 'coder-s', agentPreset: 'coder' }))
+  await service.add({ track: 'user', scope: 'user-global', text: '共享偏好' }, { agent: makeAgent(makeSession({ id: 'plain' })) })
+  await service.add({ track: 'user', scope: 'user-global', text: 'coder 偏好' }, { agent: coder })
+  await service.add({ track: 'user', scope: 'user-global', text: 'reviewer 偏好' }, { agent: makeAgent(makeSession({ id: 'reviewer-s', agentPreset: 'reviewer' })) })
+
+  // 服务面：显式 agentKey 过滤（共享 + 本 agent）
+  assert.equal(service.query({ track: 'user', scope: 'user-global' }, { agentKey: 'coder' }).total, 2, '共享 + coder')
+  assert.equal(service.query({ track: 'user', scope: 'user-global' }, { agentKey: 'unknown' }).total, 1, '未知 agent 只见共享层')
+  // 不带 agentKey（管理面 / 外部插件调用）：全量，向后兼容
+  assert.equal(service.query({ track: 'user', scope: 'user-global' }).total, 3)
+
+  // 工具面：execute 按 exec.agent.session 的 agentPreset 过滤
+  const tool = mock.tools.find((candidate) => candidate.name === 'memory')
+  const toolResult = await tool.execute(
+    { action: 'query', track: 'user', scope: 'user-global' },
+    makeExec({ agent: coder }),
+  )
+  assert.equal(toolResult.total, 2, 'memory 工具按会话 agentKey 过滤')
+  assert.ok(toolResult.entries.some((entry) => entry.text === 'coder 偏好'))
+  assert.ok(!toolResult.entries.some((entry) => entry.text === 'reviewer 偏好'), '不泄漏其它 agent 条目')
 })
 
 test('P0-4：replace 审批期间并发新增填满预算 → 复审以此刻用量拒绝，零落盘', async (t) => {

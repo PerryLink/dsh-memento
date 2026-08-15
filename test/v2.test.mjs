@@ -114,6 +114,22 @@ test('F10：命令 add/remove 走 turn 外审批门（同一 waterfall + writePo
   assert.equal(approval.asked.length, 0, '命令路径不产生 turn 内审批对（turn 外），审计走审计表')
 })
 
+test('审计：turn 外 gate 被拒写落 denied 审计行（无审批审计对的拒绝证据链）', async (t) => {
+  const mounted = mount({ writePolicy: 'off' })
+  t.after(() => teardown(mounted))
+  const { mock } = mounted
+  const service = mock.services.get('memory')
+  const invocation = { agent: makeAgent(makeSession({ id: 's-gate-deny' })), signal: new AbortController().signal }
+  const denied = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'add 被拒的写' })
+  assert.equal(denied.kind, 'error')
+  assert.ok(denied.text.includes('WRITE_DENIED'))
+  const audit = service.store.auditList()
+  assert.equal(audit.length, 1, 'gate 被拒也落审计（零条目落盘）')
+  assert.equal(audit[0].action, 'add-denied')
+  assert.equal(audit[0].outcome, 'rejected (via write gate)')
+  assert.equal(audit[0].text, '被拒的写')
+})
+
 test('F10：ask 策略下命令写无 answerer 时失败封闭；会话 never 策略拒绝且不派发', async (t) => {
   const askMounted = mount({ writePolicy: 'ask' })
   t.after(() => teardown(askMounted))

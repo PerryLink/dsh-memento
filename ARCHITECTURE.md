@@ -46,7 +46,7 @@ memory 工具(add)
       └─ waterfall：本插件 answerer（prepend）按 writePolicy 裁决
            ask → 委托 UI answerer（人类批准/拒绝）
            auto → allowed-once；off → rejected
-  → outcome === allowed-once 才继续（否则 WriteDeniedError，零落盘）
+  → outcome === allowed-once 才继续（否则 WriteDeniedError + <action>-denied 审计行，零落盘）
   → 预算复审（审批等待期间用量可能变化，此刻为权威）
   → store.insertEntry + audit 行（outcome 含 policy 来源）
   → 会话日志（已知事件类型）已有 approval/asked+decided 审计对
@@ -68,6 +68,8 @@ memory 工具(add)
    - `writePolicy` 是 Config（ask/auto/off，默认 ask），模型不可见、不可改；
    - 本插件在 `approval/request` 上注册 prepend answerer：只认领 toolName='memory' 且 reason 带 `[dsh-memento]` 前缀的请求；ask 委托续链（人类 answerer），auto/off 直接裁决；
    - 会话级 `approval/never` 由审批服务在 answerer 之前裁决，任何 answerer（含 prepend）都无法绕过——本插件遵从该硬不变量。
+   - **审批载荷完整化（approve-what-you-see）**：add/seed 载荷 = 新文本全文；replace 载荷 = `from:\n<旧条目全文>\n\nto:\n<新文本>`；remove 载荷 = 被删条目全文（不再是裸子串）；consolidate 载荷 = 每个目标的定位原文（单条 >300 字截断标注）+ 新文本。人批准的是具体变更而非抽象动作，approval/asked 的 reason 因此携带可重建变更的完整信息。
+   - **被拒写也留痕**：`rejected/cancelled/unavailable` 一律在抛出 WriteDeniedError 前落 `<action>-denied` 审计行（outcome 标注真实裁决来源）。turn 内路径另有 approval/asked+decided 审计对；turn 外 gate 路径（/memory 命令）没有审计对可落，denied 行是拒绝的唯一证据链。
 
 3. **预算在 Service 层双重校验（审批前后各一次），Provider 层绝不截断**。
    - 预检在打扰用户之前拒绝明显超限；复审以审批等待后的真实用量为权威（期间可能有其它写）；
@@ -81,6 +83,7 @@ memory 工具(add)
 
 5. **审计 = 审批对 + 审计表 + 快照三条链**。
    - 每次写：approval/asked（reason 全文载荷）→ approval/decided（结果）→ audit 行（outcome 含 policy 来源、entry id、会话 id）；
+   - 每次被拒写：`<action>-denied` audit 行（turn 外 gate 路径无审批审计对，这是拒绝证据链）；
    - 每次 recall：audit(recalled) 行；每次快照：audit(snapshot) 行（与注入文本逐字一致）；
    - 卸载插件后：记忆库与会话日志保留，旧会话可正常加载（因为从不 append 未注册事件类型）。
 
@@ -88,6 +91,8 @@ memory 工具(add)
    - replace/remove 在 Provider 层事务内"定位+变更"原子执行；Service 层审批前先定位（零/多命中不打扰用户）；
    - 审批期间条目被并发写移除：审批后重定位失败即结构化报错（响亮，不静默）。
    - seed 整批先全量预算预检，通过后同步插入（无 await 间隔），不存在部分写入。
+   - **写定位 = 会话可见集**（决策 11 的可见性语义扩展到写路径）：replace/remove/consolidate 的匹配只命中共享层 + 写方会话 agent 键的条目（显式 `input.agentKey` 覆盖），`workspace` 层再按写方会话 cwd 键过滤——跨 agent、跨工作区条目对会话不可见，也就不可能被误改。
+   - 提案裁决（`proposalDecide`）同样在事务内"定位+更新"原子执行：approve 与 dismiss 并发先到者赢；`/memory proposals approve` 在写成功后容忍提案已被并发裁决（不掩盖成功写）。
 
 7. **工作区键**：workspace 条目按会话 cwd 的规范化绝对值隔离；Windows 下大小写不敏感（同一项目以不同大小写路径打开仍命中同一 workspace 层）。两个进程共用一个 `$DSH_HOME` 时，SQLite 以 busy_timeout 串行写，但"谁先写谁赢"，跨进程一致性不保证（学 Hermes 的官方警告，见 README 安全边界）。
 
@@ -104,7 +109,9 @@ memory 工具(add)
 11. **第三维 agentKey（per-agent 作用域，SCHEMA v3）**。
     - 写方 session 的 `header.agentPreset` 经 `agentKeyOf` 规范化（缺失→'' 共享层）；条目与提案落 `agent_key`。
     - 可见性：`agent_key === '' || === 会话 agentKey`，且 scope 规则不变；预算仍按 track×scope 计（agentKey 不新增预算维度）。
+    - **可见性对读与写定位一致生效（0.3.0）**：快照/提案沿用会话可见集；`memory` 工具与 `memory_recall` 的 query 按会话 agentPreset 过滤（`service.query` 的 `opts.agentKey`，显式给定才过滤）；replace/remove/consolidate 的匹配同样按可见集过滤（见决策 6）。管理面（`/memory` 命令、Web 面板）与未传 agentKey 的插件调用保持全量视图（向后兼容），面板与命令列表渲染非共享条目的 agent 键以便管理。
     - 工具不暴露 agentKey 参数——由写方 session 自动决定，模型不可选，避免污染。
+    - **可见性对读与写定位一致生效（0.3.0）**：快照/提案沿用会话可见集；`memory` 工具与 `memory_recall` 的 query 按会话 agentPreset 过滤（`service.query` 的 `opts.agentKey`，显式给定才过滤）；replace/remove/consolidate 的匹配同样按可见集过滤（见决策 6）。管理面（`/memory` 命令、Web 面板）与未传 agentKey 的插件调用保持全量视图（向后兼容），面板与命令列表渲染非共享条目的 agent 键以便管理。
 
 12. **语言面（Config.language，en/zh）与错误文案的分界**。
     - 随语言切换的只有**模型可见/命令/面板**文案：`memory`/`memory_recall` 工具描述与参数说明、冻结快照（`lib/strings.mjs` 词表）、`/memory` 命令输出、Web 面板标签（语言经 `/api/memento/*` 响应的 `language` 字段下发）。en 为源文，zh 为对应译文；未知语言回退 en。

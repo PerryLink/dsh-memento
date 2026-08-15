@@ -15,7 +15,7 @@
 ## ✨ 为什么是 dsh-memento？
 
 - **它是能力接缝，不是又一个 store。** Service Definition（`ctx.memory`）+ 本地 SQLite Provider（`node:sqlite`，WAL，`0600`）+ Consumer（`memory` 工具 + 冻结快照注入）。任何未来的插件——dsh-claude-move 的 seed 集成、桥接、面板——都通过**同一个门**读写**同一份** store。
-- **审批门不可绕过。** 每条写路径（`add`/`replace`/`remove`/`seed`）都被强制经过审批 waterfall，且强制点在**服务内部**而非工具层。`writePolicy: ask | auto | off` 是模型看不见、改不了的配置；会话级 `never` 姿态依旧先于一切。
+- **审批门不可绕过。** 每条写路径（`add`/`replace`/`remove`/`seed`）都被强制经过审批 waterfall，且强制点在**服务内部**而非工具层。`writePolicy: ask | auto | off` 是模型看不见、改不了的配置；会话级 `never` 姿态依旧先于一切。`replace`/`remove`/`consolidate` 的审批载荷携带将被改动的条目全文——批准什么就看到什么；被拒的写同样落 `*-denied` 审计行。
 - **模型可见 ⟺ 落盘。** 注入的快照逐字进入 `request/header.system`；每次写都能从 `approval/asked`（完整载荷）+ `approval/decided`（结果）+ 插件自有审计表重建。
 - **有界且诚实。** 每轨每层硬字符预算（默认 user 2000 / agent 4000）。写满**返回结构化错误**（用量 + 上限）——模型整合后重试。绝不截断、绝不自动压缩。
 
@@ -47,7 +47,7 @@ dsh --profile web --dump-config               # 应看到 "# == dsh-memento" 层
 | 💾 Provider | `lib/store.mjs` —— `node:sqlite` 单文件（`$DSH_HOME/dsh-memento/memory.db`，WAL） | 零依赖、零网络；条目表 + 审计表；唯一子串匹配 |
 | 🛠 Consumers | `memory` 工具 · 冻结快照注入（systemPrompt 段，顺序 `-50`）· `memory_recall` 工具 · `/memory` 命令 · 只读 Web 面板 | 模型读写、带用量头的冻结快照、两段式召回、用户侧命令、浏览器抽屉 |
 
-**双轨 × 双层 × per-agent 键。** `user` 轨 = 用户画像（偏好、沟通风格、雷区）；`agent` 轨 = 环境事实、项目约定、教训。每轨分 `user-global`（跨工作区）与 `workspace`（按会话 cwd）两层——学 Codex 的合并分层，不学 Hermes 的纯全局。第三维按会话 `agentPreset` 隔离条目（per-agent 作用域）；无 preset 的条目留在人人可见的共享层。
+**双轨 × 双层 × per-agent 键。** `user` 轨 = 用户画像（偏好、沟通风格、雷区）；`agent` 轨 = 环境事实、项目约定、教训。每轨分 `user-global`（跨工作区）与 `workspace`（按会话 cwd）两层——学 Codex 的合并分层，不学 Hermes 的纯全局。第三维按会话 `agentPreset` 隔离条目（per-agent 作用域）；无 preset 的条目留在人人可见的共享层。会话内读与写定位遵循同一可见集：会话只能看到（`replace`/`remove` 也只能改到）共享条目 + 本 agent 条目，`workspace` 条目仅限本会话 cwd；管理面（`/memory`、面板）保持跨 agent 全量视图。
 
 **冻结快照。** 快照在会话首个 prompt 组装时渲染一次（SQLite 同步读 + 按会话缓存），会话内不再变化——前缀缓存天然稳定。会话内变更只落盘 + 落审计。
 
