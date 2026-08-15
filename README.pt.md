@@ -81,7 +81,7 @@ Todo campo é um `Config` Schemastery validado; valores inválidos falham ruidos
 | Campo | Padrão | Significado |
 | --- | --- | --- |
 | `enabled` | `true` | `false` remove o serviço, as ferramentas, o snapshot, o comando, o painel e o answerer por completo (sem estado parcial) |
-| `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | absoluto, ou relativo a `$DSH_HOME` |
+| `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | absoluto, ou relativo a `$DSH_HOME`; quando `$DSH_HOME` não é exportado (o padrão no Windows — `dsh web` não devolve o home resolvido ao ambiente), ambos caem para `~/.dsh` |
 | `budgets.user.userGlobal` / `budgets.user.workspace` | `2000` / `2000` | orçamento rígido de caracteres por camada da trilha user |
 | `budgets.agent.userGlobal` / `budgets.agent.workspace` | `4000` / `4000` | orçamento rígido de caracteres por camada da trilha agent |
 | `writePolicy` | `'ask'` | `'ask'` = aprovação do usuário; `'auto'` = permite passar (fonte da aprovação registrada); `'off'` = rejeita. Invisível ao modelo |

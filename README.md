@@ -81,7 +81,7 @@ Every field is a validated Schemastery `Config`; invalid values fail loudly at l
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `enabled` | `true` | `false` removes the service, tools, snapshot, command, panel, and answerer entirely (no half-state) |
-| `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | absolute, or relative to `$DSH_HOME` |
+| `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | absolute, or relative to `$DSH_HOME`; when `$DSH_HOME` is not exported (the Windows default — `dsh web` does not write the resolved home back to the env), both fall back to `~/.dsh` |
 | `budgets.user.userGlobal` / `budgets.user.workspace` | `2000` / `2000` | hard char budget per layer of the user track |
 | `budgets.agent.userGlobal` / `budgets.agent.workspace` | `4000` / `4000` | hard char budget per layer of the agent track |
 | `writePolicy` | `'ask'` | `'ask'` = user approval; `'auto'` = allow through (approval source recorded); `'off'` = reject. Model-invisible |

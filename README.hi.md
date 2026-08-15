@@ -81,7 +81,7 @@ dsh plugin --profile <name> remove dsh-memento       # uninstall: DB + session l
 | फ़ील्ड | डिफ़ॉल्ट | अर्थ |
 | --- | --- | --- |
 | `enabled` | `true` | `false` सेवा, टूल, स्नैपशॉट, कमांड, पैनल और उत्तरदाता को पूरी तरह हटा देता है (कोई अधूरी स्थिति नहीं) |
-| `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | निरपेक्ष, या `$DSH_HOME` के सापेक्ष |
+| `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | निरपेक्ष, या `$DSH_HOME` के सापेक्ष; जब `$DSH_HOME` निर्यातित नहीं है (Windows डिफ़ॉल्ट — `dsh web` resolved home को env में वापस नहीं लिखता), दोनों `~/.dsh` पर गिरते हैं |
 | `budgets.user.userGlobal` / `budgets.user.workspace` | `2000` / `2000` | user ट्रैक की हर लेयर का कठोर वर्ण बजट |
 | `budgets.agent.userGlobal` / `budgets.agent.workspace` | `4000` / `4000` | agent ट्रैक की हर लेयर का कठोर वर्ण बजट |
 | `writePolicy` | `'ask'` | `'ask'` = उपयोगकर्ता अनुमोदन; `'auto'` = अनुमति दें (अनुमोदन स्रोत रिकॉर्ड किया गया); `'off'` = अस्वीकार करें। मॉडल-अदृश्य |

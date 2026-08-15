@@ -81,7 +81,7 @@ dsh plugin --profile <name> remove dsh-memento       # 卸载：库与会话日�
 | 字段 | 默认 | 含义 |
 | --- | --- | --- |
 | `enabled` | `true` | `false` 时服务/工具/快照/命令/面板/answerer 整体消失（不留半残状态） |
-| `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | 绝对路径，或相对 `$DSH_HOME` |
+| `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | 绝对路径，或相对 `$DSH_HOME`；`$DSH_HOME` 未导出时（Windows 默认——`dsh web` 不会把解析出的主目录写回环境变量）两者都回退 `~/.dsh` |
 | `budgets.user.userGlobal` / `budgets.user.workspace` | `2000` / `2000` | user 轨每层硬字符预算 |
 | `budgets.agent.userGlobal` / `budgets.agent.workspace` | `4000` / `4000` | agent 轨每层硬字符预算 |
 | `writePolicy` | `'ask'` | `'ask'`=用户审批；`'auto'`=放行但记录审批来源；`'off'`=拒绝。模型不可见 |

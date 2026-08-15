@@ -3,7 +3,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, rmSync, readFileSync, statSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { tmpdir, homedir } from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { openMemoryStore, resolveDbPath, chmodOwned } from '../lib/store.mjs'
@@ -366,12 +366,17 @@ test('queryEntries agentKey 过滤：共享 + 指定键；不带过滤全量（�
   assert.equal(store.queryEntries({ track: 'user', scope: 'user-global' }).total, 2, '不带过滤全量')
 })
 
-test('resolveDbPath：显式绝对/相对路径与 $DSH_HOME 缺省，缺失 DSH_HOME 响亮失败', () => {
+test('resolveDbPath：显式绝对/相对路径与 harness 主目录；DSH_HOME 未导出回退 ~/.dsh', () => {
   // 平台各自的绝对路径样本：Windows 盘符路径在 POSIX 上不是绝对路径（isAbsolute=false），
   // 会走相对解析分支——样本必须与 path.isAbsolute 的语义对齐，CI 三平台才全绿。
   const absSample = process.platform === 'win32' ? 'C:\\x\\m.db' : '/abs/m.db'
   assert.equal(resolveDbPath(absSample, 'ignored'), path.normalize(absSample))
   assert.equal(resolveDbPath('rel/m.db', '/home/u'), path.resolve('/home/u', 'rel/m.db'))
   assert.equal(resolveDbPath('', '/home/u'), path.join('/home/u', 'dsh-memento', 'memory.db'))
-  assert.throws(() => resolveDbPath('', ''), (error) => error instanceof StoreError && error.code === ERROR_CODES.MISSING_DSH_HOME)
+  // $DSH_HOME 未导出（dsh web 不把解析出的主目录写回 process.env.DSH_HOME）：
+  // 回退 ~/.dsh，与官方 resolveDshHome 同语义——默认 Windows 配置启动不再崩溃（issue #1）。
+  const fallbackHome = path.join(homedir(), '.dsh')
+  assert.equal(resolveDbPath('', ''), path.join(fallbackHome, 'dsh-memento', 'memory.db'))
+  assert.equal(resolveDbPath('rel/m.db', ''), path.resolve(fallbackHome, 'rel/m.db'))
+  assert.equal(resolveDbPath('', undefined), path.join(fallbackHome, 'dsh-memento', 'memory.db'))
 })
