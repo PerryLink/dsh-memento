@@ -150,7 +150,7 @@ dsh-memento 不是 Claude Code、Codex 或 Hermes 的移植版——但它的设
 
 ```sh
 npm install
-npm test                # node --test：112 个测试——预算、唯一子串、审批策略、store、快照、mock ctx 集成（S2/S3 不变量）、V2 命令/召回/面板/导入
+npm test                # node --test：115 个测试——预算、唯一子串、审批策略、store、快照、mock ctx 集成（S2/S3 不变量）、V2 命令/召回/面板/导入
 npm run typecheck       # tsc --checkJs 类型检查门（index.mjs / lib / scripts）
 npm run check:coverage  # 行覆盖率门：lib ≥90%、index.mjs ≥85%、全部 ≥90%
 npm run check:readmes   # 五语 README 一致性门

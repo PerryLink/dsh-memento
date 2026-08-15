@@ -150,7 +150,7 @@ O nome é **`dsh-memento`** (publicado no npm e no GitHub). Não `dsh-recall` (c
 
 ```sh
 npm install
-npm test                # node --test: 112 testes — orçamento, substring única, política do portão, armazenamento, snapshot, integração com mock-ctx (invariantes S2/S3), comando/recuperação/painel/importação V2
+npm test                # node --test: 115 testes — orçamento, substring única, política do portão, armazenamento, snapshot, integração com mock-ctx (invariantes S2/S3), comando/recuperação/painel/importação V2
 npm run typecheck       # portão tsc --checkJs sobre index.mjs / lib / scripts
 npm run check:coverage  # portão de cobertura de linhas: lib ≥90%, index.mjs ≥85%, todos ≥90%
 npm run check:readmes   # portão de coerência dos cinco README

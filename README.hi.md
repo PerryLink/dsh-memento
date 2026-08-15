@@ -150,7 +150,7 @@ dsh-memento Claude Code, Codex या Hermes का पोर्ट नहीं
 
 ```sh
 npm install
-npm test                # node --test: 112 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel/import
+npm test                # node --test: 115 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel/import
 npm run typecheck       # index.mjs / lib / scripts पर tsc --checkJs द्वार
 npm run check:coverage  # लाइन-कवरेज द्वार: lib ≥90%, index.mjs ≥85%, सभी ≥90%
 npm run check:readmes   # पाँच-भाषा README संगति द्वार
