@@ -15,8 +15,6 @@ import Schema from '@deepseek-ai/schemastery'
 import { KNOWN_SESSION_EVENT_TYPES } from '@deepseek-ai/dsh-session'
 import { readFileSync } from 'node:fs'
 import {
-  TRACKS,
-  SCOPES,
   TOOL_NAME,
   DEFAULT_SOURCE,
   SESSION_EVENTS,
@@ -33,9 +31,14 @@ import {
   WriteDeniedError,
   NoAgentError,
   ProposalNotFoundError,
+  AdapterNotFoundError,
+  AdapterPayloadError,
 } from './lib/errors.mjs'
-import { checkBudget, budgetReport, budgetLimits, validateBudgets } from './lib/budget.mjs'
+import { validateBudgets, budgetReport, budgetLimits, checkBudget } from './lib/budget.mjs'
 import { buildWriteReason, isMemoryWriteRequest, applyWritePolicy, normalizeWritePolicy, resolveWritePolicy, validateWritePolicies, parseWriteReason } from './lib/gate.mjs'
+import { MemoryProtocolCore, PROTOCOL_ID, PROTOCOL_VERSION, PROTOCOL_URI, normalizeTags, validateMemoryEntry, validateExportEnvelope, validateAuditRow, MAX_TAGS_PER_ENTRY, MAX_TAG_LENGTH } from './lib/protocol.mjs'
+import { MemoryAdapterRegistry } from './lib/registry.mjs'
+import { REFERENCE_ADAPTERS } from './lib/adapters.mjs'
 import { renderSnapshot, visibleEntries, visibleProposals } from './lib/snapshot.mjs'
 import { openMemoryStore, resolveDbPath } from './lib/store.mjs'
 import { workspaceKeyOf, agentKeyOf } from './lib/workspace.mjs'
@@ -227,438 +230,29 @@ function maybeAppendSessionEvent(session, type, data) {
 
 /**
  * ctx.memory 服务（Service Definition 实现）。
- * 写方法内部强制过审批门：预算预检 → 审批 → 预算复审 → 落盘 → 审计。
- * 读方法无审批；禁用时本服务整体不存在。
+ * 协议写语义（预算预检 → 审批 → 预算复审 → 落盘 → 审计）在 lib/protocol.mjs 的
+ * MemoryProtocolCore 里——协议与实现分离，协议部分零 DSH 依赖；本类只注入两件
+ * DSH 专属物：审批传输（ctx.approval）与会话事件派发（memory/* 词汇的已知类型
+ * 自适应门）。读方法无审批；禁用时本服务整体不存在。
  */
-export class MemoryService {
+export class MemoryService extends MemoryProtocolCore {
   /**
-   * @param {ServiceDeps} deps - {store, budgets, writePolicy, maxEntriesPerQuery, approval, sourceLabel}。
+   * @param {ServiceDeps} deps - {store, budgets, writePolicy, maxEntriesPerQuery, commandListLimit, commandAuditLimit, language, approval, sourceLabel}。
    */
   constructor(deps) {
-    this.store = deps.store
-    this.budgetsConfig = deps.budgets
-    this.limits = budgetLimits(deps.budgets)
-    this.writePolicy = normalizeWritePolicy(deps.writePolicy)
-    this.maxEntriesPerQuery = deps.maxEntriesPerQuery
+    super({
+      store: deps.store,
+      budgets: deps.budgets,
+      writePolicy: deps.writePolicy,
+      defaultQueryLimit: deps.maxEntriesPerQuery,
+      sourceLabel: deps.sourceLabel,
+      gate: (payload, write) => askApproval(deps.approval, /** @type {WritePayload} */ (payload), write),
+      emit: (session, type, data) => maybeAppendSessionEvent(session, type, data),
+    })
     this.commandListLimit = deps.commandListLimit
     this.commandAuditLimit = deps.commandAuditLimit
     this.language = deps.language
-    this.approval = deps.approval
-    this.sourceLabel = deps.sourceLabel ?? DEFAULT_SOURCE
   }
-
-  /** @returns {Array<{track: string, scope: string, used: number, limit: number}>} 预算报表。 */
-  budgets() {
-    return budgetReport(this.store.listEntries(), this.budgetsConfig)
-  }
-
-  /**
-   * 查询条目（无审批；带 sessionId 时记一条 recalled 审计）。
-   * 显式合法 limit 生效但被 Provider 硬钳到 MAX_QUERY_LIMIT（1000）；缺省/非法 limit 用
-   * maxEntriesPerQuery（Config 默认 20，语义是"默认返回上限"而非硬顶）。
-   * opts.agentKey 给定时按会话可见集过滤（共享层 + 指定 agent 键）；缺省不过滤——
-   * 管理面（/memory 命令、面板）与无会话上下文的插件调用保持全量视图。
-   * @param {{track?: string, scope?: string, text?: string, limit?: number}} [filter] - {track, scope, text, limit}。
-   * @param {{sessionId?: string, session?: MemorySessionLike | null, agentKey?: string}} [opts] - {sessionId, session, agentKey}；session 用于 memory/recalled
-   *   事件的按已知类型自适应派发（与写事件同一 maybeAppendSessionEvent 门）。
-   * @returns {MemoryQueryResult}。
-   */
-  query(filter = {}, opts = {}) {
-    const { entries, total, truncated } = this.store.queryEntries({
-      ...(filter.track === undefined ? {} : { track: filter.track }),
-      ...(filter.scope === undefined ? {} : { scope: filter.scope }),
-      ...(typeof filter.text === 'string' && filter.text.length > 0 ? { text: filter.text } : {}),
-      limit: Number.isInteger(filter.limit) && filter.limit > 0 ? filter.limit : this.maxEntriesPerQuery,
-      ...(typeof opts.agentKey === 'string' ? { agentKey: opts.agentKey } : {}),
-    })
-    if (opts.sessionId !== undefined) {
-      this.store.auditAppend({
-        action: 'recalled',
-        ...(filter.track === undefined ? {} : { track: filter.track }),
-        ...(filter.scope === undefined ? {} : { scope: filter.scope }),
-        text: typeof filter.text === 'string' ? filter.text : null,
-        outcome: 'ok',
-        source: this.sourceLabel,
-        sessionId: opts.sessionId,
-      })
-    }
-    if (opts.session !== undefined && opts.session !== null) {
-      maybeAppendSessionEvent(opts.session, SESSION_EVENTS.recalled, {
-        query: typeof filter.text === 'string' ? filter.text : '',
-        matches: total,
-        sessionId: opts.sessionId ?? opts.session.id ?? '',
-      })
-    }
-    return { entries, total, truncated }
-  }
-
-  /**
-   * 写路径审批门。默认走 ctx.approval.request（turn 内，落 approval/asked +
-   * approval/decided 审计对）。write.gate 为可选自定义传输（/memory 命令在
-   * turn 外使用：同一 approval/request waterfall + 同一 answerer 链裁决，
-   * 会话级 never 策略由调用方预检；审计落在插件审计表 + command/done）。
-   * 被拒（rejected/cancelled/unavailable/off）一律落 `<action>-denied` 审计行再抛——
-   * turn 外 gate 路径没有审批审计对，这是拒绝的唯一证据链。
-   * @param {WritePayload} payload - {action, track, scope, text, count?}。
-   * @param {MemoryWriteContext} write - {agent, callId?, signal?, gate?}。
-   * @returns {Promise<{outcome: string, source: 'approval'|'gate'}>} 实际裁决结果与传输来源（审计标签用）。
-   * 被拒（rejected/cancelled/unavailable/off）一律落 `<action>-denied` 审计行再抛——
-   * turn 外 gate 路径没有审批审计对，这是拒绝的唯一证据链。
-   */
-  async #ask(payload, write) {
-    try {
-      const via = typeof write.gate === 'function'
-        ? { outcome: await write.gate(payload, write), source: /** @type {'approval'|'gate'} */ ('gate') }
-        : { outcome: await askApproval(this.approval, payload, write), source: /** @type {'approval'|'gate'} */ ('approval') }
-      this.#assertOutcome(via.outcome)
-      return via
-    } catch (error) {
-      if (error instanceof WriteDeniedError) {
-        const outcome = typeof error.details.outcome === 'string' ? error.details.outcome : 'denied'
-        const viaLabel = typeof write.gate === 'function'
-          ? `${outcome} (via write gate)`
-          : `${outcome} (via approval, writePolicy ${this.writePolicy})`
-        this.store.auditAppend({
-          action: `${payload.action}-denied`,
-          track: payload.track,
-          scope: payload.scope,
-          entryId: null,
-          text: payload.text,
-          outcome: viaLabel,
-          source: payload.source ?? this.sourceLabel,
-          sessionId: write.agent?.session?.id ?? null,
-        })
-      }
-      throw error
-    }
-  }
-
-  /** 审计 outcome 标签：审批传输标注策略，gate 传输标注 gate（真实裁决来源，不张冠李戴）。 */
-  #outcomeLabel(/** @type {{outcome: string, source: 'approval'|'gate'}} */ via) {
-    return via.source === 'gate'
-      ? `${via.outcome} (via write gate)`
-      : `${via.outcome} (via approval, writePolicy ${this.writePolicy})`
-  }
-
-  /**
-   * 新增条目（写：审批门 + 预算门）。
-   * @param {{track: string, scope: string, text: string, source?: string, workspaceKey?: string, agentKey?: string}} input - {track, scope, text, source?, workspaceKey?, agentKey?}。
-   * @param {MemoryWriteContext} write - {agent, callId?, signal?, gate?}；agent 缺失即失败封闭。
-   * @returns {Promise<{entry: MemoryEntry, usage: {track: string, scope: string, used: number, limit: number}}>}。
-   */
-  async add(input, write) {
-    const { track, scope, text } = this.#validateEntry(input, write)
-    this.#assertBudget(track, scope, this.store.usage(track, scope), text.length)
-    const via = await this.#ask({ action: 'add', track, scope, text, source: input.source ?? this.sourceLabel }, write)
-    this.#throwIfAborted(write)
-    // 审批等待期间用量可能变化：以此刻用量为权威复审。
-    const now = this.store.usage(track, scope)
-    this.#assertBudget(track, scope, now, text.length)
-    const entry = this.store.insertEntry({
-      track, scope, text,
-      workspaceKey: input.workspaceKey ?? this.#workspaceKeyOf(write),
-      agentKey: input.agentKey ?? this.#agentKeyOf(write),
-      source: input.source ?? this.sourceLabel,
-      sessionId: write.agent.session?.id ?? null,
-    })
-    this.#auditWrite('add', track, scope, entry, write, via)
-    this.#appendWriteEvent(write, SESSION_EVENTS.added, { entry, source: entry.source })
-    return { entry, usage: this.#usage(track, scope) }
-  }
-
-  /**
-   * 按唯一子串替换条目（写：审批门 + 预算门；零/多命中报错，绝不截断）。
-   * @param {{track: string, scope: string, match: string, text: string, source?: string}} input - {track, scope, match, text, source?}。
-   * @param {MemoryWriteContext} write - {agent, callId?, signal?}。
-   * @returns {Promise<{previous: MemoryEntry, entry: MemoryEntry, usage: {track: string, scope: string, used: number, limit: number}}>}。
-   */
-  async replace(input, write) {
-    const { track, scope, text } = this.#validateEntry(input, write)
-    this.#assertMatch(input)
-    // 审批前先定位：零/多命中在打扰用户之前就响亮失败。
-    const initial = this.#resolveMatch(input, track, scope, write)
-    this.#assertBudget(track, scope, this.store.usage(track, scope), text.length - initial.text.length)
-    // 审批载荷携带将被改写的旧条目全文（approve-what-you-see：人批准的不是抽象动作，是具体变更）。
-    const via = await this.#ask({
-      action: 'replace', track, scope,
-      text: `from:\n${initial.text}\n\nto:\n${text}`,
-      source: input.source ?? this.sourceLabel,
-    }, write)
-    this.#throwIfAborted(write)
-    // 审批等待期间目标条目可能已被并发写改动：以此刻重新定位的 previous 为权威重算净变化，
-    // 再用此刻用量复审。复审与 replaceEntry 之间无 await，判断与实际写入之间不存在窗口。
-    const current = this.#resolveMatch(input, track, scope, write)
-    const net = text.length - current.text.length
-    this.#assertBudget(track, scope, this.store.usage(track, scope), net)
-    // 事务内重新定位+更新：零/多命中仍会响亮报错（不静默）。
-    const replaced = this.store.replaceEntry({
-      track, scope, match: input.match, text,
-      sessionId: write.agent.session?.id ?? null,
-    })
-    this.#auditWrite('replace', track, scope, replaced.entry, write, via)
-    this.#appendWriteEvent(write, SESSION_EVENTS.updated, {
-      previous: replaced.previous,
-      entry: replaced.entry,
-      source: replaced.entry.source,
-    })
-    return { previous: replaced.previous, entry: replaced.entry, usage: this.#usage(track, scope) }
-  }
-
-  /**
-   * 按唯一子串删除条目（写：审批门；零/多命中报错）。
-   * @param {{track: string, scope: string, match: string}} input - {track, scope, match}。
-   * @param {MemoryWriteContext} write - {agent, callId?, signal?}。
-   * @returns {Promise<{entry: MemoryEntry, usage: {track: string, scope: string, used: number, limit: number}}>}。
-   */
-  async remove(input, write) {
-    this.#assertAgent(write)
-    this.#assertScope(input.track, input.scope)
-    this.#assertMatch(input)
-    // 审批前先定位：零/多命中在打扰用户之前就响亮失败。
-    const target = this.#resolveMatch(input, input.track, input.scope, write)
-    // 审批载荷携带将被删除的条目全文（approve-what-you-see），而非裸子串。
-    const via = await this.#ask({ action: 'remove', track: input.track, scope: input.scope, text: target.text, source: target.source }, write)
-    this.#throwIfAborted(write)
-    const removed = this.store.removeEntry({ track: input.track, scope: input.scope, match: input.match })
-    this.#auditWrite('remove', input.track, input.scope, removed, write, via)
-    this.#appendWriteEvent(write, SESSION_EVENTS.removed, { entry: removed, source: removed.source })
-    return { entry: removed, usage: this.#usage(input.track, input.scope) }
-  }
-
-  /**
-   * 批量种子（一次 ask 审批整个批次；dsh-claude-move 等插件喂数据用）。
-   * 任一条超预算 → 整批拒绝（先全量预检再落盘，无部分写入）。
-   * @param {Array<{track: string, scope: string, text: string, source?: string, workspaceKey?: string, agentKey?: string}>} inputs - 条目数组（track/scope/text/source/workspaceKey/agentKey）。
-   * @param {MemoryWriteContext} write - {agent, callId?, signal?}。
-   * @returns {Promise<{added: number, entries: MemoryEntry[]}>}。
-   */
-  async seed(inputs, write) {
-    this.#assertAgent(write)
-    if (!Array.isArray(inputs) || inputs.length === 0) {
-      throw new InvalidInputError('seed requires a non-empty entry list')
-    }
-    const normalized = inputs.map((input) => {
-      const { track, scope, text } = this.#validateEntry(input, write)
-      return {
-        track, scope, text,
-        source: input.source ?? this.sourceLabel,
-        workspaceKey: input.workspaceKey ?? this.#workspaceKeyOf(write),
-        agentKey: input.agentKey ?? this.#agentKeyOf(write),
-      }
-    })
-    const summary = normalized.map((entry) => `${entry.track}/${entry.scope}: ${entry.text}`).join('\n')
-    const via = await this.#ask({
-      action: 'seed', track: 'batch', scope: 'batch', text: summary, count: normalized.length,
-    }, write)
-    this.#throwIfAborted(write)
-    // 全量预检（任意一条超限整批拒绝）；通过后同步插入，无 await 间隔。
-    for (const [track, scope] of uniqueScopes(normalized)) {
-      const used = this.store.usage(track, scope)
-      const addition = normalized
-        .filter((entry) => entry.track === track && entry.scope === scope)
-        .reduce((sum, entry) => sum + entry.text.length, 0)
-      this.#assertBudget(track, scope, used, addition)
-    }
-    const sessionId = write.agent.session?.id ?? null
-    const entries = this.store.seedEntries(normalized.map((entry) => ({ ...entry, sessionId })))
-    this.store.auditAppend({
-      action: 'seed',
-      track: null, scope: null, entryId: null,
-      text: summary, outcome: this.#outcomeLabel(via),
-      source: this.sourceLabel, sessionId,
-    })
-    for (const entry of entries) {
-      this.#auditWrite('add', entry.track, entry.scope, entry, write, via)
-      this.#appendWriteEvent(write, SESSION_EVENTS.added, { entry, source: entry.source })
-    }
-    return { added: entries.length, entries }
-  }
-
-  /**
-   * 整合多个条目为一条新条目（写：审批门 + 预算门；一次审批 + Provider 单事务原子执行）。
-   * 零/多命中、超预算、审批拒绝、目标在审批期间消失都响亮失败；任一步失败无部分写入。
-   * @param {{track: string, scope: string, matches: string[], text: string, source?: string, workspaceKey?: string, agentKey?: string}} input - 整合方案。
-   * @param {MemoryWriteContext} write - {agent, callId?, signal?, gate?}。
-   * @returns {Promise<{removed: MemoryEntry[], entry: MemoryEntry, usage: MemoryUsage}>}。
-   */
-  async consolidate(input, write) {
-    const { track, scope, text } = this.#validateEntry(input, write)
-    this.#assertConsolidateMatches(input)
-    // 审批前先定位全部目标：零/多命中在打扰用户之前就响亮失败。
-    const initial = input.matches.map((match) => this.#resolveMatch({ match }, track, scope, write))
-    const removalBefore = initial.reduce((sum, entry) => sum + entry.text.length, 0)
-    this.#assertBudget(track, scope, this.store.usage(track, scope), text.length - removalBefore)
-    // 审批载荷携带每个目标的定位条目原文（单条超长只截前 300 字，避免 20×满预算条目撑爆载荷）。
-    const plan = [
-      ...initial.map((entry, index) => {
-        const body = entry.text.length > 300 ? `${entry.text.slice(0, 300)}…` : entry.text
-        return `remove: ${input.matches[index]}\n${body}`
-      }),
-      `new text: ${text}`,
-    ].join('\n')
-    const via = await this.#ask({ action: 'consolidate', track, scope, text: plan, source: input.source ?? this.sourceLabel }, write)
-    this.#throwIfAborted(write)
-    // 审批等待期间目标可能被并发写改动：重新定位并以此刻为权威重算净变化。
-    const current = input.matches.map((match) => this.#resolveMatch({ match }, track, scope, write))
-    const removalNow = current.reduce((sum, entry) => sum + entry.text.length, 0)
-    this.#assertBudget(track, scope, this.store.usage(track, scope), text.length - removalNow)
-    const { removed, entry } = this.store.consolidateEntries({
-      track, scope, matches: input.matches, text,
-      source: input.source ?? this.sourceLabel,
-      workspaceKey: input.workspaceKey ?? this.#workspaceKeyOf(write),
-      agentKey: input.agentKey ?? this.#agentKeyOf(write),
-      sessionId: write.agent.session?.id ?? null,
-    })
-    const sessionId = write.agent.session?.id ?? null
-    for (const old of removed) {
-      this.store.auditAppend({
-        action: 'consolidate-remove', track, scope, entryId: old.id, text: old.text,
-        outcome: this.#outcomeLabel(via), source: old.source, sessionId,
-      })
-      this.#appendWriteEvent(write, SESSION_EVENTS.removed, { entry: old, source: old.source })
-    }
-    this.store.auditAppend({
-      action: 'consolidate-add', track, scope, entryId: entry.id, text: entry.text,
-      outcome: this.#outcomeLabel(via), source: entry.source, sessionId,
-    })
-    this.#appendWriteEvent(write, SESSION_EVENTS.added, { entry, source: entry.source })
-    return { removed, entry, usage: this.#usage(track, scope) }
-  }
-
-  /** 写路径必须有 agent（审批路由与审计归属）：缺失即失败封闭。 */
-  #assertAgent(/** @type {MemoryWriteContext} */ write) {
-    if (write === null || typeof write !== 'object' || write.agent === undefined || write.agent === null) {
-      throw new NoAgentError()
-    }
-  }
-
-  /** track/scope 词汇校验（响亮失败，绝不落到 SQL）。 */
-  #assertScope(/** @type {string} */ track, /** @type {string} */ scope) {
-    if (!/** @type {readonly string[]} */ (TRACKS).includes(track) || !/** @type {readonly string[]} */ (SCOPES).includes(scope)) {
-      throw new InvalidInputError(`invalid memory scope: track=${JSON.stringify(track)} scope=${JSON.stringify(scope)} (track ∈ ${TRACKS.join('|')}, scope ∈ ${SCOPES.join('|')})`)
-    }
-  }
-
-  /** match 参数校验（replace/remove 共用）。 */
-  #assertMatch(/** @type {{match?: unknown}} */ input) {
-    if (typeof input.match !== 'string' || input.match.length === 0) {
-      throw new InvalidInputError('replace/remove match must be a non-empty string')
-    }
-  }
-
-  /** consolidate matches 校验（1..20 个非空字符串）。 */
-  #assertConsolidateMatches(/** @type {{matches?: unknown}} */ input) {
-    if (!Array.isArray(input.matches) || input.matches.length === 0 || input.matches.length > 20) {
-      throw new InvalidInputError('consolidate matches must be an array of 1..20 non-empty strings')
-    }
-    for (const match of input.matches) {
-      if (typeof match !== 'string' || match.length === 0) {
-        throw new InvalidInputError('consolidate matches must be an array of 1..20 non-empty strings')
-      }
-    }
-  }
-
-  /** 条目公共校验：agent + scope + 非空文本。 */
-  #validateEntry(/** @type {{track: string, scope: string, text: string}} */ input, /** @type {MemoryWriteContext} */ write) {
-    this.#assertAgent(write)
-    this.#assertScope(input.track, input.scope)
-    if (typeof input.text !== 'string' || input.text.length === 0) {
-      throw new InvalidInputError('entry text must be a non-empty string')
-    }
-    return { track: input.track, scope: input.scope, text: input.text }
-  }
-
-  /**
-   * 审批前定位替换/删除目标（唯一子串语义，大小写不敏感，零/多命中结构化报错）。
-   * 写定位 = 会话可见集：agentKey 共享 + 写方会话键（显式 input 覆盖）；scope='workspace'
-   * 时按写方会话 cwd 键过滤——跨 agent/跨工作区条目对本会话不可见、也不可被误改。
-   */
-  #resolveMatch(/** @type {{match: string, agentKey?: string, workspaceKey?: string}} */ input, /** @type {string} */ track, /** @type {string} */ scope, /** @type {MemoryWriteContext} */ write) {
-    const agentKey = typeof input.agentKey === 'string' && input.agentKey.length > 0 ? input.agentKey : this.#agentKeyOf(write)
-    const workspaceKey = typeof input.workspaceKey === 'string' && input.workspaceKey.length > 0 ? input.workspaceKey : this.#workspaceKeyOf(write)
-    const hits = /** @type {MemoryEntry[]} */ (this.store.matchCandidates(track, scope, input.match, {
-      agentKey,
-      workspaceKey: scope === 'workspace' ? workspaceKey : undefined,
-    }))
-      .filter((entry) => entry.text.toLowerCase().includes(input.match.toLowerCase()))
-    if (hits.length === 0) throw new EntryNotFoundError({ track, scope, match: input.match })
-    if (hits.length > 1) {
-      throw new AmbiguousMatchError({
-        track, scope, match: input.match,
-        candidates: hits.length,
-        sample: hits.map((entry) => entry.text.length > 200 ? `${entry.text.slice(0, 200)}…` : entry.text),
-      })
-    }
-    return hits[0]
-  }
-
-  /** 预算门：超限抛 BudgetExceededError（结构化，含用量与上限），绝不截断。 */
-  #assertBudget(/** @type {string} */ track, /** @type {string} */ scope, /** @type {number} */ used, /** @type {number} */ addition) {
-    const checked = checkBudget(used, this.limits[/** @type {'user'|'agent'} */ (track)][/** @type {'user-global'|'workspace'} */ (scope)], addition)
-    if (!checked.ok) {
-      const d = /** @type {{used: number, limit: number, needed: number}} */ (checked)
-      throw new BudgetExceededError({ track, scope, used: d.used, limit: d.limit, needed: d.needed })
-    }
-  }
-
-  /** 审批结果门：唯一放行是 allowed-once。 */
-  #assertOutcome(/** @type {string} */ outcome) {
-    if (outcome !== 'allowed-once') throw new WriteDeniedError(outcome)
-  }
-
-  /** @param {{signal?: AbortSignal}} write - {signal?}。 */
-  #throwIfAborted(write) {
-    write.signal?.throwIfAborted()
-  }
-
-  /** 写成功的审计行（outcome 携带真实裁决来源：审批传输标注策略，gate 传输标注 gate）。 */
-  #auditWrite(/** @type {string} */ action, /** @type {string} */ track, /** @type {string} */ scope, /** @type {MemoryEntry} */ entry, /** @type {MemoryWriteContext} */ write, /** @type {{outcome: string, source: 'approval'|'gate'}} */ via) {
-    this.store.auditAppend({
-      action,
-      track,
-      scope,
-      entryId: entry.id,
-      text: entry.text,
-      outcome: this.#outcomeLabel(via),
-      source: entry.source,
-      sessionId: write.agent.session?.id ?? null,
-    })
-  }
-
-  /** 写事件自适应派发（带上写方会话）。 */
-  #appendWriteEvent(/** @type {MemoryWriteContext} */ write, /** @type {string} */ type, /** @type {object} */ data) {
-    const sessionId = write.agent.session?.id ?? ''
-    maybeAppendSessionEvent(write.agent.session, type, { ...data, sessionId })
-  }
-
-  /** (track, scope) 用量与上限（工具结果回带，模型据此整合重试）。 */
-  #usage(/** @type {string} */ track, /** @type {string} */ scope) {
-    return { track, scope, used: this.store.usage(track, scope), limit: this.limits[/** @type {'user'|'agent'} */ (track)][/** @type {'user-global'|'workspace'} */ (scope)] }
-  }
-
-  /** @param {{agent?: {session?: MemorySessionLike | null} | null}} write - {agent}。 */
-  #workspaceKeyOf(write) {
-    return workspaceKeyOf(/** @type {string | undefined} */ (write.agent?.session?.header?.cwd))
-  }
-
-  /** @param {{agent?: {session?: MemorySessionLike | null} | null}} write - {agent}。 */
-  #agentKeyOf(write) {
-    return agentKeyOf(/** @type {string | undefined} */ (write.agent?.session?.header?.agentPreset))
-  }
-}
-
-/** 去重的 (track, scope) 组合（seed 预检用）。 */
-function uniqueScopes(/** @type {Array<{track: string, scope: string}>} */ entries) {
-  const seen = new Set()
-  const result = []
-  for (const entry of entries) {
-    const key = `${entry.track}/${entry.scope}`
-    if (!seen.has(key)) {
-      seen.add(key)
-      result.push([entry.track, entry.scope])
-    }
-  }
-  return result
 }
 
 /** 工具结果里的固定错误形状（schema additionalProperties:false 需要显式字段）。 */
@@ -715,6 +309,7 @@ const MEMORY_TOOL_PARAMETERS = {
     match: 'replace/remove: a UNIQUE case-insensitive substring of the existing entry to target.',
     matches: 'consolidate: 1..20 UNIQUE case-insensitive substrings of the entries to merge into the new text.',
     limit: 'query: maximum entries to return (default 20; hard-capped at 1000).',
+    tags: 'Optional short labels for the entry (e.g. ["project-x", "decision"]). At most 16 tags, each at most 32 characters; applies to add/replace/consolidate.',
   },
   zh: {
     action: 'add = 新增一条；replace = 改写一条既有条目；remove = 删除一条既有条目；consolidate = 把 1..20 条既有条目整合为一条新条目（单次审批、原子执行）；query = 对既有条目的子串检索。',
@@ -724,6 +319,7 @@ const MEMORY_TOOL_PARAMETERS = {
     match: 'replace/remove：目标条目的唯一大小写不敏感子串。',
     matches: 'consolidate：要并入新文本的 1..20 个唯一大小写不敏感子串。',
     limit: 'query：最多返回条数（默认 20；硬钳 1000）。',
+    tags: '可选短标签（如 ["project-x", "decision"]）。最多 16 个、每个最多 32 字符；用于 add/replace/consolidate。',
   },
 }
 
@@ -773,6 +369,11 @@ export function makeMemoryTool(service, language = 'en') {
         type: 'integer',
         description: parameters.limit,
       },
+      tags: {
+        type: 'array',
+        items: { type: 'string' },
+        description: parameters.tags,
+      },
     },
     output: {
       schema: {
@@ -790,6 +391,7 @@ export function makeMemoryTool(service, language = 'en') {
               scope: { type: 'string', required: true },
               text: { type: 'string', required: true },
               source: { type: 'string', required: true },
+              tags: { type: 'array', items: { type: 'string' }, required: true },
             },
           },
           removed: {
@@ -822,6 +424,7 @@ export function makeMemoryTool(service, language = 'en') {
                 scope: { type: 'string', required: true },
                 text: { type: 'string', required: true },
                 source: { type: 'string', required: true },
+                tags: { type: 'array', items: { type: 'string' }, required: true },
               },
             },
           },
@@ -901,6 +504,7 @@ export function makeMemoryTool(service, language = 'en') {
                 scope: args.scope ?? 'workspace',
                 text: args.text,
                 source: 'memory-tool',
+                ...(args.tags === undefined ? {} : { tags: args.tags }),
               },
               write,
             )
@@ -914,6 +518,7 @@ export function makeMemoryTool(service, language = 'en') {
                 match: args.match,
                 text: args.text,
                 source: 'memory-tool',
+                ...(args.tags === undefined ? {} : { tags: args.tags }),
               },
               write,
             )
@@ -944,6 +549,7 @@ export function makeMemoryTool(service, language = 'en') {
                 matches: args.matches,
                 text: args.text,
                 source: 'memory-tool',
+                ...(args.tags === undefined ? {} : { tags: args.tags }),
               },
               write,
             )
@@ -977,6 +583,7 @@ function publicEntry(/** @type {MemoryEntry} */ entry) {
     scope: entry.scope,
     text: entry.text,
     source: entry.source,
+    tags: entry.tags,
   }
 }
 
@@ -1110,6 +717,15 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
 
   ctx.provide('memory', service)
   ctx.effect(() => () => store.close(), 'dsh-memento.store.close')
+
+  // 协议 v1 适配器注册表（ctx.memoryAdapters）：第三方记忆插件可 register() 自己的
+  // 适配器把外部 store 接进协议。注册可逆（register 返回 disposer，经 ctx.effect 随
+  // 插件生命周期自动回收）；内置参考适配器（mem0 / Hermes / CLAUDE.md）同生命周期。
+  const adapters = new MemoryAdapterRegistry()
+  ctx.provide('memoryAdapters', adapters)
+  for (const adapter of REFERENCE_ADAPTERS) {
+    ctx.effect(() => adapters.register(adapter), `dsh-memento.adapter.${adapter.id}`)
+  }
 
   // 审批 answerer：认领本插件的记忆写请求并按粒度策略裁决（writePolicies 精确键 >
   // track/scope > 全局 writePolicy；prepend 保证 auto/off 的确定性先于 UI answerer；
@@ -1330,12 +946,21 @@ function makeCommandGate(ctx, write) {
  * @property {(max: number) => string} importTooMany
  * @property {string} importBadEntry
  * @property {(n: number) => string} imported
+ * @property {string} adaptersEmpty
+ * @property {(n: number, rows: string) => string} adaptersList
+ * @property {string} adapterExportUsage
+ * @property {string} adapterImportUsage
+ * @property {string} adapterServiceMissing
+ * @property {string} adapterBadFlag
+ * @property {(id: string) => string} adapterUnknown
+ * @property {(id: string, message: string) => string} adapterPayload
+ * @property {(n: number, id: string) => string} adapterImported
  * @property {(verb: string) => string} unknownVerb
  * @property {(message: string) => string} commandFailed
  */
 const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} */ ({
   en: {
-    usage: 'Usage: /memory list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | export | import <path>',
+    usage: 'Usage: /memory list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <path>',
     memoryEmpty: 'Memory is empty.',
     entries: (total, shown) => `Memory entries (${total} total, showing first ${shown}):`,
     entriesFull: (total) => `Memory entries (${total}):`,
@@ -1369,11 +994,20 @@ const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} 
     importTooMany: (max) => `import: the export document has more than ${max} entries; split it and import in batches`,
     importBadEntry: 'import: every entry needs a string track, scope, and non-empty text',
     imported: (n) => `Imported ${n} entries into memory (single approval; budgets re-checked). Entries get fresh ids and timestamps; proposals, audit rows and recall counts are not migrated.`,
-    unknownVerb: (verb) => `Unknown subcommand "${verb}". Usage: /memory list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | export | import <path>`,
+    adaptersEmpty: 'No memory adapters registered.',
+    adaptersList: (n, rows) => `Memory adapters (${n}):\n${rows}\nImport: /memory import --adapter=<id> <path|inline JSON>; export: /memory export --adapter=<id>`,
+    adapterExportUsage: 'adapter export usage: /memory export --adapter=<id> (read-only conversion to stdout)',
+    adapterImportUsage: 'adapter import usage: /memory import --adapter=<id> <file path> (or inline JSON starting with {)',
+    adapterServiceMissing: 'memory adapter registry is unavailable in this profile',
+    adapterBadFlag: 'adapter id missing or invalid: use --adapter=<id> (lowercase kebab-case)',
+    adapterUnknown: (id) => `no memory adapter "${id}" is registered; run /memory adapters`,
+    adapterPayload: (id, message) => `adapter ${id} rejected the payload: ${message}`,
+    adapterImported: (n, id) => `Imported ${n} entries via adapter ${id} (single approval; budgets re-checked). Entries get fresh ids and timestamps.`,
+    unknownVerb: (verb) => `Unknown subcommand "${verb}". Usage: /memory list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <path>`,
     commandFailed: (message) => `memory command failed: ${message}`,
   },
   zh: {
-    usage: '用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | export | import <路径>',
+    usage: '用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <路径>',
     memoryEmpty: '记忆为空。',
     entries: (total, shown) => `记忆条目（共 ${total} 条，显示前 ${shown} 条）：`,
     entriesFull: (total) => `记忆条目（${total} 条）：`,
@@ -1407,7 +1041,16 @@ const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} 
     importTooMany: (max) => `import：导出文档超过 ${max} 条；请拆分后分批导入`,
     importBadEntry: 'import：每条都需要字符串 track、scope 与非空 text',
     imported: (n) => `已导入 ${n} 条记忆（单次审批；预算已复检）。条目获得新 id 与新时间戳；提案、审计行与召回计数不迁移。`,
-    unknownVerb: (verb) => `未知子命令「${verb}」。用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | export | import <路径>`,
+    adaptersEmpty: '没有已注册的记忆适配器。',
+    adaptersList: (n, rows) => `记忆适配器（${n} 个）：\n${rows}\n导入：/memory import --adapter=<id> <路径|内联 JSON>；导出：/memory export --adapter=<id>`,
+    adapterExportUsage: '适配器导出用法：/memory export --adapter=<id>（只读转换输出到 stdout）',
+    adapterImportUsage: '适配器导入用法：/memory import --adapter=<id> <文件路径>（或以 { 开头的内联 JSON）',
+    adapterServiceMissing: '当前 profile 没有记忆适配器注册表',
+    adapterBadFlag: '适配器 id 缺失或非法：请用 --adapter=<id>（小写 kebab-case）',
+    adapterUnknown: (id) => `没有注册记忆适配器「${id}」；请运行 /memory adapters`,
+    adapterPayload: (id, message) => `适配器 ${id} 拒绝了载荷：${message}`,
+    adapterImported: (n, id) => `已通过适配器 ${id} 导入 ${n} 条记忆（单次审批；预算已复检）。条目获得新 id 与新时间戳。`,
+    unknownVerb: (verb) => `未知子命令「${verb}」。用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <路径>`,
     commandFailed: (message) => `memory 命令失败：${message}`,
   },
 })
@@ -1415,12 +1058,12 @@ const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} 
 /** 命令注册描述与输入提示（双语）。 */
 const COMMAND_DESCRIPTION = /** @type {{en: {description: string, hint: string}, zh: {description: string, hint: string}}} */ ({
   en: {
-    description: 'View/manage dsh-memento memory: list | query <word> | add [--track=user|agent] [--scope=user-global|workspace] <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | export | import <path>',
-    hint: 'list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | export | import <path>',
+    description: 'View/manage dsh-memento memory: list | query <word> | add [--track=user|agent] [--scope=user-global|workspace] <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <path>',
+    hint: 'list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <path>',
   },
   zh: {
-    description: '查看/管理 dsh-memento 记忆：list | query <词> | add [--track=user|agent] [--scope=user-global|workspace] <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | export | import <路径>',
-    hint: 'list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | export | import <路径>',
+    description: '查看/管理 dsh-memento 记忆：list | query <词> | add [--track=user|agent] [--scope=user-global|workspace] <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <路径>',
+    hint: 'list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <路径>',
   },
 })
 
@@ -1538,7 +1181,23 @@ async function runMemoryCommand(ctx, service, invocation) {
       if (rows.length === 0) return { kind: 'success', text: text.auditEmpty }
       return { kind: 'success', text: `${text.audit(rows.length)}\n${rows.map((/** @type {{ts: number, action: string, track?: string | null, scope?: string | null, outcome?: string | null, source?: string | null}} */ row) => `- ${new Date(row.ts).toISOString()} ${row.action}${row.track ? ` ${row.track}/${row.scope}` : ''} ${row.outcome ?? ''} (${row.source ?? ''})`.trim()).join('\n')}` }
     }
+    case 'adapters': {
+      const registry = adapterRegistryOf(ctx)
+      if (registry === null) return { kind: 'error', text: text.adapterServiceMissing }
+      const list = registry.list()
+      if (list.length === 0) return { kind: 'success', text: text.adaptersEmpty }
+      const rows = list.map((adapter) => `- ${adapter.id} (${adapter.name}, v${adapter.version}): ${adapter.description}\n  import: ${adapter.importFormats.join(', ')}; export: ${adapter.exportFormat}`)
+      return { kind: 'success', text: text.adaptersList(list.length, rows.join('\n')) }
+    }
     case 'export': {
+      const parsed = parseAdapterFlag(rest)
+      if (parsed.flagSeen) {
+        if (parsed.adapterId === undefined) return { kind: 'error', text: text.adapterBadFlag }
+        const registry = adapterRegistryOf(ctx)
+        if (registry === null) return { kind: 'error', text: text.adapterServiceMissing }
+        const payload = registry.export(parsed.adapterId, service.store.listEntries())
+        return { kind: 'success', text: typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2) }
+      }
       if (rest.length > 0) return { kind: 'error', text: text.exportUsage }
       const entries = service.store.listEntries()
       const payload = {
@@ -1554,6 +1213,8 @@ async function runMemoryCommand(ctx, service, invocation) {
           agentKey: entry.agentKey,
           text: entry.text,
           source: entry.source,
+          tags: entry.tags,
+          version: entry.version,
           createdAt: entry.createdAt,
           updatedAt: entry.updatedAt,
           lastRecalled: entry.lastRecalled,
@@ -1563,6 +1224,11 @@ async function runMemoryCommand(ctx, service, invocation) {
       return { kind: 'success', text: JSON.stringify(payload, null, 2) }
     }
     case 'import': {
+      const parsed = parseAdapterFlag(rest)
+      if (parsed.flagSeen) {
+        if (parsed.adapterId === undefined) return { kind: 'error', text: text.adapterBadFlag }
+        return await importViaAdapter(ctx, service, parsed.adapterId, parsed.rest.join(' '), invocation, text)
+      }
       const arg = rest.join(' ').trim()
       if (arg.length === 0) return { kind: 'error', text: text.importUsage }
       let payload
@@ -1657,9 +1323,87 @@ async function runMemoryCommand(ctx, service, invocation) {
   }
 }
 
+/** 读取 ctx.memoryAdapters（命令路径用）；缺失返回 null（headless 未挂载时响亮报缺）。 */
+function adapterRegistryOf(/** @type {import('@deepseek-ai/cordis').Context} */ ctx) {
+  const registry = ctx.get('memoryAdapters')
+  if (registry === null || typeof registry !== 'object' || typeof /** @type {{list?: unknown}} */ (registry).list !== 'function') return null
+  return /** @type {MemoryAdapterRegistry} */ (registry)
+}
+
+/** 解析 --adapter=<id> 标志（export/import 共用；返回 {adapterId, rest, flagSeen}）。 */
+function parseAdapterFlag(/** @type {string[]} */ args) {
+  const rest = []
+  let adapterId
+  let flagSeen = false
+  for (const arg of args) {
+    const match = /^--adapter=([a-z0-9][a-z0-9-]*)$/.exec(arg)
+    if (match !== null) {
+      flagSeen = true
+      adapterId = match[1]
+      continue
+    }
+    if (arg.startsWith('--adapter')) flagSeen = true
+    rest.push(arg)
+  }
+  return { adapterId, rest, flagSeen }
+}
+
+/**
+ * 适配器导入：外部载荷（文件或内联 JSON）→ 适配器转换 → service.seed（单次审批 +
+ * 全量预算预检 + 单事务原子落盘，逐条落审计）。转换失败/未知适配器响亮报错。
+ * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文。
+ * @param {MemoryService} service - ctx.memory。
+ * @param {string} adapterId - 适配器 id。
+ * @param {string} rawArg - 文件路径或内联 JSON。
+ * @param {{rawInput?: unknown, agent?: {session?: MemorySessionLike | null} | null, signal?: AbortSignal}} invocation - 命令调用。
+ * @param {CommandTextBundle} text - 文案包。
+ * @returns {Promise<{kind: 'success' | 'error', text: string}>}。
+ */
+async function importViaAdapter(ctx, service, adapterId, rawArg, invocation, text) {
+  const registry = adapterRegistryOf(ctx)
+  if (registry === null) return { kind: 'error', text: text.adapterServiceMissing }
+  const arg = rawArg.trim()
+  if (arg.length === 0) return { kind: 'error', text: text.adapterImportUsage }
+  /** @type {unknown} */
+  let payload
+  if (arg.startsWith('{')) {
+    try {
+      payload = JSON.parse(arg)
+    } catch {
+      return { kind: 'error', text: text.importBadJson }
+    }
+  } else {
+    try {
+      const rawText = readFileSync(arg, 'utf8')
+      try {
+        payload = JSON.parse(rawText)
+      } catch {
+        // markdown 适配器（hermes-memory-md / claude-code-memory-md）直接收原文。
+        payload = rawText
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { kind: 'error', text: text.importReadFailed(arg, message) }
+    }
+  }
+  let entries
+  try {
+    entries = registry.adapt(adapterId, payload).entries
+  } catch (error) {
+    if (error instanceof AdapterNotFoundError) {
+      return { kind: 'error', text: text.adapterUnknown(adapterId) }
+    }
+    const message = error instanceof Error ? error.message : String(error)
+    return { kind: 'error', text: text.adapterPayload(adapterId, message) }
+  }
+  if (entries.length === 0) return { kind: 'error', text: text.importNoEntries }
+  if (entries.length > MAX_IMPORT_ENTRIES) return { kind: 'error', text: text.importTooMany(MAX_IMPORT_ENTRIES) }
+  const result = await service.seed(entries, { agent: invocation?.agent, gate: makeCommandGate(ctx, invocation) })
+  return { kind: 'success', text: text.adapterImported(result.added, adapterId) }
+}
+
 /** 命令写参数解析：--track/--scope 可选（默认 user/workspace，与工具一致），余下为文本。 */
-function parseCommandWrite(/** @type {string[]} */ args, /** @type {boolean} */ requireText) {
-  let track = 'user'
+function parseCommandWrite(/** @type {string[]} */ args, /** @type {boolean} */ requireText) {  let track = 'user'
   let scope = 'workspace'
   const textParts = []
   for (const arg of args) {
@@ -1975,9 +1719,12 @@ function sendPanelJson(/** @type {PanelResponse} */ res, /** @type {number} */ s
   res.end(JSON.stringify(value))
 }
 
-export { MemoryError, InvalidInputError, BudgetExceededError, EntryNotFoundError, AmbiguousMatchError, WriteDeniedError, NoAgentError, ProposalNotFoundError }
+export { MemoryError, InvalidInputError, BudgetExceededError, EntryNotFoundError, AmbiguousMatchError, WriteDeniedError, NoAgentError, ProposalNotFoundError, AdapterNotFoundError, AdapterPayloadError }
 export { buildWriteReason, isMemoryWriteRequest, applyWritePolicy, normalizeWritePolicy, resolveWritePolicy, validateWritePolicies, parseWriteReason }
 export { openMemoryStore, resolveDbPath }
 export { renderSnapshot, visibleEntries }
 export { workspaceKeyOf }
 export { validateBudgets, budgetReport, budgetLimits, checkBudget }
+export { MemoryProtocolCore, PROTOCOL_ID, PROTOCOL_VERSION, PROTOCOL_URI, normalizeTags, validateMemoryEntry, validateExportEnvelope, validateAuditRow, MAX_TAGS_PER_ENTRY, MAX_TAG_LENGTH }
+export { MemoryAdapterRegistry }
+export { REFERENCE_ADAPTERS }

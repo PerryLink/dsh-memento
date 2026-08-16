@@ -31,7 +31,15 @@
     "ARCHITECTURE.md",
     "CHANGELOG.md",
     "LICENSE",
-    "THIRD_PARTY_NOTICES.md"
+    "THIRD_PARTY_NOTICES.md",
+    "docs/protocol-v1.md",
+    "docs/protocol-v1.zh.md",
+    "docs/adapters-guide.md",
+    "docs/adapters-guide.zh.md",
+    "docs/upstream-proposal.md",
+    "docs/upstream-proposal.zh.md",
+    "docs/schemas",
+    "test/protocol-conformance"
   ],
   "repository": {
     "type": "git",
@@ -112,7 +120,8 @@
     "coverage": "node --test --experimental-test-coverage \"test/*.test.mjs\"",
     "check:coverage": "node scripts/check-coverage.mjs",
     "typecheck": "tsc -p tsconfig.check.json",
-    "check:readmes": "node scripts/verify-readmes.mjs"
+    "check:readmes": "node scripts/verify-readmes.mjs",
+    "test:conformance": "node test/protocol-conformance/run.mjs"
   },
   "keywords": [
     "dsh",

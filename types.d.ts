@@ -19,7 +19,7 @@ export type MemoryAction = 'add' | 'replace' | 'remove' | 'consolidate' | 'query
 
 /** 落盘条目（审计/会话事件的载荷形状）。 */
 export interface MemoryEntry {
-  /** 条目 id（本插件生成，跨会话稳定）。 */
+  /** 条目 id（本插件生成，UUID v4，跨会话稳定）。 */
   id: string
   /** 轨道：user=用户画像，agent=环境事实/约定/教训。 */
   track: MemoryTrack
@@ -33,6 +33,10 @@ export interface MemoryEntry {
   text: string
   /** 来源标注（dsh-memento / memory-tool / claude 等）。 */
   source: string
+  /** 短标签（协议 v1：最多 16 个、每个 ≤32 字符；顺序 = 首次出现序）。 */
+  tags: string[]
+  /** 条目版本（协议 v1：新条目 = 1；每次 replace 自增）。 */
+  version: number
   /** 创建时间（epoch ms）。 */
   createdAt: number
   /** 最近更新时间（epoch ms）。 */
@@ -55,6 +59,8 @@ export interface MemoryEntryInput {
   workspaceKey?: string
   /** 显式 agentKey；省略时取写方会话 agentPreset。 */
   agentKey?: string
+  /** 短标签（协议 v1 条目规范；缺省 = 无标签）。 */
+  tags?: string[]
 }
 
 /** 会话最小形状（插件只读这些面；字段宽类型以兼容真实 Session/Agent）。 */
@@ -123,22 +129,60 @@ export interface MemoryService {
 
   /** 按唯一子串替换（审批门 + 预算门；零/多命中报错）。写定位 = 会话可见集：
    *  agentKey/workspaceKey 显式给定则覆盖写方会话的推导值。审批载荷携带将被改写的旧条目全文。 */
-  replace(input: { track: MemoryTrack; scope: MemoryScope; match: string; text: string; source?: string; agentKey?: string; workspaceKey?: string }, write: MemoryWriteContext): Promise<{ previous: MemoryEntry; entry: MemoryEntry; usage: MemoryUsage }>
+  replace(input: { track: MemoryTrack; scope: MemoryScope; match: string; text: string; source?: string; agentKey?: string; workspaceKey?: string; tags?: string[] }, write: MemoryWriteContext): Promise<{ previous: MemoryEntry; entry: MemoryEntry; usage: MemoryUsage }>
 
   /** 按唯一子串删除（审批门；零/多命中报错）。写定位 = 会话可见集；审批载荷携带将被删除的条目全文。 */
   remove(input: { track: MemoryTrack; scope: MemoryScope; match: string; agentKey?: string; workspaceKey?: string }, write: MemoryWriteContext): Promise<{ entry: MemoryEntry; usage: MemoryUsage }>
 
   /** 整合多条为一条（一次审批 + Provider 单事务原子执行；零/多命中或超预算响亮失败）。 */
-  consolidate(input: { track: MemoryTrack; scope: MemoryScope; matches: string[]; text: string; source?: string; workspaceKey?: string; agentKey?: string }, write: MemoryWriteContext): Promise<{ removed: MemoryEntry[]; entry: MemoryEntry; usage: MemoryUsage }>
+  consolidate(input: { track: MemoryTrack; scope: MemoryScope; matches: string[]; text: string; source?: string; workspaceKey?: string; agentKey?: string; tags?: string[] }, write: MemoryWriteContext): Promise<{ removed: MemoryEntry[]; entry: MemoryEntry; usage: MemoryUsage }>
 
   /** 批量种子（一次 ask 审批整批；任一条超预算整批拒绝）。 */
   seed(inputs: MemoryEntryInput[], write: MemoryWriteContext): Promise<{ added: number; entries: MemoryEntry[] }>
+}
+
+/** 适配器描述（/memory adapters 与接入指南展示面）。 */
+export interface MemoryAdapterDescriptor {
+  /** 唯一适配器 id（小写 kebab-case）。 */
+  id: string
+  /** 人类可读名称。 */
+  name: string
+  /** 一句话说明转换方向与适用格式。 */
+  description: string
+  /** 适配器自身版本。 */
+  version: string
+  /** 可导入的外部格式标签。 */
+  importFormats: string[]
+  /** 导出产出的外部格式标签。 */
+  exportFormat: string
+}
+
+/** 适配器契约（第三方记忆插件实现面）：外部格式 ⇄ 协议条目。 */
+export interface MemoryAdapter extends MemoryAdapterDescriptor {
+  /** 外部载荷 → 协议条目输入（只转换，绝不调模型抽取）。 */
+  adapt(payload: unknown): { entries: MemoryEntryInput[] }
+  /** 协议条目 → 外部载荷（JSON 安全，只读转换）。 */
+  export(entries: MemoryEntry[]): unknown
+}
+
+/** ctx.memoryAdapters 服务（dsh-memory-protocol v1 适配器注册表）。 */
+export interface MemoryAdaptersService {
+  /** 注册适配器（返回 disposer；id 冲突响亮失败）。 */
+  register(adapter: MemoryAdapter): () => void
+  /** 已注册适配器描述（按 id 排序）。 */
+  list(): MemoryAdapterDescriptor[]
+  /** 外部载荷 → 协议条目输入（未知 id / 非法载荷结构化报错）。 */
+  adapt(adapterId: string, payload: unknown): { entries: MemoryEntryInput[] }
+  /** 协议条目 → 外部格式载荷（只读）。 */
+  export(adapterId: string, entries: MemoryEntry[]): unknown
 }
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /** dsh-memento 记忆服务（本插件提供；其它插件可读写同一 store）。 */
     memory: MemoryService
+    /** dsh-memory-protocol v1 适配器注册表（本插件提供；第三方记忆插件注册自己的适配器）。 */
+    memoryAdapters: MemoryAdaptersService
     /** 审批 seam（本插件消费的最小面；由 DSH interaction 能力提供）。 */
     approval: MemoryApprovalLike
   }
