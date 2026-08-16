@@ -47,6 +47,7 @@ Depois, na Web UI: peça ao modelo para lembrar algo → aprove a escrita → in
 | | Componente | O que você recebe |
 | --- | --- | --- |
 | 🧩 Service Definition | `ctx.memory` — `add` / `replace` / `remove` / `query` / `seed` / `budgets()` | Serviço tipado, declarado por merge; os métodos de escrita impõem o portão internamente |
+| 🧬 Registro de adaptadores | `ctx.memoryAdapters` — `register` / `list` / `adapt` / `export` | Plugins de memória de terceiros adaptam o próprio armazenamento ao protocolo; adaptadores de referência para mem0, `memory.md` do Hermes e `CLAUDE.md` já vêm embutidos |
 | 💾 Provider | `lib/store.mjs` — `node:sqlite` arquivo único (`$DSH_HOME/dsh-memento/memory.db`, WAL) | Zero dependências, zero rede; tabelas de entrada + auditoria; correspondência por substring única |
 | 🛠 Consumers | ferramenta `memory` · injeção de snapshot congelado (seção de system-prompt, ordem `-50`) · ferramenta `memory_recall` · comando `/memory` · painel Web somente leitura | Escritas/leituras voltadas ao modelo, snapshot congelado com cabeçalho de orçamento, recuperação em duas partes, comando do usuário, gaveta do navegador |
 
@@ -102,9 +103,9 @@ Todo campo é um `Config` Schemastery validado; valores inválidos falham ruidos
 
 ## 🛠 Ferramentas e superfícies
 
-- **`memory`** — add/replace/remove/consolidate/query com orientação de Salvar/Pular embutida na descrição (salve preferências do usuário, correções, fatos do ambiente, convenções, lições; pule trivialidades, fatos rederiváveis, despejos, caminhos de uso único). Escritas passam pelo portão de aprovação; leituras são livres; replace/remove miram uma **substring única** (correspondências ambíguas falham com a lista de candidatos); consolidate mescla 1..20 entradas em uma com uma única aprovação e uma escrita atômica.
+- **`memory`** — add/replace/remove/consolidate/query com orientação de Salvar/Pular embutida na descrição (salve preferências do usuário, correções, fatos do ambiente, convenções, lições; pule trivialidades, fatos rederiváveis, despejos, caminhos de uso único). Escritas passam pelo portão de aprovação; leituras são livres; replace/remove miram uma **substring única** (correspondências ambíguas falham com a lista de candidatos); consolidate mescla 1..20 entradas em uma com uma única aprovação e uma escrita atômica. Entradas carregam os campos do protocolo v1: `tags` curtas (≤16 × ≤32 caracteres) e uma `version` por entrada que incrementa a cada replace.
 - **`memory_recall`** — recuperação em duas partes: correspondências de memória limitadas **mais** correspondências recentes do histórico da sessão via `ctx.sessionQuery` (degrada graciosamente para somente memória onde o serviço está ausente).
-- **`/memory`** — comando acionado pelo usuário (não um turno do modelo): `list` · `query <word>` · `add [--track=user|agent] [--scope=user-global|workspace] <text>` · `remove [flags] <substring>` · `consolidate [flags] <substring...> => <text>` · `proposals [approve|dismiss <id>]` · `budgets` · `audit` · `export` · `import <path>`. Escritas por comando passam pela mesma cascata + política; a auditoria cai na tabela de auditoria do plugin + `command/done`. `export` é somente leitura e despeja todas as entradas + orçamentos como um documento JSON; `import` o restaura (caminho de arquivo ou JSON inline, uma única aprovação, orçamentos pré-verificados) — um ciclo completo de backup/migração. Entradas importadas ganham ids e carimbos de tempo novos; propostas, linhas de auditoria e contadores de recuperação não são migrados.
+- **`/memory`** — comando acionado pelo usuário (não um turno do modelo): `list` · `query <word>` · `add [--track=user|agent] [--scope=user-global|workspace] <text>` · `remove [flags] <substring>` · `consolidate [flags] <substring...> => <text>` · `proposals [approve|dismiss <id>]` · `budgets` · `audit` · `export [--adapter=<id>]` · `import <path> [--adapter=<id>]` · `adapters`. Escritas por comando passam pela mesma cascata + política; a auditoria cai na tabela de auditoria do plugin + `command/done`. `export` é somente leitura e despeja todas as entradas + orçamentos como um documento JSON; `import` o restaura (caminho de arquivo ou JSON inline, uma única aprovação, orçamentos pré-verificados) — um ciclo completo de backup/migração. Os verbos de adaptador convertem formatos de memória externos: `import --adapter=mem0 <facts.json>` alimenta fatos pelo `seed` com portão de aprovação; `export --adapter=<id>` imprime uma conversão somente leitura. Entradas importadas ganham ids e carimbos de tempo novos; propostas, linhas de auditoria e contadores de recuperação não são migrados.
 - **Propostas auto-capturadas** — após uma compactação de sessão bem-sucedida, o resumo vira uma proposta de memória pendente (`agent/workspace`); aprovar a escreve pelo portão de aprovação, descartar a remove. Propostas pendentes aparecem no snapshot congelado e no painel.
 - **Painel Web** — gaveta `dsh.client` sem build: navegue pelas entradas por trilha/camada, pesquise, veja barras de orçamento e o fim da auditoria. Somente leitura por design: escritas e aprovação acontecem pela ferramenta `memory` e pela UI de aprovação embutida.
 
@@ -136,6 +137,22 @@ E as partes que recusamos deliberadamente: auto-resumir de forma oculta para est
 
 O nome é **`dsh-memento`** (publicado no npm e no GitHub). Não `dsh-recall` (confundível com dsh-external/Recall), não o nome legado excluído `dsh-memory`.
 
+## 🧬 dsh-memory-protocol v1
+
+dsh-memento é o ensaio comunitário do **protocolo de memória do DSH** — uma forma candidata para uma emenda oficial `ctx.memory`. O protocolo normaliza a emenda deste plugin em um contrato entre plugins: especificação de entradas (duas trilhas × duas camadas × chave por agente + `tags` + `version` por entrada), semântica das operações de escrita (idempotência por escritas condicionais de substring única, cargas "aprove o que vê"), o contrato de auditoria (toda escrita é reconstruível a partir de `approval/asked` + `approval/decided` + o livro-razão do provedor), o modelo de orçamento (semântica de `BUDGET_EXCEEDED` / `AMBIGUOUS_MATCH`) e as regras de versionamento/migração de schema.
+
+- **Especificação** — [docs/protocol-v1.md](docs/protocol-v1.md) (chinês: [protocol-v1.zh.md](docs/protocol-v1.zh.md)); JSON Schema normativo em [docs/schemas/dsh-memory-protocol-v1.schema.json](docs/schemas/dsh-memory-protocol-v1.schema.json).
+- **Registro de adaptadores** — `ctx.memoryAdapters` permite que plugins de memória de terceiros falem o protocolo registrando um conversor de dados puro (`register()` reversível; a importação passa pelo `seed` com portão de aprovação, a exportação é somente leitura). Guia: [docs/adapters-guide.md](docs/adapters-guide.md) (chinês: [adapters-guide.zh.md](docs/adapters-guide.zh.md)).
+
+| Adaptador embutido | Formato externo | Notas |
+| --- | --- | --- |
+| `mem0` | coleções de fatos mem0 (`{facts: [{memory, metadata?}]}`) | `metadata.category`/`metadata.tags` viram tags; arrays `messages` crus são rejeitados — adaptadores convertem, nunca extraem |
+| `hermes-memory-md` | `memory.md` do Hermes (`## seção` + marcadores) | nomes de seção viram tags; prosa sem marcadores falha ruidosamente |
+| `claude-code-memory-md` | markdown estilo `CLAUDE.md` (títulos, marcadores, parágrafos) | marcadores e parágrafos viram entradas; nomes de seção viram tags |
+
+- **Suíte de conformidade** — [test/protocol-conformance/](test/protocol-conformance/README.md): um conjunto de casos distribuível que qualquer provedor que reivindique compatibilidade executa (`node test/protocol-conformance/run.mjs --provider ./sua-fábrica.mjs`); o CI deste repositório executa contra o próprio provedor como referência dourada (`npm run test:conformance`).
+- **Proposta de upstream** — [docs/upstream-proposal.md](docs/upstream-proposal.md) (chinês: [upstream-proposal.zh.md](docs/upstream-proposal.zh.md)): por que a emenda oficial `ctx.memory` deveria adotar o protocolo, as diferenças e o caminho de migração.
+
 ## 🔒 Limites de segurança
 
 - **Somente serviços públicos** (`tools`, `systemPrompt`, a emenda de aprovação). Sem mudanças em engine / agent-loop / apiproxy / UI oficial.
@@ -153,7 +170,8 @@ O nome é **`dsh-memento`** (publicado no npm e no GitHub). Não `dsh-recall` (c
 
 ```sh
 npm install
-npm test                # node --test: 115 testes — orçamento, substring única, política do portão, armazenamento, snapshot, integração com mock-ctx (invariantes S2/S3), comando/recuperação/painel/importação V2
+npm test                # node --test: 133 testes — orçamento, substring única, política do portão, armazenamento, snapshot, integração com mock-ctx (invariantes S2/S3), comando/recuperação/painel/importação V2, adaptadores de protocolo + conformidade
+npm run test:conformance  # suíte de conformidade dsh-memory-protocol v1 (referência dourada; terceiros usam --provider)
 npm run typecheck       # portão tsc --checkJs sobre index.mjs / lib / scripts
 npm run check:coverage  # portão de cobertura de linhas: lib ≥90%, index.mjs ≥85%, todos ≥90%
 npm run check:readmes   # portão de coerência dos cinco README

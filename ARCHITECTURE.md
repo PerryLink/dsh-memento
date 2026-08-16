@@ -139,3 +139,39 @@ memory 工具(add)
 
 全部字段可 cordis.yml 覆盖，schema 见 `index.mjs` 的 `Config`；完整字段表（`enabled` / `dbPath` / `budgets` / `writePolicy` / `writePolicies` / `language` / `snapshotOrder` / `maxEntriesPerQuery` / `commandListLimit` / `commandAuditLimit` / `recall.*` / `panelEntriesLimit` / `panelAuditLimit` / `auditRetentionDays` / `proposals.*`）以 README 配置表为准，本文件不再逐项复制以免漂移。非法值加载期响亮失败。
 - **harness 主目录回退（0.3.1）**：`dbPath` 为空或相对路径时，基准目录取 `$DSH_HOME`；`dsh web` 启动不会把官方 `resolveDshHome()` 解析出的主目录写回 `process.env.DSH_HOME`，因此未导出时回退 `~/.dsh`（与官方回退同语义）——否则默认 Windows 配置会在真实 boot 时整体崩溃（issue #1）。`lib/` 零 DSH 依赖的红线不允许 import `@deepseek-ai/dsh-home-paths`，用 `os.homedir()` 复刻同一回退。
+
+## 协议 v1（0.4.0：dsh-memory-protocol 社区预演）
+
+### 13. 协议与实现分离：写语义抽进 lib/protocol.mjs（零 DSH 依赖）
+
+0.4.0 把 MemoryService 的写语义整体抽进 `lib/protocol.mjs` 的 `MemoryProtocolCore`：预算预检 →
+gate → 预算复审 → 落盘 → 审计的完整流水线、唯一子串定位、`<action>-denied` 审计行、协议级
+校验（`validateMemoryEntry` / `validateExportEnvelope` / `validateAuditRow` / `normalizeTags`）。
+`index.mjs` 的 `MemoryService` 变成薄子类，只注入两件 DSH 专属物：审批传输（ctx.approval）与
+会话事件派发（memory/* 已知类型自适应门，见决策 4）。一致性套件的黄金参考 = 同一 core +
+自动放行 gate——协议声称与实现同源，不存在"套件通过、实现另写一份"的漂移空间。协议常量
+（`PROTOCOL_URI`、标签上限等）在 protocol.mjs；错误码语义进协议文档（docs/protocol-v1.md §7）。
+
+### 14. store schema v4：条目 tags + version（协议 v1 条目规范）
+
+- `tags`：JSON 数组列；协议常量上限 16 个 × 每标签 32 字符，trim/去重/禁控制字符，
+  协议层 `normalizeTags` 校验（预算只计 text，tags 不计）。
+- `version`：整数列，新条目 1；每次 `replace` 在 Provider 事务内 `version = version + 1`；
+  consolidate/seed/导入产生全新 version 1 条目。审计链可经 entryId + 逐次审计行重建同一 id 的
+  演进史。
+- 迁移：SCHEMA_VERSION 3 → 4 走既有逐级迁移梯子（`V4_SCHEMA_SQL`），旧库无损升级；
+  过新版本照旧响亮拒绝。
+
+### 15. 适配器注册表（ctx.memoryAdapters）与一致性套件
+
+- `lib/registry.mjs` 的 `MemoryAdapterRegistry`：`register`（返回 disposer，id 冲突响亮）/
+  `list` / `adapt` / `export`；index.mjs 经 `ctx.effect` 注册三个参考适配器
+  （`lib/adapters.mjs`：mem0 / hermes-memory-md / claude-code-memory-md），随插件生命周期可逆。
+  适配器是纯数据转换器——只转换、绝不调模型抽取（载荷无事实条目时 `ADAPTER_PAYLOAD` 响亮失败）。
+- 命令面：`/memory adapters`、`export --adapter=<id>`（只读 stdout 转换）、
+  `import --adapter=<id> <路径|内联 JSON>`（转换 → `service.seed`：一次审批 + 全量预算预检 +
+  单事务 + 逐条审计）。
+- `test/protocol-conformance/`：可对外分发的用例集（suite/golden/run + Provider 契约 README），
+  仓库 CI 以黄金参考全绿；第三方 Provider 拷贝目录即可跑同一套用例。协议文档：
+  `docs/protocol-v1.md`（双语）、`docs/schemas/dsh-memory-protocol-v1.schema.json`、
+  `docs/adapters-guide.md`（双语）、`docs/upstream-proposal.md`（双语，官方 seam 采纳论证与迁移路径）。

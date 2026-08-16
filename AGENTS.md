@@ -7,13 +7,16 @@
 根目录只放发布到 GitHub / npm 的文件；本地工程文件一律收进 `dev/`（gitignore，永不提交）。
 
 ```
-index.mjs            插件入口（唯一 host 面文件）：服务/审批门/工具/快照段注册
-types.d.ts           类型契约：ctx.memory 服务与 memory/* SessionEventMap 声明合并
+index.mjs            插件入口（唯一 host 面文件）：服务/审批门/工具/快照段/适配器注册表注册
+types.d.ts           类型契约：ctx.memory / ctx.memoryAdapters 服务与 memory/* SessionEventMap 声明合并
 lib/constants.mjs    词汇表与协议常量（轨道/作用域/错误码/schema 版本/硬上限，零依赖）
 lib/errors.mjs       结构化领域错误（code + details，零依赖）
 lib/budget.mjs       每轨每层硬字符预算（纯函数，零依赖）
 lib/match.mjs        唯一子串匹配（零/多命中语义，零依赖）
 lib/gate.mjs         审批门策略与 reason 编解码（零依赖）
+lib/protocol.mjs     协议 v1：写语义核心 MemoryProtocolCore + 条目/信封/审计校验（零 DSH 依赖）
+lib/registry.mjs     适配器注册表（register 可逆 / list / adapt / export，零依赖）
+lib/adapters.mjs     参考适配器：mem0 / hermes-memory-md / claude-code-memory-md（零依赖）
 lib/snapshot.mjs     冻结快照渲染（纯函数，零依赖）
 lib/workspace.mjs    工作区键规范化（Windows 大小写不敏感，零依赖）
 lib/extract.mjs      会话事件文本抽取（memory_recall 历史片段用，零依赖）
@@ -22,15 +25,19 @@ lib/store.mjs        node:sqlite Provider：条目表+审计账本+迁移（零�
 client/client.js     Web 面板（零构建 vanilla，只读；en/zh 随 language 配置；经 dsh.client 注入）
 scripts/             机械门：verify-readmes.mjs（五语一致性）、check-coverage.mjs（覆盖率）
 cordis.patch.yml     bundle 声明（insert memento）
-package.json         npm 元数据；files 白名单 = 发布内容
+package.json         npm 元数据；files 白名单 = 发布内容（含 docs/ 协议三件套与一致性套件）
 package-lock.json    锁文件（CI 用，不进 npm 包）
 tsconfig.check.json  tsc --checkJs 类型检查门
 .github/workflows/   CI（三平台×双 Node）、每周 next-rc 兼容探针、v* 标签 npm 发布
 README.md            英文主介绍（GitHub 默认页；五语源文）
 README.{zh,es,pt,hi}.md   中/西/葡/印地语介绍（顶部互链，与英文同 commit 更新）
 ARCHITECTURE.md      三角色 seam 架构图与全部设计决策
+docs/protocol-v1.md(+.zh)       dsh-memory-protocol v1 规范（双语；docs/schemas/ 为规范性 JSON Schema）
+docs/adapters-guide.md(+.zh)    第三方插件接入指南（双语）
+docs/upstream-proposal.md(+.zh) 官方 ctx.memory seam 采纳论证与迁移路径（双语）
+test/                单测 + mock ctx 集成测试（进 GitHub）
+test/protocol-conformance/  协议一致性套件（可对外分发：进 GitHub 也进 npm 包）
 LICENSE / THIRD_PARTY_NOTICES.md   Apache-2.0 + 复用出处标注
-test/                单测 + mock ctx 集成测试（进 GitHub，不进 npm 包）
 dev/                 ❌ 本地工程面：冒烟脚本、夹具、演示——永不提交
 ```
 
@@ -42,11 +49,12 @@ dev/                 ❌ 本地工程面：冒烟脚本、夹具、演示——�
 
 ```sh
 npm install             # 安装 peer 依赖（@deepseek-ai/dsh-tools、schemastery 等）
-npm test                # node --test 跑 test/*.test.mjs
+npm test                # node --test 跑 test/*.test.mjs（含协议一致性套件的仓库门）
 npm run coverage        # 展示内置覆盖率报告
 npm run check:coverage  # 覆盖率门：lib ≥90%、index.mjs ≥85%、all files ≥90%
 npm run typecheck       # tsc --checkJs 类型检查门
 npm run check:readmes   # 五语 README 一致性门
+npm run test:conformance  # 协议一致性套件（黄金参考；第三方 Provider 用 run.mjs --provider）
 ```
 
 无构建步骤：纯 ESM，`index.mjs`/`lib/` 即发布产物。
@@ -63,7 +71,7 @@ npm run check:readmes   # 五语 README 一致性门
 - **只消费公开服务**：`tools`、`systemPrompt`、审批 seam（`inject` 声明）。不修改 DSH 引擎 / agent-loop / apiproxy / 官方 UI 包。
 - **注册即 effect**：一切贡献走 `ctx.effect()` / `ctx.on()` / 服务 `register()`（返回 disposer）；绝不手动收尾。
 - **模型可见 ⟺ 落盘**：注入模型的快照文本可自会话日志重建（request/header.system + snapshot 审计行 + 审批 reason 携带完整载荷）。
-- **审批门不可绕过**：写路径的强制点位于 `MemoryService` 写方法内部（`ctx.approval.request`），不在工具层；`writePolicy` 是 Config，模型不可见、不可改；禁用（`enabled:false`）时一切贡献整体消失，不留半残状态。
+- **审批门不可绕过**：写路径的强制点位于 `MemoryProtocolCore`（`lib/protocol.mjs`）写方法内部（`MemoryService` 继承它并注入 `ctx.approval.request` 传输），不在工具层；`writePolicy` 是 Config，模型不可见、不可改；禁用（`enabled:false`）时一切贡献整体消失，不留半残状态。
 - **失败要大声**：库损坏/版本过新/非法配置在加载期抛错；写满报 `BUDGET_EXCEEDED`；子串歧义报 `AMBIGUOUS_MATCH`；绝不静默吞、绝不静默截断。
 - **本地优先**：零网络、零凭据；记忆库只写 `dbPath`（默认 `$DSH_HOME/dsh-memento/memory.db`），POSIX 权限 0600。
 - **systemPrompt 提供者必须同步**（rc.6 不 await）：SQLite 同步读 + WeakMap 按 Session 冻结。

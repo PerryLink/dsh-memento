@@ -47,6 +47,7 @@ Then, in the Web UI: ask the model to remember something → approve the write �
 | | Component | What you get |
 | --- | --- | --- |
 | 🧩 Service Definition | `ctx.memory` — `add` / `replace` / `remove` / `query` / `seed` / `budgets()` | Typed, merge-declared service; write methods enforce the gate internally |
+| 🧬 Adapter registry | `ctx.memoryAdapters` — `register` / `list` / `adapt` / `export` | Third-party memory plugins adapt their own stores into the protocol; reference adapters for mem0, Hermes `memory.md`, and `CLAUDE.md` ship built-in |
 | 💾 Provider | `lib/store.mjs` — `node:sqlite` single file (`$DSH_HOME/dsh-memento/memory.db`, WAL) | Zero dependencies, zero network; entry + audit tables; unique-substring match |
 | 🛠 Consumers | `memory` tool · frozen snapshot injection (system-prompt section, order `-50`) · `memory_recall` tool · `/memory` command · read-only Web panel | Model-facing writes/reads, budget-headed frozen snapshot, two-part recall, user-side command, browser drawer |
 
@@ -102,9 +103,9 @@ Every field is a validated Schemastery `Config`; invalid values fail loudly at l
 
 ## 🛠 Tools & surfaces
 
-- **`memory`** — add/replace/remove/consolidate/query with Save/Skip guidance embedded in the description (save user preferences, corrections, environment facts, conventions, lessons; skip trivia, re-derivable facts, dumps, one-off paths). Writes ride the approval gate; reads are free; replace/remove target a **unique substring** (ambiguous matches fail with the candidate list); consolidate merges 1..20 entries into one with a single approval and one atomic write.
+- **`memory`** — add/replace/remove/consolidate/query with Save/Skip guidance embedded in the description (save user preferences, corrections, environment facts, conventions, lessons; skip trivia, re-derivable facts, dumps, one-off paths). Writes ride the approval gate; reads are free; replace/remove target a **unique substring** (ambiguous matches fail with the candidate list); consolidate merges 1..20 entries into one with a single approval and one atomic write. Entries carry protocol v1 fields: short `tags` (≤16 × ≤32 chars) and a per-entry `version` that increments on every replace.
 - **`memory_recall`** — two-part recall: bounded memory matches **plus** recent session-history matches via `ctx.sessionQuery` (degrades gracefully to memory-only where the service is absent).
-- **`/memory`** — user-triggered command (not a model turn): `list` · `query <word>` · `add [--track=user|agent] [--scope=user-global|workspace] <text>` · `remove [flags] <substring>` · `consolidate [flags] <substring...> => <text>` · `proposals [approve|dismiss <id>]` · `budgets` · `audit` · `export` · `import <path>`. Command writes ride the same waterfall + policy; audit lands in the plugin audit table + `command/done`. `export` is read-only and dumps all entries + budgets as one JSON document; `import` restores it (file path or inline JSON, single approval, budget pre-checked) — a complete backup/migration round-trip. Imported entries get fresh ids and timestamps; proposals, audit rows and recall counts are not migrated.
+- **`/memory`** — user-triggered command (not a model turn): `list` · `query <word>` · `add [--track=user|agent] [--scope=user-global|workspace] <text>` · `remove [flags] <substring>` · `consolidate [flags] <substring...> => <text>` · `proposals [approve|dismiss <id>]` · `budgets` · `audit` · `export [--adapter=<id>]` · `import <path> [--adapter=<id>]` · `adapters`. Command writes ride the same waterfall + policy; audit lands in the plugin audit table + `command/done`. `export` is read-only and dumps all entries + budgets as one JSON document; `import` restores it (file path or inline JSON, single approval, budget pre-checked) — a complete backup/migration round-trip. Adapter verbs convert external memory formats: `import --adapter=mem0 <facts.json>` feeds facts through the approval-gated `seed`; `export --adapter=<id>` prints a read-only conversion to stdout. Imported entries get fresh ids and timestamps; proposals, audit rows and recall counts are not migrated.
 - **Auto-capture proposals** — after a successful session compaction, the summary lands as a pending memory proposal (`agent/workspace`); approving writes it through the approval gate, dismissing drops it. Pending proposals appear in the frozen snapshot and the panel.
 - **Web panel** — zero-build `dsh.client` drawer: browse entries by track/layer, search, budget bars, audit tail. Read-only by design: writes and approval happen through the `memory` tool and the built-in approval UI.
 
@@ -136,6 +137,22 @@ And the parts we deliberately refused: hidden auto-summarization into model-priv
 
 The name is **`dsh-memento`** (published on npm and GitHub). Not `dsh-recall` (confusable with dsh-external/Recall), not the deleted legacy name `dsh-memory`.
 
+## 🧬 dsh-memory-protocol v1
+
+dsh-memento is the community rehearsal of the **DSH memory protocol** — a candidate shape for an official `ctx.memory` seam. The protocol normalizes this plugin's seam into a cross-plugin contract: entry spec (two tracks × two layers × per-agent key + `tags` + per-entry `version`), write-operation semantics (idempotency by unique-substring conditional writes, approve-what-you-see payloads), the audit contract (every write reconstructable from `approval/asked` + `approval/decided` + the provider ledger), the budget model (`BUDGET_EXCEEDED` / `AMBIGUOUS_MATCH` semantics), and schema versioning/migration rules.
+
+- **Spec** — [docs/protocol-v1.md](docs/protocol-v1.md) (中文: [protocol-v1.zh.md](docs/protocol-v1.zh.md)); normative JSON Schema at [docs/schemas/dsh-memory-protocol-v1.schema.json](docs/schemas/dsh-memory-protocol-v1.schema.json).
+- **Adapter registry** — `ctx.memoryAdapters` lets third-party memory plugins speak the protocol by registering a pure data converter (reversible `register()`; import rides the approval-gated `seed`, export is read-only). Onboarding: [docs/adapters-guide.md](docs/adapters-guide.md) (中文: [adapters-guide.zh.md](docs/adapters-guide.zh.md)).
+
+| Built-in adapter | External format | Notes |
+| --- | --- | --- |
+| `mem0` | mem0 fact collections (`{facts: [{memory, metadata?}]}`) | `metadata.category`/`metadata.tags` become tags; raw `messages` arrays are rejected — adapters convert, never extract |
+| `hermes-memory-md` | Hermes `memory.md` (`## section` + bullets) | section names become tags; non-bullet prose fails loudly |
+| `claude-code-memory-md` | `CLAUDE.md`-style markdown (headings, bullets, paragraphs) | bullets and paragraphs become entries; section names become tags |
+
+- **Conformance suite** — [test/protocol-conformance/](test/protocol-conformance/README.md): a distributable case set any provider claiming compatibility runs (`node test/protocol-conformance/run.mjs --provider ./your-factory.mjs`); this repo's CI runs it against its own provider as the golden reference (`npm run test:conformance`).
+- **Upstream proposal** — [docs/upstream-proposal.md](docs/upstream-proposal.md) (中文: [upstream-proposal.zh.md](docs/upstream-proposal.zh.md)): why the official `ctx.memory` seam should adopt the protocol, the differences, and the migration path.
+
 ## 🔒 Security boundaries
 
 - **Public services only** (`tools`, `systemPrompt`, the approval seam). No engine / agent-loop / apiproxy / official-UI changes.
@@ -153,7 +170,8 @@ The name is **`dsh-memento`** (published on npm and GitHub). Not `dsh-recall` (c
 
 ```sh
 npm install
-npm test                # node --test: 115 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel/import
+npm test                # node --test: 133 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel/import, protocol adapters + conformance
+npm run test:conformance  # dsh-memory-protocol v1 conformance suite (golden reference; third-party providers use --provider)
 npm run typecheck       # tsc --checkJs gate over index.mjs / lib / scripts
 npm run check:coverage  # line-coverage gate: lib ≥90%, index.mjs ≥85%, all files ≥90%
 npm run check:readmes   # five-language README consistency gate

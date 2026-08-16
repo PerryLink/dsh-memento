@@ -47,6 +47,7 @@ dsh --profile web --dump-config               # expect a "# == dsh-memento" laye
 | | घटक | आपको क्या मिलता है |
 | --- | --- | --- |
 | 🧩 Service Definition | `ctx.memory` — `add` / `replace` / `remove` / `query` / `seed` / `budgets()` | टाइप्ड, merge-घोषित सेवा; लेखन विधियाँ द्वार को आंतरिक रूप से लागू करती हैं |
+| 🧬 एडाप्टर रजिस्ट्री | `ctx.memoryAdapters` — `register` / `list` / `adapt` / `export` | तृतीय-पक्ष मेमोरी प्लगइन अपने स्टोर को प्रोटोकॉल में ढालते हैं; mem0, Hermes `memory.md` व `CLAUDE.md` के संदर्भ एडाप्टर बिल्ट-इन आते हैं |
 | 💾 Provider | `lib/store.mjs` — `node:sqlite` एकल फ़ाइल (`$DSH_HOME/dsh-memento/memory.db`, WAL) | शून्य निर्भरता, शून्य नेटवर्क; एंट्री + ऑडिट टेबल; यूनीक-सबस्ट्रिंग मिलान |
 | 🛠 Consumers | `memory` टूल · फ़्रोज़न स्नैपशॉट इंजेक्शन (system-prompt सेक्शन, क्रम `-50`) · `memory_recall` टूल · `/memory` कमांड · रीड-ओनली Web पैनल | मॉडल-मुखी लेखन/पठन, बजट-शीर्ष फ़्रोज़न स्नैपशॉट, दो-भाग रिकॉल, यूज़र-साइड कमांड, ब्राउज़र ड्रॉअर |
 
@@ -102,9 +103,9 @@ dsh plugin --profile <name> remove dsh-memento       # uninstall: DB + session l
 
 ## 🛠 टूल और सतहें
 
-- **`memory`** — विवरण में अंतर्निहित Save/Skip मार्गदर्शन के साथ add/replace/remove/consolidate/query (उपयोगकर्ता प्राथमिकताएँ, सुधार, पर्यावरण तथ्य, परंपराएँ, सबक सहेजें; तुच्छ बातें, पुनः-व्युत्पन्न तथ्य, डंप, एक-बार के पथ छोड़ें)। लेखन अनुमोदन द्वार से गुज़रते हैं; पठन निःशुल्क हैं; replace/remove एक **यूनीक सबस्ट्रिंग** को लक्षित करते हैं (अस्पष्ट मिलान उम्मीदवार सूची के साथ विफल होते हैं); consolidate एक अनुमोदन और एक परमाणु लेखन से 1..20 प्रविष्टियों को एक में मिलाता है।
+- **`memory`** — विवरण में अंतर्निहित Save/Skip मार्गदर्शन के साथ add/replace/remove/consolidate/query (उपयोगकर्ता प्राथमिकताएँ, सुधार, पर्यावरण तथ्य, परंपराएँ, सबक सहेजें; तुच्छ बातें, पुनः-व्युत्पन्न तथ्य, डंप, एक-बार के पथ छोड़ें)। लेखन अनुमोदन द्वार से गुज़रते हैं; पठन निःशुल्क हैं; replace/remove एक **यूनीक सबस्ट्रिंग** को लक्षित करते हैं (अस्पष्ट मिलान उम्मीदवार सूची के साथ विफल होते हैं); consolidate एक अनुमोदन और एक परमाणु लेखन से 1..20 प्रविष्टियों को एक में मिलाता है। प्रविष्टियाँ प्रोटोकॉल v1 फ़ील्ड रखती हैं: छोटे `tags` (≤16 × ≤32 वर्ण) और प्रति-प्रविष्टि `version` जो हर replace पर बढ़ता है।
 - **`memory_recall`** — दो-भाग रिकॉल: परिबद्ध मेमोरी मिलान **और साथ में** `ctx.sessionQuery` के माध्यम से हाल के सेशन-इतिहास मिलान (जहाँ सेवा अनुपस्थित हो वहाँ केवल-मेमोरी पर सहजता से गिरता है)।
-- **`/memory`** — उपयोगकर्ता-ट्रिगर कमांड (मॉडल टर्न नहीं): `list` · `query <word>` · `add [--track=user|agent] [--scope=user-global|workspace] <text>` · `remove [flags] <substring>` · `consolidate [flags] <substring...> => <text>` · `proposals [approve|dismiss <id>]` · `budgets` · `audit` · `export` · `import <path>`। कमांड लेखन उसी वॉटरफॉल + नीति से गुज़रते हैं; ऑडिट प्लगइन ऑडिट टेबल + `command/done` में दर्ज होता है। `export` रीड-ओनली है और सभी प्रविष्टियाँ + बजट एक JSON दस्तावेज़ के रूप में निकालता है; `import` उसे वापस लाता है (फ़ाइल पथ या इनलाइन JSON, एक अनुमोदन, बजट पूर्व-जाँच) — पूर्ण बैकअप/माइग्रेशन चक्र। आयातित प्रविष्टियों को नए id व टाइमस्टैम्प मिलते हैं; प्रस्ताव, ऑडिट पंक्तियाँ और रिकॉल गणनाएँ माइग्रेट नहीं होतीं।
+- **`/memory`** — उपयोगकर्ता-ट्रिगर कमांड (मॉडल टर्न नहीं): `list` · `query <word>` · `add [--track=user|agent] [--scope=user-global|workspace] <text>` · `remove [flags] <substring>` · `consolidate [flags] <substring...> => <text>` · `proposals [approve|dismiss <id>]` · `budgets` · `audit` · `export [--adapter=<id>]` · `import <path> [--adapter=<id>]` · `adapters`। कमांड लेखन उसी वॉटरफॉल + नीति से गुज़रते हैं; ऑडिट प्लगइन ऑडिट टेबल + `command/done` में दर्ज होता है। `export` रीड-ओनली है और सभी प्रविष्टियाँ + बजट एक JSON दस्तावेज़ के रूप में निकालता है; `import` उसे वापस लाता है (फ़ाइल पथ या इनलाइन JSON, एक अनुमोदन, बजट पूर्व-जाँच) — पूर्ण बैकअप/माइग्रेशन चक्र। एडाप्टर क्रियाएँ बाहरी मेमोरी प्रारूप बदलती हैं: `import --adapter=mem0 <facts.json>` अनुमोदन-द्वार `seed` से तथ्य भरता है; `export --adapter=<id>` रीड-ओनली रूपांतरण छापता है। आयातित प्रविष्टियों को नए id व टाइमस्टैम्प मिलते हैं; प्रस्ताव, ऑडिट पंक्तियाँ और रिकॉल गणनाएँ माइग्रेट नहीं होतीं।
 - **ऑटो-कैप्चर प्रस्ताव** — सफल सेशन कॉम्पैक्शन के बाद सारांश एक लंबित मेमोरी प्रस्ताव (`agent/workspace`) बन जाता है; approve उसे अनुमोदन द्वार से लिखता है, dismiss उसे हटाता है। लंबित प्रस्ताव फ्रोज़न स्नैपशॉट और पैनल में दिखते हैं।
 - **Web पैनल** — शून्य-बिल्ड `dsh.client` ड्रॉअर: ट्रैक/लेयर के अनुसार एंट्री ब्राउज़ करें, खोजें, बजट बार, ऑडिट टेल। डिज़ाइन से रीड-ओनली: लेखन और अनुमोदन `memory` टूल और बिल्ट-इन अनुमोदन UI के माध्यम से होते हैं।
 
@@ -136,6 +137,22 @@ dsh-memento Claude Code, Codex या Hermes का पोर्ट नहीं
 
 नाम **`dsh-memento`** है (npm और GitHub पर प्रकाशित)। `dsh-recall` नहीं (dsh-external/Recall से भ्रमित होने वाला), और न ही हटाया गया पुराना नाम `dsh-memory`।
 
+## 🧬 dsh-memory-protocol v1
+
+dsh-memento **DSH मेमोरी प्रोटोकॉल** का सामुदायिक पूर्वाभ्यास है — आधिकारिक `ctx.memory` सीम के लिए एक उम्मीदवार रूप। प्रोटोकॉल इस प्लगइन की सीम को क्रॉस-प्लगइन अनुबंध में सामान्य करता है: एंट्री विनिर्देश (दो ट्रैक × दो लेयर × प्रति-एजेंट कुंजी + `tags` + प्रति-एंट्री `version`), लेखन-संचालन अर्थविज्ञान (यूनीक-सबस्ट्रिंग सशर्त लेखन से इडेम्पोटेंसी, approve-what-you-see पेलोड), ऑडिट अनुबंध (हर लेखन `approval/asked` + `approval/decided` + प्रोवाइडर बही से पुनर्निर्माण योग्य), बजट मॉडल (`BUDGET_EXCEEDED` / `AMBIGUOUS_MATCH` अर्थविज्ञान) तथा schema संस्करण/माइग्रेशन नियम।
+
+- **विनिर्देश** — [docs/protocol-v1.md](docs/protocol-v1.md) (चीनी: [protocol-v1.zh.md](docs/protocol-v1.zh.md)); मानक JSON Schema [docs/schemas/dsh-memory-protocol-v1.schema.json](docs/schemas/dsh-memory-protocol-v1.schema.json) पर।
+- **एडाप्टर रजिस्ट्री** — `ctx.memoryAdapters` से तृतीय-पक्ष मेमोरी प्लगइन एक शुद्ध डेटा-रूपांतरक पंजीकृत कर प्रोटोकॉल बोलते हैं (`register()` प्रतिवर्ती; आयात अनुमोदन-द्वार `seed` से गुज़रता है, निर्यात रीड-ओनली है)। मार्गदर्शिका: [docs/adapters-guide.md](docs/adapters-guide.md) (चीनी: [adapters-guide.zh.md](docs/adapters-guide.zh.md))।
+
+| बिल्ट-इन एडाप्टर | बाहरी प्रारूप | नोट्स |
+| --- | --- | --- |
+| `mem0` | mem0 तथ्य-संग्रह (`{facts: [{memory, metadata?}]}`) | `metadata.category`/`metadata.tags` टैग बनते हैं; कच्चे `messages` ऐरे अस्वीकृत होते हैं — एडाप्टर रूपांतरित करते हैं, निकालते नहीं |
+| `hermes-memory-md` | Hermes `memory.md` (`## अनुभाग` + बुलेट) | अनुभाग नाम टैग बनते हैं; बुलेट-रहित गद्य ज़ोर से विफल होता है |
+| `claude-code-memory-md` | `CLAUDE.md`-शैली markdown (शीर्षक, बुलेट, अनुच्छेद) | बुलेट व अनुच्छेद एंट्री बनते हैं; अनुभाग नाम टैग बनते हैं |
+
+- **अनुरूपता सूट** — [test/protocol-conformance/](test/protocol-conformance/README.md): वितरण योग्य केस-सेट जिसे संगतता का दावा करने वाला हर प्रोवाइडर चलाता है (`node test/protocol-conformance/run.mjs --provider ./आपकी-फैक्ट्री.mjs`); इस रेपो का CI इसे अपने प्रोवाइडर पर स्वर्ण संदर्भ के रूप में चलाता है (`npm run test:conformance`)।
+- **अपस्ट्रीम प्रस्ताव** — [docs/upstream-proposal.md](docs/upstream-proposal.md) (चीनी: [upstream-proposal.zh.md](docs/upstream-proposal.zh.md)): आधिकारिक `ctx.memory` सीम को प्रोटोकॉल क्यों अपनाना चाहिए, अंतर और माइग्रेशन पथ।
+
 ## 🔒 सुरक्षा सीमाएँ
 
 - **केवल सार्वजनिक सेवाएँ** (`tools`, `systemPrompt`, अनुमोदन सीम)। कोई engine / agent-loop / apiproxy / official-UI परिवर्तन नहीं।
@@ -153,7 +170,8 @@ dsh-memento Claude Code, Codex या Hermes का पोर्ट नहीं
 
 ```sh
 npm install
-npm test                # node --test: 115 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel/import
+npm test                # node --test: 133 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel/import, प्रोटोकॉल एडाप्टर + अनुरूपता
+npm run test:conformance  # dsh-memory-protocol v1 अनुरूपता सूट (स्वर्ण संदर्भ; तृतीय-पक्ष --provider उपयोग करें)
 npm run typecheck       # index.mjs / lib / scripts पर tsc --checkJs द्वार
 npm run check:coverage  # लाइन-कवरेज द्वार: lib ≥90%, index.mjs ≥85%, सभी ≥90%
 npm run check:readmes   # पाँच-भाषा README संगति द्वार

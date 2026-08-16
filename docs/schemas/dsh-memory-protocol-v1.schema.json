@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/PerryLink/dsh-memento/blob/main/docs/schemas/dsh-memory-protocol-v1.schema.json",
+  "title": "dsh-memory-protocol v1",
+  "description": "Normative JSON Schema for dsh-memory-protocol v1: memory entries, the export envelope, and audit rows. The prose spec is docs/protocol-v1.md; the zero-dependency validator in lib/protocol.mjs implements the same constraints.",
+  "type": "object",
+  "$defs": {
+    "track": {
+      "type": "string",
+      "enum": ["user", "agent"]
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["user-global", "workspace"]
+    },
+    "tag": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32
+    },
+    "tags": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/tag" }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "track",
+        "scope",
+        "workspaceKey",
+        "agentKey",
+        "text",
+        "source",
+        "tags",
+        "version",
+        "createdAt",
+        "updatedAt",
+        "lastRecalled",
+        "recallCount",
+        "sessionId"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+        },
+        "track": { "$ref": "#/$defs/track" },
+        "scope": { "$ref": "#/$defs/scope" },
+        "workspaceKey": { "type": "string" },
+        "agentKey": { "type": "string" },
+        "text": { "type": "string", "minLength": 1 },
+        "source": { "type": "string", "minLength": 1 },
+        "tags": { "$ref": "#/$defs/tags" },
+        "version": { "type": "integer", "minimum": 1 },
+        "createdAt": { "type": "integer", "minimum": 0 },
+        "updatedAt": { "type": "integer", "minimum": 0 },
+        "lastRecalled": { "type": ["integer", "null"], "minimum": 0 },
+        "recallCount": { "type": "integer", "minimum": 0 },
+        "sessionId": { "type": ["string", "null"] }
+      }
+    },
+    "entryInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["track", "scope", "text"],
+      "properties": {
+        "track": { "$ref": "#/$defs/track" },
+        "scope": { "$ref": "#/$defs/scope" },
+        "text": { "type": "string", "minLength": 1 },
+        "source": { "type": "string" },
+        "workspaceKey": { "type": "string" },
+        "agentKey": { "type": "string" },
+        "tags": { "$ref": "#/$defs/tags" }
+      }
+    },
+    "budgetRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["track", "scope", "used", "limit"],
+      "properties": {
+        "track": { "$ref": "#/$defs/track" },
+        "scope": { "$ref": "#/$defs/scope" },
+        "used": { "type": "integer", "minimum": 0 },
+        "limit": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "exportEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plugin", "schema", "exportedAt", "budgets", "entries"],
+      "properties": {
+        "plugin": { "const": "dsh-memento" },
+        "schema": { "const": "memory-export-v1" },
+        "exportedAt": { "type": "string", "format": "date-time" },
+        "budgets": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": { "$ref": "#/$defs/budgetRow" }
+        },
+        "entries": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": { "$ref": "#/$defs/entry" }
+        }
+      }
+    },
+    "auditRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "ts", "action", "track", "scope", "entryId", "text", "outcome", "source", "sessionId"],
+      "properties": {
+        "seq": { "type": "integer", "minimum": 0 },
+        "ts": { "type": "integer", "minimum": 0 },
+        "action": { "type": "string", "minLength": 1 },
+        "track": { "type": ["string", "null"] },
+        "scope": { "type": ["string", "null"] },
+        "entryId": { "type": ["string", "null"] },
+        "text": { "type": ["string", "null"] },
+        "outcome": { "type": ["string", "null"] },
+        "source": { "type": ["string", "null"] },
+        "sessionId": { "type": ["string", "null"] }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "INVALID_INPUT",
+            "WRITE_REQUIRES_AGENT",
+            "BUDGET_EXCEEDED",
+            "ENTRY_NOT_FOUND",
+            "AMBIGUOUS_MATCH",
+            "WRITE_DENIED",
+            "PROPOSAL_NOT_FOUND",
+            "STORE_CORRUPT",
+            "STORE_UNSUPPORTED_VERSION",
+            "ADAPTER_NOT_FOUND",
+            "ADAPTER_PAYLOAD"
+          ]
+        },
+        "message": { "type": "string" },
+        "outcome": { "type": "string" },
+        "usage": { "type": "object" },
+        "candidates": { "type": "integer" },
+        "sample": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/entry" },
+    { "$ref": "#/$defs/entryInput" },
+    { "$ref": "#/$defs/exportEnvelope" },
+    { "$ref": "#/$defs/auditRow" },
+    { "$ref": "#/$defs/error" }
+  ]
+}

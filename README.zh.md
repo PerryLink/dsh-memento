@@ -47,6 +47,7 @@ dsh --profile web --dump-config               # 应看到 "# == dsh-memento" 层
 | | 组件 | 你得到什么 |
 | --- | --- | --- |
 | 🧩 Service Definition | `ctx.memory` —— `add` / `replace` / `remove` / `query` / `seed` / `budgets()` | 类型化、声明合并的服务；写方法内部强制过门 |
+| 🧬 适配器注册表 | `ctx.memoryAdapters` —— `register` / `list` / `adapt` / `export` | 第三方记忆插件把自己的 store 接进协议；内置 mem0、Hermes `memory.md`、`CLAUDE.md` 参考适配器 |
 | 💾 Provider | `lib/store.mjs` —— `node:sqlite` 单文件（`$DSH_HOME/dsh-memento/memory.db`，WAL） | 零依赖、零网络；条目表 + 审计表；唯一子串匹配 |
 | 🛠 Consumers | `memory` 工具 · 冻结快照注入（systemPrompt 段，顺序 `-50`）· `memory_recall` 工具 · `/memory` 命令 · 只读 Web 面板 | 模型读写、带用量头的冻结快照、两段式召回、用户侧命令、浏览器抽屉 |
 
@@ -102,9 +103,9 @@ dsh plugin --profile <name> remove dsh-memento       # 卸载：库与会话日�
 
 ## 🛠 工具与观察面
 
-- **`memory`** —— add/replace/remove/consolidate/query，工具描述内嵌 Save/Skip 行为指引（存用户偏好、纠正、环境事实、项目约定、教训；跳过琐碎事实、可再查的百科知识、大数据转储、一次性路径）。写走审批门，读免费；replace/remove 用**唯一子串**定位（歧义时报候选清单）；consolidate 一次审批 + 一次原子写把 1..20 条整合为一条。
+- **`memory`** —— add/replace/remove/consolidate/query，工具描述内嵌 Save/Skip 行为指引（存用户偏好、纠正、环境事实、项目约定、教训；跳过琐碎事实、可再查的百科知识、大数据转储、一次性路径）。写走审批门，读免费；replace/remove 用**唯一子串**定位（歧义时报候选清单）；consolidate 一次审批 + 一次原子写把 1..20 条整合为一条。条目携带协议 v1 字段：短 `tags`（≤16 个 × ≤32 字符）与每次 replace 自增的条目 `version`。
 - **`memory_recall`** —— 两段式召回：有界记忆匹配 **+** 经 `ctx.sessionQuery` 的近期会话历史匹配（服务缺失时优雅降级为纯记忆结果）。
-- **`/memory`** —— 用户触发命令（非模型回合）：`list` · `query <词>` · `add [--track=user|agent] [--scope=user-global|workspace] <文本>` · `remove [选项] <子串>` · `consolidate [选项] <子串...> => <新文本>` · `proposals [approve|dismiss <id>]` · `budgets` · `audit` · `export` · `import <路径>`。命令写走同一 waterfall 与策略；审计落插件审计表 + `command/done`。`export` 只读，把所有条目 + 预算导出为一份 JSON 文档；`import` 把它恢复回来（文件路径或内联 JSON，单次审批、预算预检）——备份/迁移完整闭环。导入条目获得新 id 与新时间戳；提案、审计行与召回计数不迁移。
+- **`/memory`** —— 用户触发命令（非模型回合）：`list` · `query <词>` · `add [--track=user|agent] [--scope=user-global|workspace] <文本>` · `remove [选项] <子串>` · `consolidate [选项] <子串...> => <新文本>` · `proposals [approve|dismiss <id>]` · `budgets` · `audit` · `export [--adapter=<id>]` · `import <路径> [--adapter=<id>]` · `adapters`。命令写走同一 waterfall 与策略；审计落插件审计表 + `command/done`。`export` 只读，把所有条目 + 预算导出为一份 JSON 文档；`import` 把它恢复回来（文件路径或内联 JSON，单次审批、预算预检）——备份/迁移完整闭环。适配器动词转换外部记忆格式：`import --adapter=mem0 <facts.json>` 把事实喂进带审批门的 `seed`；`export --adapter=<id>` 只读转换输出到 stdout。导入条目获得新 id 与新时间戳；提案、审计行与召回计数不迁移。
 - **Auto-capture 提案** —— 会话压缩成功后，摘要落为待审批记忆提案（`agent/workspace`）；approve 经审批门写入记忆，dismiss 丢弃。待审批提案出现在冻结快照与面板中。
 - **Web 面板** —— 零构建 `dsh.client` 抽屉：按轨/层浏览条目、搜索、预算用量条、审计尾。设计上只读：写与审批走 `memory` 工具与内置审批 UI。
 
@@ -136,6 +137,22 @@ dsh-memento 不是 Claude Code、Codex 或 Hermes 的移植版——但它的设
 
 命名已定 **`dsh-memento`**（npm 与 GitHub 均已发布）。不用 `dsh-recall`（与 dsh-external/Recall 混淆），不用已删除的旧名 `dsh-memory`。
 
+## 🧬 dsh-memory-protocol v1
+
+dsh-memento 是 **DSH 记忆协议**的社区预演——官方 `ctx.memory` seam 的候选形态。协议把本插件接缝规范化为跨插件契约：条目规范（双轨 × 双层 × per-agent 键 + `tags` + 条目级 `version`）、写操作语义（唯一子串条件写的幂等性、approve-what-you-see 载荷）、审计契约（任何写入可由 `approval/asked` + `approval/decided` + Provider 账本重建）、预算模型（`BUDGET_EXCEEDED` / `AMBIGUOUS_MATCH` 语义）与 schema 版本/迁移规则。
+
+- **规范** —— [docs/protocol-v1.zh.md](docs/protocol-v1.zh.md)（英文: [protocol-v1.md](docs/protocol-v1.md)）；规范性 JSON Schema 在 [docs/schemas/dsh-memory-protocol-v1.schema.json](docs/schemas/dsh-memory-protocol-v1.schema.json)。
+- **适配器注册表** —— `ctx.memoryAdapters` 让第三方记忆插件通过注册纯数据转换器说协议（`register()` 可逆；导入走带审批门的 `seed`，导出只读）。接入指南：[docs/adapters-guide.zh.md](docs/adapters-guide.zh.md)（英文: [adapters-guide.md](docs/adapters-guide.md)）。
+
+| 内置适配器 | 外部格式 | 说明 |
+| --- | --- | --- |
+| `mem0` | mem0 事实集合（`{facts: [{memory, metadata?}]}`） | `metadata.category`/`metadata.tags` 变成标签；原始 `messages` 数组被拒——适配器只转换、绝不抽取 |
+| `hermes-memory-md` | Hermes `memory.md`（`## 小节` + 项目符号） | 小节名变标签；非项目符号散文响亮失败 |
+| `claude-code-memory-md` | `CLAUDE.md` 风格 markdown（标题、项目符号、段落） | 项目符号与段落各成条目；小节名变标签 |
+
+- **一致性套件** —— [test/protocol-conformance/](test/protocol-conformance/README.md)：可对外分发的用例集，任何声称兼容的 Provider 都跑（`node test/protocol-conformance/run.mjs --provider ./你的工厂.mjs`）；本仓库 CI 以黄金参考全绿（`npm run test:conformance`）。
+- **上游化提案** —— [docs/upstream-proposal.zh.md](docs/upstream-proposal.zh.md)（英文: [upstream-proposal.md](docs/upstream-proposal.md)）：官方 `ctx.memory` seam 为何应采纳本协议、差异与迁移路径。
+
 ## 🔒 安全边界
 
 - **只消费公开服务**（`tools`、`systemPrompt`、审批 seam）。不修改引擎 / agent-loop / apiproxy / 官方 UI 包。
@@ -153,7 +170,8 @@ dsh-memento 不是 Claude Code、Codex 或 Hermes 的移植版——但它的设
 
 ```sh
 npm install
-npm test                # node --test：115 个测试——预算、唯一子串、审批策略、store、快照、mock ctx 集成（S2/S3 不变量）、V2 命令/召回/面板/导入
+npm test                # node --test：133 个测试——预算、唯一子串、审批策略、store、快照、mock ctx 集成（S2/S3 不变量）、V2 命令/召回/面板/导入、协议适配器与一致性
+npm run test:conformance  # dsh-memory-protocol v1 一致性套件（黄金参考；第三方 Provider 用 --provider）
 npm run typecheck       # tsc --checkJs 类型检查门（index.mjs / lib / scripts）
 npm run check:coverage  # 行覆盖率门：lib ≥90%、index.mjs ≥85%、全部 ≥90%
 npm run check:readmes   # 五语 README 一致性门
