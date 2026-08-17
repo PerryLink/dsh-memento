@@ -1,192 +1,203 @@
+<div align="center">
+
 # dsh-memento
 
 **DeepSeek Harness के लिए परिबद्ध, स्तरित, अनुमोदन-द्वारी, लेखा-परीक्षण-योग्य क्रॉस-सेशन मेमोरी।**
 
-[![license](https://img.shields.io/badge/license-Apache--2.0-3a7d44)](LICENSE)
-[![dsh](https://img.shields.io/badge/dsh-0.1.0--rc.6-4e51e8)](https://www.npmjs.com/package/@deepseek-ai/dsh)
-[![node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-339933)](https://nodejs.org/)
-[![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)]()
-[![no build step](https://img.shields.io/badge/build-none%20%28pure%20ESM%29-8a6d3b)]()
+*एक टाइप्ड `ctx.memory` सीम, एक लेखन-अनुमोदन द्वार जिसे मॉडल का कोई मार्ग नहीं टाल सकता, और सत्र लॉग से पुनर्निर्माण-योग्य ऑडिट ट्रेल।*
+
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![DSH plugin](https://img.shields.io/badge/dsh-plugin-✅-green)](https://github.com/topics/dsh-plugin)
+[![Node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-brightgreen.svg)](#)
+[![CI](https://img.shields.io/github/actions/workflow/status/PerryLink/dsh-memento/ci.yml?branch=main&label=CI)](https://github.com/PerryLink/dsh-memento/actions)
+[![Version](https://img.shields.io/github/v/tag/PerryLink/dsh-memento?label=version)](https://github.com/PerryLink/dsh-memento/releases)
 [![npm version](https://img.shields.io/npm/v/dsh-memento)](https://www.npmjs.com/package/dsh-memento)
 [![npm downloads](https://img.shields.io/npm/dm/dsh-memento)](https://www.npmjs.com/package/dsh-memento)
-[![CI](https://github.com/PerryLink/dsh-memento/actions/workflows/ci.yml/badge.svg)](https://github.com/PerryLink/dsh-memento/actions/workflows/ci.yml)
 
-[English](README.md) · [中文](README.zh.md) · [Español](README.es.md) · [Português](README.pt.md) · [हिन्दी](README.hi.md)
+[English](README.md) · [简体中文](README.zh.md) · [Español](README.es.md) · [Português](README.pt.md) · [हिन्दी](README.hi.md)
 
-> अन्य मेमोरी प्लगइन एक **गोदाम (warehouse)** बेचते हैं। dsh-memento **सीम (seam)** बेचता है: एक टाइप्ड `ctx.memory` सेवा, एक लेखन-अनुमोदन द्वार जिसे कोई मॉडल पथ बायपास नहीं कर सकता, और ऑडिट ट्रेल जिन्हें आप सेशन लॉग से पुनर्निर्मित कर सकते हैं। DeepSeek Harness के लिए नेटिव-फर्स्ट मेमोरी — प्रोटोकॉल + ट्रस्ट गेट + ऑडिट, शून्य नेटवर्क और शून्य क्रेडेंशियल के साथ।
+</div>
 
-## ✨ dsh-memento क्यों?
+---
 
-- **यह एक क्षमता सीम (capability seam) है, कोई और स्टोर नहीं।** सर्विस डेफ़िनिशन (`ctx.memory`), लोकल SQLite प्रोवाइडर (`node:sqlite`, WAL, `0600`), और कंज़्यूमर (`memory` टूल + फ़्रोज़न स्नैपशॉट इंजेक्शन)। कोई भी भविष्य का प्लगइन — एक `dsh-claude-move` सीड इंटीग्रेशन, एक ब्रिज, एक पैनल — **उसी स्टोर को उसी द्वार के माध्यम से** पढ़ता और लिखता है।
-- **द्वार को बायपास नहीं किया जा सकता।** हर लेखन पथ (`add`/`replace`/`remove`/`seed`) **सेवा के अंदर** अनुमोदन वॉटरफॉल से गुज़रता है, टूल लेयर में नहीं। `writePolicy: ask | auto | off` ऐसा कॉन्फ़िगरेशन है जिसे मॉडल न तो देख सकता है और न ही बदल सकता है; एक सेशन-स्तरीय `never` रुख फिर भी सब कुछ पहले ही रोक देता है। `replace`/`remove`/`consolidate` अनुमोदन पेलोड में बदली जाने वाली प्रविष्टियों का पूरा पाठ ले जाते हैं — आप जो अनुमोदित करते हैं वही देखते हैं, और अस्वीकृत लेखन भी `*-denied` ऑडिट पंक्ति दर्ज करता है।
-- **Model-visible ⟺ logged.** इंजेक्ट किया गया स्नैपशॉट `request/header.system` में शब्दशः उतरता है; हर लेखन `approval/asked` (पूर्ण पेलोड) + `approval/decided` (परिणाम) + प्लगइन की अपनी ऑडिट टेबल से पुनर्निर्मित किया जा सकता है।
-- **परिबद्ध और ईमानदार।** हर-ट्रैक/हर-लेयर कठोर वर्ण बजट (डिफ़ॉल्ट user 2000 / agent 4000)। भरा हुआ स्टोर **संरचित त्रुटि के साथ विफल** होता है (उपयोग + सीमा) — मॉडल समेकित करके पुनः प्रयास करता है। कभी काटा नहीं जाता, कभी स्वतः-कॉम्पैक्ट नहीं होता।
+## Compatibility
 
-## ⚡ त्वरित शुरुआत
+| Surface | Status |
+|---|---|
+| Harness | DeepSeek Harness `0.1.0-rc.6` |
+| Node | `^22.19.0 || >=24.0.0` |
+| Platforms | Windows / macOS / Linux (केवल host; कोई नेटिव कोड नहीं, कोई नेटवर्क नहीं) |
+| Model | कोई भी |
 
-```sh
-# requires Node ^22.19 || >=24 and DSH 0.1.0-rc.6
-dsh plugin --profile web add dsh-memento      # or ./dsh-memento / a tarball / a GitHub URL
-dsh --profile web --dump-config               # expect a "# == dsh-memento" layer, no FAILED at startup
-```
+## What you get
 
-फिर, Web UI में: मॉडल से कुछ याद रखने को कहें → लेखन को अनुमोदित करें → एक **नया सेशन** शुरू करें और पूछें कि उसे क्या याद है। बस यही पूरा डेमो है।
+`dsh-memento` एक क्षमता-सीम है, कोई दूसरा भंडार नहीं: एक टाइप्ड `ctx.memory` सेवा, एक स्थानीय SQLite प्रदाता (`node:sqlite`, WAL, `0600`, `$DSH_HOME/dsh-memento/memory.db` पर) और उसके उपभोक्ता — `memory` टूल और सिस्टम प्रॉम्प्ट में इंजेक्ट किया गया फ़्रोज़न स्नैपशॉट।
 
-```yaml
-# optional override in the profile's cordis.patch.yml
-- id: memento
-  config:
-    writePolicy: ask        # ask (default) | auto | off — model-invisible
-    budgets:
-      user: { userGlobal: 4000, workspace: 2000 }   # Chinese-heavy memory: raise + note why
-      agent: { userGlobal: 4000, workspace: 4000 }
-```
+- **अनुमोदन द्वार को टाला नहीं जा सकता।** हर लेखन पथ (`add` / `replace` / `remove` / `seed`) सेवा के भीतर अनुमोदन वॉटरफ़ॉल से होकर गुज़रता है, टूल परत से नहीं। `writePolicy: ask | auto | off` मॉडल के लिए अदृश्य विन्यास है; `replace` / `remove` / `consolidate` अनुमोदन पेलोड में बदली जाने वाली प्रविष्टियों का पूरा पाठ ले जाते हैं, और अस्वीकृत लेखन भी एक `*-denied` ऑडिट पंक्ति छोड़ता है।
+- **मॉडल-दृश्य ⟺ लॉग किया गया।** इंजेक्ट किया गया स्नैपशॉट `request/header.system` में शब्दशः पहुँचता है; हर लेखन `approval/asked` + `approval/decided` + प्लगइन की अपनी ऑडिट तालिका से पुनर्निर्माण-योग्य है।
+- **परिबद्ध और ईमानदार।** प्रति-ट्रैक/प्रति-परत कठोर अक्षर बजट (डिफ़ॉल्ट user 2000 / agent 4000)। भरा हुआ भंडार संरचित त्रुटि से विफल होता है (उपयोग + सीमा) — कभी काटा नहीं, कभी स्वतः संकुचित नहीं।
 
-## 🧠 यह क्या करता है
+दो ट्रैक × दो परतें × प्रति-एजेंट कुंजी: एक `user` ट्रैक (उपयोगकर्ता के बारे में तथ्य) और एक `agent` ट्रैक (पर्यावरण तथ्य और परंपराएँ), प्रत्येक `user-global` और `workspace` परतों में बँटा, `agentPreset` के अनुसार पृथक। स्नैपशॉट पहले प्रॉम्प्ट संयोजन पर प्रति-सत्र एक बार फ़्रीज़ होता है और सत्र के बीच कभी नहीं बदलता।
 
-| | घटक | आपको क्या मिलता है |
-| --- | --- | --- |
-| 🧩 Service Definition | `ctx.memory` — `add` / `replace` / `remove` / `query` / `seed` / `budgets()` | टाइप्ड, merge-घोषित सेवा; लेखन विधियाँ द्वार को आंतरिक रूप से लागू करती हैं |
-| 🧬 एडाप्टर रजिस्ट्री | `ctx.memoryAdapters` — `register` / `list` / `adapt` / `export` | तृतीय-पक्ष मेमोरी प्लगइन अपने स्टोर को प्रोटोकॉल में ढालते हैं; mem0, Hermes `memory.md` व `CLAUDE.md` के संदर्भ एडाप्टर बिल्ट-इन आते हैं |
-| 💾 Provider | `lib/store.mjs` — `node:sqlite` एकल फ़ाइल (`$DSH_HOME/dsh-memento/memory.db`, WAL) | शून्य निर्भरता, शून्य नेटवर्क; एंट्री + ऑडिट टेबल; यूनीक-सबस्ट्रिंग मिलान |
-| 🛠 Consumers | `memory` टूल · फ़्रोज़न स्नैपशॉट इंजेक्शन (system-prompt सेक्शन, क्रम `-50`) · `memory_recall` टूल · `/memory` कमांड · रीड-ओनली Web पैनल | मॉडल-मुखी लेखन/पठन, बजट-शीर्ष फ़्रोज़न स्नैपशॉट, दो-भाग रिकॉल, यूज़र-साइड कमांड, ब्राउज़र ड्रॉअर |
-
-**दो ट्रैक × दो लेयर × प्रति-एजेंट कुंजी।** `user` ट्रैक = उपयोगकर्ता के बारे में तथ्य (प्राथमिकताएँ, संचार शैली, संवेदनशील बिंदु); `agent` ट्रैक = पर्यावरण तथ्य, प्रोजेक्ट परंपराएँ, सीखे गए पाठ। हर ट्रैक में `user-global` (क्रॉस-वर्कस्पेस) और `workspace` (प्रति-सेशन cwd) लेयर होती हैं — Codex-शैली मर्ज्ड लेयरिंग, Hermes-शैली केवल-ग्लोबल नहीं। एक तीसरा आयाम सत्र के `agentPreset` से प्रविष्टियों को अलग करता है (प्रति-एजेंट स्कोप); बिना preset वाली प्रविष्टियाँ सबको दिखने वाली साझा लेयर में रहती हैं। सेशन-स्कोप्ड पठन और लेखन-लक्ष्यीकरण उसी दृश्यता का पालन करते हैं: एक सत्र केवल साझा प्रविष्टियाँ + अपने एजेंट की प्रविष्टियाँ देखता है (और `replace`/`remove` केवल उन्हें छू सकता है), तथा `workspace` प्रविष्टियाँ केवल अपने cwd के लिए। प्रबंधन सतहें (`/memory`, पैनल) पूर्ण क्रॉस-एजेंट दृश्य रखती हैं।
-
-**फ़्रोज़न स्नैपशॉट।** स्नैपशॉट हर सेशन में पहली प्रॉम्प्ट असेंबली पर एक बार रेंडर होता है (सिंक्रोनस SQLite रीड + प्रति-सेशन कैश) और सेशन के बीच कभी नहीं बदलता — निर्माण से ही प्रीफ़िक्स-कैश स्थिर। सेशन-आंतरिक परिवर्तन केवल डिस्क + ऑडिट में स्थायी होते हैं।
-
-```
-Consumer: memory tool          Consumer: frozen snapshot (systemPrompt section, order -50)
-   add/replace/remove/query       per-session freeze, budget-headed
-        │ writes (agent+callId)   │ reads (sync, session cwd)
-        ▼                          ▼
-Service Definition: ctx.memory — budgets/add/replace/remove/query/seed
-   every write: budget precheck → ctx.approval.request (approval waterfall) → budget recheck → persist → audit
-        │
-        ▼
-Provider: lib/store.mjs — node:sqlite (WAL, 0600), entries + audit tables, unique-substring match
-```
-
-## 🧰 इंस्टॉल और अनइंस्टॉल
+## Quick start
 
 ```sh
-dsh plugin --profile <name> add ./dsh-memento        # local checkout (no build step)
-dsh plugin --profile <name> add dsh-memento          # npm पैकेज (0.2.0 से प्रकाशित)
-dsh plugin --profile <name> add git+https://github.com/PerryLink/dsh-memento.git   # GitHub इंस्टॉल
-dsh plugin --profile <name> remove dsh-memento       # uninstall: DB + session logs are kept
+# 1. install the bundle into your profile
+dsh plugin --profile web add "github:PerryLink/dsh-memento#main"
+
+# or from npm (published releases)
+dsh plugin --profile web add dsh-memento
+
+# 2. restart and verify the row
+dsh --profile web --dump-config | grep -A3 'id: memento'
 ```
 
-अनइंस्टॉल के बाद मेमोरी डेटाबेस और वे सेशन लॉग, जिन्होंने मेमोरी गतिविधि रिकॉर्ड की थी, बचे रहते हैं; पुराने सेशन लोड होने योग्य बने रहते हैं।
+## Install & uninstall
 
-## ⚙️ कॉन्फ़िगरेशन
+- **git चैनल** (नवीनतम `main`): `dsh plugin --profile web add git+https://github.com/PerryLink/dsh-memento.git`.
+- **npm चैनल** (प्रकाशित रिलीज़): `dsh plugin --profile web add dsh-memento`.
+- **tarball चैनल**: इस रेपो में `npm pack`, फिर `dsh plugin --profile web add ./dsh-memento-<version>.tgz`.
+- **uninstall**: `dsh plugin --profile web remove dsh-memento` (मेमोरी डेटाबेस और सत्र लॉग रखे जाते हैं)।
 
-हर फ़ील्ड एक मान्यीकृत Schemastery `Config` है; अमान्य मान लोड के समय ज़ोर से विफल होते हैं। cordis.yml में `memento` पंक्ति के अंतर्गत ओवरराइड करें।
+## Configuration
 
-| फ़ील्ड | डिफ़ॉल्ट | अर्थ |
-| --- | --- | --- |
-| `enabled` | `true` | `false` सेवा, टूल, स्नैपशॉट, कमांड, पैनल और उत्तरदाता को पूरी तरह हटा देता है (कोई अधूरी स्थिति नहीं) |
-| `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | निरपेक्ष, या `$DSH_HOME` के सापेक्ष; जब `$DSH_HOME` निर्यातित नहीं है (Windows डिफ़ॉल्ट — `dsh web` resolved home को env में वापस नहीं लिखता), दोनों `~/.dsh` पर गिरते हैं |
-| `budgets.user.userGlobal` / `budgets.user.workspace` | `2000` / `2000` | user ट्रैक की हर लेयर का कठोर वर्ण बजट |
-| `budgets.agent.userGlobal` / `budgets.agent.workspace` | `4000` / `4000` | agent ट्रैक की हर लेयर का कठोर वर्ण बजट |
-| `writePolicy` | `'ask'` | `'ask'` = उपयोगकर्ता अनुमोदन; `'auto'` = अनुमति दें (अनुमोदन स्रोत रिकॉर्ड किया गया); `'off'` = अस्वीकार करें। मॉडल-अदृश्य |
-| `writePolicies` | `{}` | प्रति-ट्रैक/स्कोप या प्रति-स्रोत ओवरराइड: कुंजियाँ `user/workspace`, `agent/user-global`, `source:claude`, … → `ask`/`auto`/`off`; बेमेल `writePolicy` पर गिरता है |
-| `language` | `'en'` | मॉडल-दृश्य पाठ और कमांड आउटपुट की भाषा: `'en'` (डिफ़ॉल्ट) या `'zh'` — टूल विवरण, फ्रोज़न स्नैपशॉट, `/memory` कमांड और वेब पैनल सभी इसका अनुसरण करते हैं |
-| `snapshotOrder` | `-50` | स्नैपशॉट सेक्शन क्रम: harness आइडेंटिटी (`-100`) के बाद, persona (`0`) से पहले |
-| `maxEntriesPerQuery` | `20` | प्रति-क्वेरी परिणाम की डिफ़ॉल्ट सीमा (स्पष्ट `limit` अनुमत, कठोर सीमा 1000) |
-| `commandListLimit` | `50` | प्रति `/memory list` / `query` कमांड दिखाई गई प्रविष्टियाँ |
-| `commandAuditLimit` | `10` | प्रति `/memory audit` कमांड दिखाई गई ऑडिट पंक्तियाँ |
-| `recall.historyLimitDefault` / `recall.snippetCap` / `recall.snippetChars` / `recall.windowDays` | `8` / `5` / `300` / `30` | `memory_recall` इतिहास डिफ़ॉल्ट: स्कैन किए सेशन, प्रति सेशन स्निपेट, स्निपेट वर्ण, दिनों की विंडो |
-| `panelEntriesLimit` | `200` | वेब पैनल प्रविष्टि पृष्ठ आकार (और सीमा) |
-| `panelAuditLimit` | `20` | वेब पैनल ऑडिट पंक्तियाँ डिफ़ॉल्ट (सीमा 200) |
-| `auditRetentionDays` | `0` | ऑडिट अवधारण: 0 = हमेशा, >0 = स्टोर खुलने पर पुरानी पंक्तियाँ हटाएँ |
-| `proposals.enabled` / `proposals.maxChars` / `proposals.maxPending` | `true` / `2000` / `8` | ऑटो-कैप्चर: हर सफल कॉम्पैक्शन के बाद लंबित मेमोरी प्रस्ताव (काटा गया, प्रति सेशन एक); बंद करें या सीमाएँ बदलें |
+सभी ट्यूनेबल Schemastery `Config` फ़ील्ड हैं (cordis.yml से बदले जा सकते हैं)। अमान्य मान लोड पर ज़ोर से विफल होते हैं। `memento` पंक्ति के अंतर्गत ओवरराइड करें।
 
-## 🛠 टूल और सतहें
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `true` | मुख्य स्विच; `false` सेवा, टूल, स्नैपशॉट, कमांड, पैनल और answerer हटा देता है |
+| `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | निरपेक्ष, या `$DSH_HOME` के सापेक्ष (Windows पर `~/.dsh` पर फ़ॉलबैक) |
+| `budgets.user.userGlobal` | `2000` | user ट्रैक की user-global परत का कठोर अक्षर बजट |
+| `budgets.user.workspace` | `2000` | user ट्रैक की workspace परत का कठोर अक्षर बजट |
+| `budgets.agent.userGlobal` | `4000` | agent ट्रैक की user-global परत का कठोर अक्षर बजट |
+| `budgets.agent.workspace` | `4000` | agent ट्रैक की workspace परत का कठोर अक्षर बजट |
+| `writePolicy` | `'ask'` | डिफ़ॉल्ट लेखन नीति: `ask` / `auto` / `off` (मॉडल-अदृश्य) |
+| `writePolicies` | `{}` | प्रति-ट्रैक/स्कोप या प्रति-स्रोत ओवरराइड (जैसे `user/workspace`, `source:claude`) |
+| `language` | `'en'` | मॉडल-दृश्य और कमांड आउटपुट भाषा: `en` / `zh` |
+| `snapshotOrder` | `-50` | स्नैपशॉट अनुभाग क्रम (harness पहचान के बाद, persona से पहले) |
+| `maxEntriesPerQuery` | `20` | डिफ़ॉल्ट प्रति-क्वेरी परिणाम सीमा (कठोर सीमा 1000) |
+| `commandListLimit` | `50` | प्रति `/memory list` / `query` प्रदर्शित प्रविष्टियाँ |
+| `commandAuditLimit` | `10` | प्रति `/memory audit` प्रदर्शित ऑडिट पंक्तियाँ |
+| `recall.historyLimitDefault` | `8` | `memory_recall` द्वारा डिफ़ॉल्ट स्कैन किए गए सत्र |
+| `recall.snippetCap` | `5` | `memory_recall` में प्रति-सत्र स्निपेट |
+| `recall.snippetChars` | `300` | `memory_recall` स्निपेट अक्षर |
+| `recall.windowDays` | `30` | `memory_recall` की दिनों में हाल-समय विंडो |
+| `panelEntriesLimit` | `200` | वेब पैनल प्रविष्टि पृष्ठ आकार |
+| `panelAuditLimit` | `20` | वेब पैनल डिफ़ॉल्ट ऑडिट पंक्तियाँ |
+| `auditRetentionDays` | `0` | ऑडिट अवधारण (0 = हमेशा रखें) |
+| `proposals.enabled` | `true` | हर सफल संघनन के बाद स्वतः एक मेमोरी प्रस्ताव कैप्चर करें |
+| `proposals.maxChars` | `2000` | प्रस्ताव अक्षर सीमा |
+| `proposals.maxPending` | `8` | लंबित प्रस्ताव सीमा |
 
-- **`memory`** — विवरण में अंतर्निहित Save/Skip मार्गदर्शन के साथ add/replace/remove/consolidate/query (उपयोगकर्ता प्राथमिकताएँ, सुधार, पर्यावरण तथ्य, परंपराएँ, सबक सहेजें; तुच्छ बातें, पुनः-व्युत्पन्न तथ्य, डंप, एक-बार के पथ छोड़ें)। लेखन अनुमोदन द्वार से गुज़रते हैं; पठन निःशुल्क हैं; replace/remove एक **यूनीक सबस्ट्रिंग** को लक्षित करते हैं (अस्पष्ट मिलान उम्मीदवार सूची के साथ विफल होते हैं); consolidate एक अनुमोदन और एक परमाणु लेखन से 1..20 प्रविष्टियों को एक में मिलाता है। प्रविष्टियाँ प्रोटोकॉल v1 फ़ील्ड रखती हैं: छोटे `tags` (≤16 × ≤32 वर्ण) और प्रति-प्रविष्टि `version` जो हर replace पर बढ़ता है।
-- **`memory_recall`** — दो-भाग रिकॉल: परिबद्ध मेमोरी मिलान **और साथ में** `ctx.sessionQuery` के माध्यम से हाल के सेशन-इतिहास मिलान (जहाँ सेवा अनुपस्थित हो वहाँ केवल-मेमोरी पर सहजता से गिरता है)।
-- **`/memory`** — उपयोगकर्ता-ट्रिगर कमांड (मॉडल टर्न नहीं): `list` · `query <word>` · `add [--track=user|agent] [--scope=user-global|workspace] <text>` · `remove [flags] <substring>` · `consolidate [flags] <substring...> => <text>` · `proposals [approve|dismiss <id>]` · `budgets` · `audit` · `export [--adapter=<id>]` · `import <path> [--adapter=<id>]` · `adapters`। कमांड लेखन उसी वॉटरफॉल + नीति से गुज़रते हैं; ऑडिट प्लगइन ऑडिट टेबल + `command/done` में दर्ज होता है। `export` रीड-ओनली है और सभी प्रविष्टियाँ + बजट एक JSON दस्तावेज़ के रूप में निकालता है; `import` उसे वापस लाता है (फ़ाइल पथ या इनलाइन JSON, एक अनुमोदन, बजट पूर्व-जाँच) — पूर्ण बैकअप/माइग्रेशन चक्र। एडाप्टर क्रियाएँ बाहरी मेमोरी प्रारूप बदलती हैं: `import --adapter=mem0 <facts.json>` अनुमोदन-द्वार `seed` से तथ्य भरता है; `export --adapter=<id>` रीड-ओनली रूपांतरण छापता है। आयातित प्रविष्टियों को नए id व टाइमस्टैम्प मिलते हैं; प्रस्ताव, ऑडिट पंक्तियाँ और रिकॉल गणनाएँ माइग्रेट नहीं होतीं।
-- **ऑटो-कैप्चर प्रस्ताव** — सफल सेशन कॉम्पैक्शन के बाद सारांश एक लंबित मेमोरी प्रस्ताव (`agent/workspace`) बन जाता है; approve उसे अनुमोदन द्वार से लिखता है, dismiss उसे हटाता है। लंबित प्रस्ताव फ्रोज़न स्नैपशॉट और पैनल में दिखते हैं।
-- **Web पैनल** — शून्य-बिल्ड `dsh.client` ड्रॉअर: ट्रैक/लेयर के अनुसार एंट्री ब्राउज़ करें, खोजें, बजट बार, ऑडिट टेल। डिज़ाइन से रीड-ओनली: लेखन और अनुमोदन `memory` टूल और बिल्ट-इन अनुमोदन UI के माध्यम से होते हैं।
+## Tools & surfaces
 
-## 🎓 टर्मिनल मेमोरियों से हमने क्या सीखा
+| Surface | Kind | Notes |
+|---|---|---|
+| `memory` | tool | Save/Skip मार्गदर्शन के साथ add/replace/remove/consolidate/query; लेखन अनुमोदन द्वार से गुज़रता है |
+| `memory_recall` | tool | परिबद्ध मेमोरी मिलान + हाल के सत्र-इतिहास मिलान |
+| `/memory` | command | `list` · `query` · `add` · `remove` · `consolidate` · `proposals` · `budgets` · `audit` · `export` · `import <path>` · `adapters` |
+| web panel | client drawer | केवल-पठन: प्रविष्टियाँ ब्राउज़ करें, खोजें, बजट बार, ऑडिट पूँछ |
 
-dsh-memento Claude Code, Codex या Hermes का पोर्ट नहीं है — पर इसके डिज़ाइन ने जान-बूझकर उनका सही हिस्सा आत्मसात किया और नुकसानदेह हिस्सों को ठुकराया:
+## dsh-memory-protocol v1
 
-| टर्मिनल मेमोरी | उसने क्या सही किया | dsh-memento ने क्या अपनाया |
-| --- | --- | --- |
-| **Claude Code** — `CLAUDE.md` | पदानुक्रमित **सादा-पाठ मेमोरी फ़ाइलें** (उपयोगकर्ता स्तर → प्रोजेक्ट स्तर), जिन्हें इंसान पढ़-संपादित कर सकता है, और हर सेशन में अपने-आप मर्ज होती हैं — ऐसी मेमोरी जिसे आप खुद पढ़ और ठीक कर सकते हैं | सादा-पाठ प्रविष्टियाँ; प्रति सेशन मर्ज होने वाली `user-global` / `workspace` लेयरें; एक स्टोर जिसे आप ब्राउज़, `export` और ऑडिट कर सकते हैं — पारदर्शिता ही फ़ीचर है |
-| **Codex** — `AGENTS.md` | **प्रति-निर्देशिका स्कोप्ड निर्देश** अपने-आप खोजे और बिना किसी मॉडल-घर्षण के इंजेक्ट होते हैं — स्थानीयता मात्रा से बड़ी चीज़ है; मेमोरी "लोड" करने के लिए कोई टूल-कॉल नहीं चाहिए | सेशन के cwd से बँधी `workspace` लेयर (Windows में केस-इनसेंसिटिव); फ्रोज़न स्नैपशॉट सेशन शुरू होते ही अपने-आप इंजेक्ट होता है |
-| **Hermes** — `memory.md` | **सक्रिय मेमोरी सेव** (save/update/delete) और [issue #48181](https://github.com/NousResearch/hermes-agent/issues/48181) की सुरक्षा सीख: केवल टूल लेयर पर लगाया गया द्वार देर से हुए टूल-इंजेक्शन से बायपास हो सकता है — द्वार वहाँ लगाओ जहाँ हर लेखन पथ मिलता है | स्पष्ट Save/Skip मार्गदर्शन वाला `memory` टूल + अनुमोदन-द्वारित ऑटो-कैप्चर प्रस्ताव; अनुमोदन द्वार **`ctx.memory` के लेखन मेथड्स के अंदर** रहता है, टूल लेयर में नहीं |
+`dsh-memento` DSH मेमोरी प्रोटोकॉल का सामुदायिक पूर्वाभ्यास है — एक आधिकारिक `ctx.memory` सीम के लिए उम्मीदवार आकार। यह प्रोटोकॉल इस प्लगइन की सीम को एक क्रॉस-प्लगइन अनुबंध में सामान्य करता है:
 
-स्रोत: [Claude Code मेमोरी](https://code.claude.com/docs/en/memory) · [Codex AGENTS.md](https://developers.openai.com/codex/cli/agents-md) · [Hermes मेमोरी](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/memory.md) · [Hermes #48181](https://github.com/NousResearch/hermes-agent/issues/48181)।
+- **Entry spec** — दो ट्रैक × दो परतें × प्रति-एजेंट कुंजी, साथ ही छोटे `tags` (≤16 × ≤32 अक्षर) और प्रति-प्रविष्टि `version` जो हर `replace` पर बढ़ता है।
+- **Write semantics** — इडेम्पोटेंट अद्वितीय-सबस्ट्रिंग सशर्त लेखन; जो-दिखे-वही-स्वीकृत पेलोड (`replace` / `remove` / `consolidate` बदले जाने वाला पूरा पाठ ले जाते हैं)।
+- **Audit contract** — हर लेखन `approval/asked` + `approval/decided` + प्रदाता खाता-बही से पुनर्निर्माण-योग्य।
+- **Budget model** — `BUDGET_EXCEEDED` / `AMBIGUOUS_MATCH` अर्थविज्ञान।
+- **Schema versioning** — ज़ोरदार संस्करण जाँच वाले प्रवासन नियम।
 
-और जिन हिस्सों को हमने जान-बूझकर ठुकराया: मॉडल के निजी स्टेट में छिपी ऑटो-समरीकरण (यहाँ कॉम्पैक्शन सारांश **लंबित प्रस्ताव** बनते हैं जो इंसानी approve/dismiss की प्रतीक्षा करते हैं), वेयरहाउस/वेक्टर-स्टोर महत्वाकांक्षाएँ, और ऐसा कोई भी लेखन जिसमें इंसान को दिखने वाला अनुमोदन या ऑडिट-ट्रेल न हो। साथ ही Hermes की दस्तावेज़ित चेतावनी अपनाई: एक ही home निर्देशिका साझा करने वाले दो प्रोसेस एक ही मेमोरी फ़ाइल लिखते हैं — सुरक्षा सीमाएँ देखें।
+- **Spec** — [docs/protocol-v1.md](docs/protocol-v1.md) (中文: [protocol-v1.zh.md](docs/protocol-v1.zh.md)); मानक JSON Schema [docs/schemas/dsh-memory-protocol-v1.schema.json](docs/schemas/dsh-memory-protocol-v1.schema.json) पर।
 
-## 🆚 यह कैसे अलग है
+**Adapter registry** — `ctx.memoryAdapters` (`register` / `list` / `adapt` / `export`) तृतीय-पक्ष मेमोरी प्लगइन को एक शुद्ध डेटा कन्वर्टर पंजीकृत करके प्रोटोकॉल बोलने देता है (उत्क्रमणीय `register()`; आयात अनुमोदन-द्वारी `seed` पर चलता है, निर्यात केवल-पठन है)। ऑनबोर्डिंग: [docs/adapters-guide.md](docs/adapters-guide.md) (中文: [adapters-guide.zh.md](docs/adapters-guide.zh.md))।
 
-| प्लगइन | यह क्या है | dsh-memento का अंतर |
-| --- | --- | --- |
-| dsh-memory-evolve | मेमोरी वेयरहाउस / इवोल्यूशन लूप | एक टाइप्ड सेवा सीम, अनुमोदन द्वार, और सेशन-लॉग ऑडिट; कोई वेयरहाउस महत्वाकांक्षा नहीं |
-| dsh-mnemon | मेमोरी स्टोर सहायक | प्रोटोकॉल + द्वार + ऑडिट, कोई और स्टोर नहीं |
-| dsh-kb-sieve | नॉलेज-बेस छानना | कोई रिट्रीवल इंजीनियरिंग नहीं: छोटे-कॉर्पस सबस्ट्रिंग खोज, `session_search`/`sessionQuery` के माध्यम से क्रॉस-सेशन रिकॉल |
-| dsh-tdai-memory | कार्य-चालित मेमोरी टूलिंग | बजट प्रति ट्रैक×लेयर होते हैं और सेवा में लागू होते हैं, बेस्ट-एफ़र्ट नहीं |
-| claude-bridge | Claude Code ब्रिजिंग | DSH-नेटिव; भविष्य का `seed(source:'claude')` पथ ब्रिज को उसी स्टोर में फ़ीड करने देता है |
-| dsh-external/Recall | बाहरी एजेंट मेमोरी | लोकल-फर्स्ट, शून्य-नेटवर्क, DSH के अपने अनुमोदन सीम पर चलता है |
-| Official MCP memory examples | DSH की घोषित "memory = external MCP" स्थिति | **नेटिव फर्स्ट-पार्टी** पूरक: समान लक्ष्य, कोई बाहरी सर्वर नहीं; दोनों सह-अस्तित्व में रहते हैं |
+| Built-in adapter | External format | Notes |
+|---|---|---|
+| `mem0` | mem0 तथ्य संग्रह (`{facts: [{memory, metadata?}]}`) | `metadata.category` / `metadata.tags` tags बनते हैं; कच्चे `messages` ऐरे अस्वीकृत — एडेप्टर परिवर्तित करते हैं, कभी निष्कर्षण नहीं |
+| `hermes-memory-md` | Hermes `memory.md` (`## section` + बुलेट) | अनुभाग नाम tags बनते हैं; बिना बुलेट वाला गद्य ज़ोर से विफल होता है |
+| `claude-code-memory-md` | `CLAUDE.md`-शैली markdown (शीर्षक, बुलेट, अनुच्छेद) | बुलेट और अनुच्छेद प्रविष्टियाँ बनते हैं; अनुभाग नाम tags बनते हैं |
 
-नाम **`dsh-memento`** है (npm और GitHub पर प्रकाशित)। `dsh-recall` नहीं (dsh-external/Recall से भ्रमित होने वाला), और न ही हटाया गया पुराना नाम `dsh-memory`।
+**Conformance suite** — [test/protocol-conformance/](test/protocol-conformance/README.md): एक वितरण-योग्य केस-सेट जिसे संगतता का दावा करने वाला कोई भी प्रदाता चलाता है (`node test/protocol-conformance/run.mjs --provider ./your-factory.mjs`); इस रेपो का CI इसे अपने प्रदाता के विरुद्ध स्वर्ण संदर्भ के रूप में चलाता है (`npm run test:conformance`)।
 
-## 🧬 dsh-memory-protocol v1
+- **Upstream proposal** — [docs/upstream-proposal.md](docs/upstream-proposal.md) (中文: [upstream-proposal.zh.md](docs/upstream-proposal.zh.md)): आधिकारिक `ctx.memory` सीम को प्रोटोकॉल क्यों अपनाना चाहिए, अंतर और प्रवासन पथ।
 
-dsh-memento **DSH मेमोरी प्रोटोकॉल** का सामुदायिक पूर्वाभ्यास है — आधिकारिक `ctx.memory` सीम के लिए एक उम्मीदवार रूप। प्रोटोकॉल इस प्लगइन की सीम को क्रॉस-प्लगइन अनुबंध में सामान्य करता है: एंट्री विनिर्देश (दो ट्रैक × दो लेयर × प्रति-एजेंट कुंजी + `tags` + प्रति-एंट्री `version`), लेखन-संचालन अर्थविज्ञान (यूनीक-सबस्ट्रिंग सशर्त लेखन से इडेम्पोटेंसी, approve-what-you-see पेलोड), ऑडिट अनुबंध (हर लेखन `approval/asked` + `approval/decided` + प्रोवाइडर बही से पुनर्निर्माण योग्य), बजट मॉडल (`BUDGET_EXCEEDED` / `AMBIGUOUS_MATCH` अर्थविज्ञान) तथा schema संस्करण/माइग्रेशन नियम।
+## Permissions & data
 
-- **विनिर्देश** — [docs/protocol-v1.md](docs/protocol-v1.md) (चीनी: [protocol-v1.zh.md](docs/protocol-v1.zh.md)); मानक JSON Schema [docs/schemas/dsh-memory-protocol-v1.schema.json](docs/schemas/dsh-memory-protocol-v1.schema.json) पर।
-- **एडाप्टर रजिस्ट्री** — `ctx.memoryAdapters` से तृतीय-पक्ष मेमोरी प्लगइन एक शुद्ध डेटा-रूपांतरक पंजीकृत कर प्रोटोकॉल बोलते हैं (`register()` प्रतिवर्ती; आयात अनुमोदन-द्वार `seed` से गुज़रता है, निर्यात रीड-ओनली है)। मार्गदर्शिका: [docs/adapters-guide.md](docs/adapters-guide.md) (चीनी: [adapters-guide.zh.md](docs/adapters-guide.zh.md))।
+- **Permissions**: workshop मैनिफ़ेस्ट `harness:tool`, `filesystem:read`, `filesystem:write` और `network:none` / `subprocess:none` / `shell:none` / `python:none` / `credentials:none` घोषित करता है। लेखन अनुमोदन आधिकारिक अनुमोदन सीम पर चलता है।
+- **Data**: स्थानीय SQLite डेटाबेस (`0600`), शून्य नेटवर्क, शून्य क्रेडेंशियल।
+- **Session log**: ऑडिट पूर्णता अनुमोदन जोड़ी (`approval/asked` + `approval/decided`) और प्लगइन की अपनी ऑडिट तालिका से आती है।
 
-| बिल्ट-इन एडाप्टर | बाहरी प्रारूप | नोट्स |
-| --- | --- | --- |
-| `mem0` | mem0 तथ्य-संग्रह (`{facts: [{memory, metadata?}]}`) | `metadata.category`/`metadata.tags` टैग बनते हैं; कच्चे `messages` ऐरे अस्वीकृत होते हैं — एडाप्टर रूपांतरित करते हैं, निकालते नहीं |
-| `hermes-memory-md` | Hermes `memory.md` (`## अनुभाग` + बुलेट) | अनुभाग नाम टैग बनते हैं; बुलेट-रहित गद्य ज़ोर से विफल होता है |
-| `claude-code-memory-md` | `CLAUDE.md`-शैली markdown (शीर्षक, बुलेट, अनुच्छेद) | बुलेट व अनुच्छेद एंट्री बनते हैं; अनुभाग नाम टैग बनते हैं |
+## Security boundaries
 
-- **अनुरूपता सूट** — [test/protocol-conformance/](test/protocol-conformance/README.md): वितरण योग्य केस-सेट जिसे संगतता का दावा करने वाला हर प्रोवाइडर चलाता है (`node test/protocol-conformance/run.mjs --provider ./आपकी-फैक्ट्री.mjs`); इस रेपो का CI इसे अपने प्रोवाइडर पर स्वर्ण संदर्भ के रूप में चलाता है (`npm run test:conformance`)।
-- **अपस्ट्रीम प्रस्ताव** — [docs/upstream-proposal.md](docs/upstream-proposal.md) (चीनी: [upstream-proposal.zh.md](docs/upstream-proposal.zh.md)): आधिकारिक `ctx.memory` सीम को प्रोटोकॉल क्यों अपनाना चाहिए, अंतर और माइग्रेशन पथ।
+- **केवल सार्वजनिक सेवाएँ।** `tools`, `systemPrompt` और अनुमोदन सीम का उपभोग करता है; engine / agent-loop / apiproxy / आधिकारिक UI में कोई बदलाव नहीं।
+- **शून्य नेटवर्क, शून्य क्रेडेंशियल।** POSIX फ़ाइल मोड `0600` वाला स्थानीय डेटाबेस।
+- **ज़ोर से विफल।** दूषित DB, नया स्कीमा या अमान्य विन्यास लोड पर विफल होता है; भरे बजट और अस्पष्ट सबस्ट्रिंग मिलान संरचित त्रुटियों से विफल होते हैं।
+- **एक प्रक्रिया, एक भंडार।** कई सत्र SQLite भंडार साझा करते हैं; एक ही `$DSH_HOME` साझा करने वाली दो प्रक्रियाएँ एक ही फ़ाइल लिखती हैं (SQLite लॉकिंग के तहत अंतिम-लेखक-जीत)।
 
-## 🔒 सुरक्षा सीमाएँ
+## Known limitations
 
-- **केवल सार्वजनिक सेवाएँ** (`tools`, `systemPrompt`, अनुमोदन सीम)। कोई engine / agent-loop / apiproxy / official-UI परिवर्तन नहीं।
-- **शून्य नेटवर्क, शून्य क्रेडेंशियल।** स्थानीय डेटाबेस; POSIX फ़ाइल मोड `0600`।
-- **ज़ोर से विफल होता है।** दूषित DB या नया schema लोड पर विफल होता है; भरे हुए बजट और अस्पष्ट सबस्ट्रिंग मिलान संरचित त्रुटियों के साथ विफल होते हैं। कुछ भी चुपचाप निगला या काटा नहीं जाता।
-- **एक प्रोसेस, एक स्टोर।** एक प्रोसेस में कई सेशन SQLite स्टोर साझा करते हैं (क्रमबद्ध लेखन, प्रति-सेशन ऑडिट)। एक ही `$DSH_HOME` साझा करने वाली दो **प्रोसेस** एक ही फ़ाइल लिखती हैं: SQLite लॉकिंग के तहत last-writer-wins — यदि आपको क्रॉस-प्रोसेस स्थिरता चाहिए तो एक `$DSH_HOME` पर दो harness इंस्टेंस न चलाएँ (वही चेतावनी जो Hermes प्रोजेक्ट दस्तावेज़ित करता है)।
+- **सत्र घटनाएँ घोषित हैं, अभी उत्सर्जित नहीं (rc.6)।** `memory/added|updated|removed|recalled|snapshot` मर्ज-घोषित हैं, परंतु rc.6 में रेपो-बाहर घटना प्रकारों के लिए कोई पंजीकरण सतह नहीं है; harness बिल्ड उन्हें पंजीकृत करते ही उत्सर्जन चालू हो जाता है।
+- **`ask` नीति को answerer चाहिए।** बिना UI/ACP answerer के, लेखन बंद-विफल होते हैं।
+- **कोई FTS5 अनुक्रमण नहीं।** सबस्ट्रिंग खोज केस-असंवेदी `instr` पर चलती है (CJK के लिए सही)।
 
-## ⚠️ ज्ञात सीमाएँ
+## What we learned from the terminal memories
 
-- **सेशन ईवेंट शब्दावली घोषित है, अभी उत्सर्जित नहीं (rc.6)।** `memory/added|updated|removed|recalled|snapshot` `types.d.ts` में merge-घोषित हैं, लेकिन rc.6 में रेपो-बाह्य ईवेंट प्रकारों के लिए कोई पंजीकरण सतह नहीं है (अपंजीकृत append स्थायी सेशन को अनलोड-अयोग्य बना देते)। ऑडिट पूर्णता अनुमोदन जोड़ी + ऑडिट टेबल से आती है; जैसे ही कोई harness बिल्ड प्रकारों को पंजीकृत करता है, उत्सर्जन स्वतः चालू हो जाता है। देखें [ARCHITECTURE.md](ARCHITECTURE.md) निर्णय 4।
-- **`ask` नीति को एक उत्तरदाता चाहिए।** कोई UI/ACP उत्तरदाता रचित न होने पर, लेखन बंद-स्थिति में विफल होते हैं (`unavailable`) — डिज़ाइन से, अनुमोदन सीम का fail-closed रुख।
-- **कोई FTS5 इंडेक्स नहीं।** सबस्ट्रिंग खोज केस-इनसेंसिटिव `instr` से चलती है (CJK के लिए सही); रिकॉल रैंकिंग प्रति-एंट्री हिट गणना का उपयोग करती है। FTS5 का trigram टोकनाइज़र एकल-वर्ण CJK वर्णों को इंडेक्स नहीं कर सकता, इसलिए इसका उपयोग नहीं होता — देखें [ARCHITECTURE.md](ARCHITECTURE.md) निर्णय 10।
+`dsh-memento` Claude Code, Codex या Hermes का पोर्ट नहीं है — लेकिन इसके डिज़ाइन ने जान-बूझकर वह अपनाया जो प्रत्येक ने सही किया, और वह अस्वीकार किया जो नुकसान करता था:
 
-## 🧪 विकास
+| Terminal memory | क्या सही किया | dsh-memento ने क्या अपनाया |
+|---|---|---|
+| **Claude Code** — `CLAUDE.md` | पदानुक्रमित सादा-पाठ मेमोरी फ़ाइलें (उपयोगकर्ता-स्तर → परियोजना-स्तर), मानव-पठनीय और संपादन-योग्य, हर सत्र में स्वतः मर्ज | सादा-पाठ प्रविष्टियाँ; `user-global` / `workspace` परतें प्रति-सत्र मर्ज; एक भंडार जिसे आप ब्राउज़, `export` और ऑडिट कर सकते हैं — पारदर्शिता एक विशेषता के रूप में |
+| **Codex** — `AGENTS.md` | प्रति-निर्देशिका स्कोप्ड निर्देश स्वतः खोजे और शून्य मॉडल घर्षण से इंजेक्ट | सत्र cwd से अनुक्रमित `workspace` परत (Windows केस-असंवेदी); सत्र आरंभ पर स्वतः इंजेक्ट फ़्रोज़न स्नैपशॉट |
+| **Hermes** — `memory.md` | सक्रिय मेमोरी सेव और यह सुरक्षा सबक कि केवल टूल परत पर लागू द्वार देर से टूल-इंजेक्शन से टाला जा सकता है | Save/Skip मार्गदर्शन वाला `memory` टूल + अनुमोदन-द्वारी स्वतः-कैप्चर प्रस्ताव; द्वार `ctx.memory` के लेखन तरीकों के भीतर रहता है, टूल परत में नहीं |
+
+स्रोत: [Claude Code memory](https://code.claude.com/docs/en/memory) · [Codex AGENTS.md](https://developers.openai.com/codex/cli/agents-md) · [Hermes memory](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/memory.md) · [Hermes #48181](https://github.com/NousResearch/hermes-agent/issues/48181)।
+
+और जान-बूझकर अस्वीकार किए गए भाग: मॉडल-निजी स्थिति में छिपा स्व-सारांशीकरण (यहाँ संघनन सारांश **लंबित प्रस्ताव** बनते हैं जो मानव approve/dismiss की प्रतीक्षा करते हैं), भंडार/वेक्टर-स्टोर महत्वाकांक्षाएँ, और बिना मानव-दृश्य अनुमोदन या ऑडिट ट्रेल वाला कोई भी लेखन। यह भी अपनाया गया: Hermes की दस्तावेज़ित चेतावनी कि एक ही होम निर्देशिका साझा करने वाली दो प्रक्रियाएँ एक ही मेमोरी फ़ाइल लिखती हैं — Security boundaries देखें।
+
+## Development
 
 ```sh
-npm install
-npm test                # node --test: 133 tests — budget, unique-substring, gate policy, store, snapshot, mock-ctx integration (S2/S3 invariants), V2 command/recall/panel/import, प्रोटोकॉल एडाप्टर + अनुरूपता
-npm run test:conformance  # dsh-memory-protocol v1 अनुरूपता सूट (स्वर्ण संदर्भ; तृतीय-पक्ष --provider उपयोग करें)
-npm run typecheck       # index.mjs / lib / scripts पर tsc --checkJs द्वार
-npm run check:coverage  # लाइन-कवरेज द्वार: lib ≥90%, index.mjs ≥85%, सभी ≥90%
-npm run check:readmes   # पाँच-भाषा README संगति द्वार
+npm install              # node ^22.19 || >=24
+npm test                 # node --test: 133 tests
+npm run test:conformance # dsh-memory-protocol v1 conformance suite
+npm run typecheck        # tsc --checkJs gate
+npm run check:coverage   # line-coverage gate
+npm run check:readmes    # five-language README consistency gate
 ```
 
-`lib/` शून्य-DSH-निर्भरता है (केवल node: बिल्ट-इन); DSH आयात केवल `index.mjs` में मौजूद हैं। पूर्ण अनुशासन [AGENTS.md](AGENTS.md) में; डिज़ाइन निर्णय [ARCHITECTURE.md](ARCHITECTURE.md) में।
+`lib/` में शून्य DSH निर्भरता है (केवल node: बिल्टइन); DSH आयात केवल `index.mjs` में मौजूद हैं।
 
-## 🏷 विषय
+## Topics
 
-सुझाए गए GitHub विषय: `dsh` · `dsh-plugin` · `deepseek-harness` · `memory` · `agent-memory` · `approval` · `audit` · `sqlite` · `cordis` · `llm`
+`dsh`, `dsh-plugin`, `deepseek-harness`, `memory`, `agent-memory`, `approval`, `audit`, `sqlite`, `cordis`, `llm`
 
-## 👥 योगदानकर्ता
+## Contributors
 
-[@Niuniu-Sir](https://github.com/Niuniu-Sir) का विशेष आभार — issue [#1](https://github.com/PerryLink/dsh-memento/issues/1) की विस्तृत बूट-क्रैश रिपोर्ट के लिए, जिसने 0.3.1 में `~/.dsh` फ़ॉलबैक को जन्म दिया।
+- [@Niuniu-Sir](https://github.com/Niuniu-Sir) — [issue #1](https://github.com/PerryLink/dsh-memento/issues/1) में बूट-क्रैश रिपोर्ट, जिससे 0.3.1 में `~/.dsh` फ़ॉलबैक आया।
 
-## 📄 लाइसेंस
+## PerryLink DSH Plugin Family
 
-Apache License 2.0 — देखें [LICENSE](LICENSE)। कोई तृतीय-पक्ष कोड पुनर्वितरित नहीं किया जाता; देखें [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)।
+यह परियोजना [PerryLink](https://github.com/PerryLink) द्वारा अनुरक्षित [15 DeepSeek Harness प्लगइन](https://github.com/PerryLink) में से एक है। यदि यह आपकी मदद करता है, तो बाकी भी संभवतः करेंगे:
+
+| Plugin | One-liner |
+|---|---|
+| [dsh-mcp-panel](https://github.com/PerryLink/dsh-mcp-panel) | Read-only MCP runtime panel: /mcp command + Settings tab with status, tools and errors |
+| [dsh-doublecheck](https://github.com/PerryLink/dsh-doublecheck) | Engineering-discipline guard: requirements grill, test gates, adversary review |
+| [dsh-background-agents](https://github.com/PerryLink/dsh-background-agents) | Durable background child agents with a Web UI sidebar, messaging and interrupt |
+| [dsh-lsp-actions](https://github.com/PerryLink/dsh-lsp-actions) | LSP diagnostics, formatting, completion, code actions and rename over language servers |
+| [dsh-output-styles](https://github.com/PerryLink/dsh-output-styles) | Claude Code outputStyles-equivalent runtime style switching |
+| [dsh-checkpoint-rewind](https://github.com/PerryLink/dsh-checkpoint-rewind) | Claude Code /rewind-equivalent: snapshots, session forks, one-shot restore |
+| [dsh-permission-rules](https://github.com/PerryLink/dsh-permission-rules) | Claude Code-style declarative allow/deny/ask permission rules with audit |
+| [dsh-auto-review](https://github.com/PerryLink/dsh-auto-review) | Second-model auto-review on the approval chain, fail-closed by default |
+| **[dsh-memento](https://github.com/PerryLink/dsh-memento)** | Approval-gated cross-session memory: ctx.memory seam + SQLite + memory tool |
+| [dsh-skill-pack-security](https://github.com/PerryLink/dsh-skill-pack-security) | Security-audit skill pack: secret scan, dependency and supply-chain review |
+| [dsh-session-pin](https://github.com/PerryLink/dsh-session-pin) | Pin sessions in the Web sidebar with durable ordering |
+| [dsh-composer-history](https://github.com/PerryLink/dsh-composer-history) | Terminal-style input history for the web composer: arrows, Ctrl+R search |
+| [dsh-github](https://github.com/PerryLink/dsh-github) | GitHub PR/issues integration for DSH, every write gated by approval |
+| [dsh-plugin-guide](https://github.com/PerryLink/dsh-plugin-guide) | Plugin-development knowledge base as an on-demand agent skill |
+| [dsh-claude-move](https://github.com/PerryLink/dsh-claude-move) | Migrate Claude Code sessions, memory, skills and CLAUDE.md into DSH |
+
+## License
+
+[Apache License 2.0](LICENSE) © 2026 dsh-memento contributors

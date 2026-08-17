@@ -8,7 +8,7 @@ import path from 'node:path'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const FILES = ['README.md', 'README.zh.md', 'README.es.md', 'README.pt.md', 'README.hi.md']
-const SWITCHER = '[English](README.md) · [中文](README.zh.md) · [Español](README.es.md) · [Português](README.pt.md) · [हिन्दी](README.hi.md)'
+const SWITCHER = '[English](README.md) · [简体中文](README.zh.md) · [Español](README.es.md) · [Português](README.pt.md) · [हिन्दी](README.hi.md)'
 
 let failed = 0
 for (const file of FILES) {
@@ -20,7 +20,7 @@ for (const file of FILES) {
   }
   const text = readFileSync(filePath, 'utf8')
   const checks = [
-    ['title', text.startsWith('# dsh-memento')],
+    ['title', text.includes('# dsh-memento')],
     ['switcher', text.includes(SWITCHER)],
     ['topic dsh', /`dsh`/.test(text)],
     ['topic dsh-plugin', /`dsh-plugin`/.test(text)],
@@ -28,7 +28,7 @@ for (const file of FILES) {
     ['install gh url', text.includes('git+https://github.com/PerryLink/dsh-memento.git')],
     ['no unpublished npm claim', !text.includes('once published')],
     ['db path', text.includes('$DSH_HOME/dsh-memento/memory.db')],
-    ['license link', text.includes('[LICENSE](LICENSE)')],
+    ['license link', text.includes('[Apache License 2.0](LICENSE)')],
     ['writePolicy token', text.includes('`writePolicy`')],
     ['language token', text.includes('`language`')],
     ['lessons claude', /claude/i.test(text)],
