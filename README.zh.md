@@ -98,6 +98,20 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 | `/memory` | command | `list` · `query` · `add` · `remove` · `consolidate` · `proposals` · `budgets` · `audit` · `export` · `import <path>` · `adapters` |
 | web panel | client drawer | 只读：浏览条目、搜索、预算条、审计尾部 |
 
+## How it's different
+
+| Plugin | 是什么 | dsh-memento 的差异 |
+|---|---|---|
+| dsh-memory-evolve | 记忆仓库 / 进化循环 | 类型化服务接缝、审批门与会话日志审计；无仓库野心 |
+| dsh-mnemon | 记忆存储助手 | 协议 + 门 + 审计，而非又一个 store |
+| dsh-kb-sieve | 知识库筛选 | 无检索工程：小语料子串搜索，经 `session_search`/`sessionQuery` 跨会话召回 |
+| dsh-tdai-memory | 任务驱动记忆工具 | 预算按 track×layer 且在服务内强制执行，而非尽力而为 |
+| claude-bridge | Claude Code 桥接 | DSH 原生；未来的 `seed(source:'claude')` 路径让桥接写入同一 store |
+| dsh-external/Recall | 外部 agent 记忆 | 本地优先、零网络、走 DSH 自有审批接缝 |
+| Official MCP memory examples | DSH 宣称的"memory = 外部 MCP"立场 | **原生第一方**补充：同目标、无外部服务器；两者共存 |
+
+名称是 **`dsh-memento`**（已发布到 npm 与 GitHub）。不是 `dsh-recall`（易与 dsh-external/Recall 混淆），也不是已删除的旧名 `dsh-memory`。
+
 ## dsh-memory-protocol v1
 
 `dsh-memento` 是 DSH 记忆协议的社区预演——官方 `ctx.memory` 接缝的一个候选形态。该协议把本插件的接缝规范化为跨插件契约：

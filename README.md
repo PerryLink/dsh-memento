@@ -98,6 +98,20 @@ All tunables are Schemastery `Config` fields (changeable from cordis.yml). Inval
 | `/memory` | command | `list` · `query` · `add` · `remove` · `consolidate` · `proposals` · `budgets` · `audit` · `export` · `import <path>` · `adapters` |
 | web panel | client drawer | Read-only: browse entries, search, budget bars, audit tail |
 
+## How it's different
+
+| Plugin | What it is | dsh-memento's difference |
+|---|---|---|
+| dsh-memory-evolve | memory warehouse / evolution loops | a typed service seam, approval gate, and session-log audit; no warehouse ambition |
+| dsh-mnemon | memory store helper | protocol + gate + audit, not another store |
+| dsh-kb-sieve | knowledge-base sieving | no retrieval engineering: small-corpus substring search, cross-session recall via `session_search`/`sessionQuery` |
+| dsh-tdai-memory | task-driven memory tooling | budgets are per track×layer and enforced in the service, not best-effort |
+| claude-bridge | Claude Code bridging | DSH-native; a future `seed(source:'claude')` path lets a bridge feed the same store |
+| dsh-external/Recall | external agent memory | local-first, zero-network, rides DSH's own approval seam |
+| Official MCP memory examples | DSH's stated "memory = external MCP" position | the **native first-party** complement: same goal, no external server; both coexist |
+
+The name is **`dsh-memento`** (published on npm and GitHub). Not `dsh-recall` (confusable with dsh-external/Recall), not the deleted legacy name `dsh-memory`.
+
 ## dsh-memory-protocol v1
 
 `dsh-memento` is the community rehearsal of the DSH memory protocol — a candidate shape for an official `ctx.memory` seam. The protocol normalizes this plugin's seam into a cross-plugin contract:
