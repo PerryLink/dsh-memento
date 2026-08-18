@@ -1,4 +1,4 @@
-name: Compat
+﻿name: Compat
 
 # dshbase-style compatibility verification (monthly + on demand):
 #   1. bare-import: install the packed tarball into an empty project and import
@@ -29,7 +29,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: pnpm
+          cache: npm
       - name: Pack
         run: pnpm pack --pack-destination "$RUNNER_TEMP"
       - name: Bare install + import smoke
@@ -52,7 +52,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: pnpm
+          cache: npm
       - name: Pack
         run: pnpm pack --pack-destination "$RUNNER_TEMP"
       - name: Install dsh CLI
