@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-08-19
+
+### Changed
+
+- `package.json#dshWorkshop.lifecycle.activation` upgraded from `restart-profile` to `hot-reload`: with the panel routes riding the plugin fiber since 0.4.1, dispose-and-reactivate is fully clean. Proven by a Loader-level hot-reload composition test that drives `Include.refresh()` — the same transaction the HMR watcher triggers — through a `language` en → zh → en cycle against a duplicate-strict mock `webServer`, asserting the memory seam, the re-applied config, and the routes re-registering without a duplicate route.
+
 ## [0.4.1] - 2026-08-19
 
 ### Fixed
