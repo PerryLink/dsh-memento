@@ -1658,9 +1658,14 @@ export function renderMemoryRecallResult(/** @type {object} */ _args, /** @type 
  * @param {{panelEntriesLimit: number, panelAuditLimit: number}} options - Config 面板上限。
  */
 export function registerWebRoutes(ctx, service, options) {
-  withService(ctx, 'webServer', (/** @type {{register?: (route: object) => unknown} | null | undefined} */ webServer) => {
+  withService(ctx, 'webServer', (/** @type {{register?: (route: object) => (() => void) | undefined} | null | undefined} */ webServer) => {
     if (typeof webServer?.register !== 'function') return
-    webServer.register({
+    // webServer.register 返回的 disposer 是唯一注销途径（重复 exact 路由会抛
+    // duplicate route），不随 fiber 自动撤销：逐个收集，末尾挂进一个
+    // ctx.effect，fiber 卸载时逆序摘除全部路由。
+    /** @type {Array<(() => void) | undefined>} */
+    const routeDisposers = []
+    routeDisposers.push(webServer.register({
       kind: 'exact',
       path: '/api/memento/entries',
       handler: async (/** @type {{url?: string}} */ req, /** @type {PanelResponse} */ res) => {
@@ -1683,8 +1688,8 @@ export function registerWebRoutes(ctx, service, options) {
           sendPanelJson(res, 500, { error: error instanceof Error ? error.message : String(error) })
         }
       },
-    })
-    webServer.register({
+    }))
+    routeDisposers.push(webServer.register({
       kind: 'exact',
       path: '/api/memento/audit',
       handler: async (/** @type {{url?: string}} */ req, /** @type {PanelResponse} */ res) => {
@@ -1697,8 +1702,8 @@ export function registerWebRoutes(ctx, service, options) {
           sendPanelJson(res, 500, { error: error instanceof Error ? error.message : String(error) })
         }
       },
-    })
-    webServer.register({
+    }))
+    routeDisposers.push(webServer.register({
       kind: 'exact',
       path: '/api/memento/proposals',
       handler: async (/** @type {{url?: string}} */ _req, /** @type {PanelResponse} */ res) => {
@@ -1709,7 +1714,11 @@ export function registerWebRoutes(ctx, service, options) {
           sendPanelJson(res, 500, { error: error instanceof Error ? error.message : String(error) })
         }
       },
-    })
+    }))
+    // 路由随插件生命周期撤销：fiber 卸载时逆序执行全部 disposer。
+    ctx.effect(() => () => {
+      for (const dispose of routeDisposers.splice(0).reverse()) dispose?.()
+    }, 'memento: web panel routes')
   })
 }
 

@@ -65,3 +65,39 @@ test('disposing the contributing fiber removes the memory seam and tools', async
     await harness.ctx.fiber.dispose()
   }
 })
+
+// ---------------------------------------------------------------------------
+// HMR 回归：面板路由随 fiber 卸载摘除；重挂载不再触发宿主的 duplicate route
+// ---------------------------------------------------------------------------
+
+test('disposing the contributing fiber removes the panel routes and remount re-registers cleanly', async () => {
+  const dbPath = join(mkdtempSync(join(tmpdir(), 'dsh-memento-lifecycle-')), 'memory.db')
+  const ctx = new Context()
+  await ctx.plugin(SystemPrompt)
+  ctx.provide('approval', { request: async () => 'allowed-once', overrideOf: () => undefined, config: { policy: 'ask' } })
+  await ctx.plugin(ToolRuntime)
+  // 与真实宿主一致：重复 exact 路由抛错；返回的 disposer 摘除路由。
+  const routes = new Map()
+  ctx.provide('webServer', {
+    register(route) {
+      if (routes.has(route.path)) throw new Error(`duplicate exact route: ${route.path}`)
+      routes.set(route.path, route)
+      return () => { routes.delete(route.path) }
+    },
+  })
+  const first = await ctx.plugin(plugin, { dbPath })
+  try {
+    assert.equal(routes.size, 3, 'the panel routes should be registered on mount')
+
+    await first.dispose()
+    assert.equal(routes.size, 0, 'the panel routes should be removed on fiber dispose')
+
+    // 重挂载（配置热重载）不得再触发 duplicate route。
+    const second = await ctx.plugin(plugin, { dbPath })
+    assert.equal(routes.size, 3, 'a remount should re-register the panel routes')
+    await second.dispose()
+    assert.equal(routes.size, 0)
+  } finally {
+    await ctx.fiber.dispose()
+  }
+})
