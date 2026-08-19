@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-08-19
+
+### Fixed
+
+- The panel routes now unload with the plugin fiber: the three `/api/memento/*` route disposers ride one `ctx.effect`, so a config hot-reload or disable followed by a remount no longer throws `duplicate exact route` (the host route table previously kept handlers closed over the unloaded fiber). Regression covered by a dispose-and-remount lifecycle test against a duplicate-strict route table.
+
 ## [0.4.0] - 2026-08-16
 
 ### Added
