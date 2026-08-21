@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-08-21
+
+### Changed
+
+- DeepSeek Harness compatibility baseline raised to **0.1.0-rc.8**: `@deepseek-ai/dsh-session` / `@deepseek-ai/dsh-tools` peer ranges now `>=0.1.0-rc.8 <0.2.0`, dev dependencies pinned to `0.1.0-rc.8`, and `dshWorkshop.compatibility.dshVersions` updated to `["0.1.0-rc.8"]`. All gates (141 tests, protocol conformance 22/22, typecheck, lint, coverage, five-language README check, self-contained/artifact verification) pass against rc.8.
+- Adaptive session-event gate re-verified on rc.8 and kept closed: rc.8 still ships no plugin event registration surface (`KNOWN_SESSION_EVENT_TYPES` has no `memory/*`) and `Session.append` still offers no writer-side `ignorable` marker, so appending unregistered types would still make a session unloadable by the persistence layer. Comments in `index.mjs` / `types.d.ts` / `AGENTS.md` now record this rc.8 verification.
+
 ## [0.4.2] - 2026-08-19
 
 ### Changed

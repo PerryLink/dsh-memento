@@ -4,10 +4,11 @@
 // - `declare module '@deepseek-ai/cordis'`：ctx.memory 服务（F1，三角色 seam 的
 //   Service Definition 面）。
 // - `declare module '@deepseek-ai/dsh-session'`：memory/* 会话事件词汇（F7）。
-//   注意 rc.6 尚无插件事件注册面（KNOWN_SESSION_EVENT_TYPES 不含 memory/*，
-//   且 Session.append 无法标记 ignorable），运行时按已知集合自适应派发——
-//   未被 harness 收录时跳过 append，审计由审批审计对 + 插件审计表承担；
-//   词汇与载荷形状在本文件定死，harness 收录后即自动启用。
+//   rc.8 复核（2026-08-21）：harness 仍无插件事件注册面
+//   （KNOWN_SESSION_EVENT_TYPES 不含 memory/*，Session.append 写入面也仍不接受
+//   ignorable 标记），运行时按已知集合自适应派发——未被 harness 收录时跳过
+//   append，审计由审批审计对 + 插件审计表承担；词汇与载荷形状在本文件定死，
+//   harness 收录后即自动启用。
 
 export type MemoryTrack = 'user' | 'agent'
 
@@ -201,7 +202,7 @@ declare module '@deepseek-ai/dsh-session' {
     /**
      * 一条记忆条目已落盘（审批通过后的写成功）。日志只读事件，非 surface；
      * 审计链 = approval/asked + approval/decided + 本事件 + 插件审计表。
-     * rc.6 无插件事件注册面时运行时跳过 append（见 types.d.ts 头注）。
+     * rc.8 无插件事件注册面时运行时跳过 append（见 types.d.ts 头注）。
      */
     'memory/added': {
       entry: MemoryEntry

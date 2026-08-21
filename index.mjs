@@ -219,6 +219,10 @@ async function askApproval(approval, payload, write) {
  * Session.append 无法标记 ignorable）：append 未注册类型会让该会话下次加载
  * 被持久化层拒绝。因此默认跳过，审计由审批审计对 + 审计表承担；未来 harness
  * 收录 memory/* 进已知集合后自动开启。
+ * rc.8 复核（2026-08-21）：读取端已有 ignorable 信封容忍未知类型，但
+ * Session.append 写入面仍不接受 ignorable 标记、插件事件注册面仍被官方
+ * 推迟（known-event-types 生成文件明文说明），故本门在 rc.8 下保持关闭，
+ * 行为不变。
  * @param {{append?: (type: string, data: object) => unknown} | null | undefined} session - Session。
  * @param {string} type - 事件类型。
  * @param {object} data - 载荷。
