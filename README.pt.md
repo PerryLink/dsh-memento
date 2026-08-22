@@ -24,7 +24,7 @@
 
 | Surface | Status |
 |---|---|
-| Harness | DeepSeek Harness `0.1.0-rc.6` |
+| Harness | DeepSeek Harness `0.1.1-rc.2` |
 | Node | `^22.19.0 || >=24.0.0` |
 | Platforms | Windows / macOS / Linux (somente host; sem código nativo, sem rede) |
 | Model | Qualquer |
@@ -151,7 +151,7 @@ O `dsh-memento` é o ensaio comunitário do protocolo de memória DSH — uma fo
 
 ## Known limitations
 
-- **Eventos de sessão declarados, ainda não emitidos (rc.6).** `memory/added|updated|removed|recalled|snapshot` são declarados por fusão, mas o rc.6 não tem superfície de registro para tipos de evento fora do repo; a emissão é ativada quando uma build do harness os registrar.
+- **Eventos de sessão declarados, ainda não emitidos (rc.2).** `memory/added|updated|removed|recalled|snapshot` são declarados por fusão, mas o rc.2 não tem superfície de registro para tipos de evento fora do repo; a emissão é ativada quando uma build do harness os registrar.
 - **A política `ask` precisa de um answerer.** Sem um answerer UI/ACP composto, as escritas falham fechadas.
 - **Sem indexação FTS5.** A busca por substring usa `instr` insensível a maiúsculas (correto para CJK).
 

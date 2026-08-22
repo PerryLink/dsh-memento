@@ -24,7 +24,7 @@
 
 | Surface | Status |
 |---|---|
-| Harness | DeepSeek Harness `0.1.0-rc.6` |
+| Harness | DeepSeek Harness `0.1.1-rc.2` |
 | Node | `^22.19.0 || >=24.0.0` |
 | Platforms | Windows / macOS / Linux（纯 host；无原生代码、无网络） |
 | Model | 任意 |
@@ -151,7 +151,7 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 
 ## Known limitations
 
-- **会话事件已声明、尚未发出（rc.6）。** `memory/added|updated|removed|recalled|snapshot` 已合并声明，但 rc.6 没有仓库外事件类型的注册面；一旦 harness 构建收录这些类型即自动开启发出。
+- **会话事件已声明、尚未发出（rc.2）。** `memory/added|updated|removed|recalled|snapshot` 已合并声明，但 rc.2 没有仓库外事件类型的注册面；一旦 harness 构建收录这些类型即自动开启发出。
 - **`ask` 策略需要 answerer。** 未组合 UI/ACP answerer 时，写入失败关闭。
 - **无 FTS5 索引。** 子串搜索走大小写不敏感的 `instr`（对 CJK 正确）。
 

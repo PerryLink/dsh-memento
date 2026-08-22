@@ -25,7 +25,7 @@
 
 | Surface | Status |
 |---|---|
-| Harness | DeepSeek Harness `0.1.0-rc.6` |
+| Harness | DeepSeek Harness `0.1.1-rc.2` |
 | Node | `^22.19.0 || >=24.0.0` |
 | Platforms | Windows / macOS / Linux (pure host; no native code, no network) |
 | Model | Any |
@@ -152,7 +152,7 @@ The name is **`dsh-memento`** (published on npm and GitHub). Not `dsh-recall` (c
 
 ## Known limitations
 
-- **Session events are declared, not yet emitted (rc.6).** `memory/added|updated|removed|recalled|snapshot` are merge-declared, but rc.6 has no registration surface for out-of-repo event types; emission turns on once a harness build registers them.
+- **Session events are declared, not yet emitted (rc.2).** `memory/added|updated|removed|recalled|snapshot` are merge-declared, but rc.2 has no registration surface for out-of-repo event types; emission turns on once a harness build registers them.
 - **`ask` policy needs an answerer.** With no UI/ACP answerer composed, writes fail closed.
 - **No FTS5 indexing.** Substring search runs on case-insensitive `instr` (correct for CJK).
 
