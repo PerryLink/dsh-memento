@@ -1,6 +1,7 @@
 <div align="center">
 
 # dsh-memento
+[![Gitee](https://img.shields.io/badge/Gitee-mirror-c71d23?logo=gitee)](https://gitee.com/perrylink/dsh-memento)
 
 **Bounded, layered, approval-gated, auditable cross-session memory for DeepSeek Harness.**
 
