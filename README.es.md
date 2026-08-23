@@ -173,11 +173,14 @@ Y las partes deliberadamente rechazadas: la auto-resumación oculta hacia estado
 
 ```sh
 npm install              # node ^22.19 || >=24
-npm test                 # node --test: 133 tests
+npm test                 # node --test: 141 tests
+npm run lint             # oxlint
 npm run test:conformance # dsh-memory-protocol v1 conformance suite
 npm run typecheck        # tsc --checkJs gate
 npm run check:coverage   # line-coverage gate
 npm run check:readmes    # five-language README consistency gate
+npm run verify:self-contained # reject out-of-repo dependency specs
+npm run verify:artifacts # artifact presence + syntax + import
 ```
 
 `lib/` tiene cero dependencias de DSH (solo builtins de node:); las importaciones de DSH solo existen en `index.mjs`.

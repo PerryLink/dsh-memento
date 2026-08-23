@@ -23,7 +23,7 @@ lib/extract.mjs      会话事件文本抽取（memory_recall 历史片段用，
 lib/strings.mjs      模型可见/命令面双语词表（快照头/分组标题/提案头，零依赖）
 lib/store.mjs        node:sqlite Provider：条目表+审计账本+迁移（零依赖）
 client/client.js     Web 面板（零构建 vanilla，只读；en/zh 随 language 配置；经 dsh.client 注入）
-scripts/             机械门：verify-readmes.mjs（五语一致性）、check-coverage.mjs（覆盖率）
+scripts/             机械门：verify-readmes.mjs（五语一致性）、check-coverage.mjs（覆盖率）、verify-self-contained.mjs（拒绝仓库外依赖）、verify-artifacts.mjs（制品齐全+语法+导入）、loader-runner.mjs（真实 Loader composition）
 cordis.patch.yml     bundle 声明（insert memento）
 package.json         npm 元数据；files 白名单 = 发布内容（含 docs/ 协议三件套与一致性套件）
 package-lock.json    锁文件（CI 用，不进 npm 包）
@@ -51,9 +51,12 @@ dev/                 ❌ 本地工程面：冒烟脚本、夹具、演示——�
 npm install             # 安装 peer 依赖（@deepseek-ai/dsh-tools、schemastery 等）
 npm test                # node --test 跑 test/*.test.mjs（含协议一致性套件的仓库门）
 npm run coverage        # 展示内置覆盖率报告
+npm run lint            # oxlint 静态检查
 npm run check:coverage  # 覆盖率门：lib ≥90%、index.mjs ≥85%、all files ≥90%
 npm run typecheck       # tsc --checkJs 类型检查门
 npm run check:readmes   # 五语 README 一致性门
+npm run verify:self-contained # 拒绝 file/link/portal/workspace/git 等仓库外依赖 spec
+npm run verify:artifacts # 发布文件齐全 + 语法检查 + 纯 Node import 冒烟
 npm run test:conformance  # 协议一致性套件（黄金参考；第三方 Provider 用 run.mjs --provider）
 ```
 

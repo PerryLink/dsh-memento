@@ -173,11 +173,14 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 
 ```sh
 npm install              # node ^22.19 || >=24
-npm test                 # node --test: 133 tests
+npm test                 # node --test: 141 tests
+npm run lint             # oxlint
 npm run test:conformance # dsh-memory-protocol v1 conformance suite
 npm run typecheck        # tsc --checkJs gate
 npm run check:coverage   # line-coverage gate
 npm run check:readmes    # five-language README consistency gate
+npm run verify:self-contained # reject out-of-repo dependency specs
+npm run verify:artifacts # artifact presence + syntax + import
 ```
 
 `lib/` में शून्य DSH निर्भरता है (केवल node: बिल्टइन); DSH आयात केवल `index.mjs` में मौजूद हैं।

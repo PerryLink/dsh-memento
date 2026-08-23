@@ -174,11 +174,14 @@ And the parts deliberately refused: hidden auto-summarization into model-private
 
 ```sh
 npm install              # node ^22.19 || >=24
-npm test                 # node --test: 133 tests
+npm test                 # node --test: 141 tests
+npm run lint             # oxlint
 npm run test:conformance # dsh-memory-protocol v1 conformance suite
 npm run typecheck        # tsc --checkJs gate
 npm run check:coverage   # line-coverage gate
 npm run check:readmes    # five-language README consistency gate
+npm run verify:self-contained # reject out-of-repo dependency specs
+npm run verify:artifacts # artifact presence + syntax + import
 ```
 
 `lib/` is zero-DSH-dependency (node: builtins only); DSH imports exist only in `index.mjs`.
