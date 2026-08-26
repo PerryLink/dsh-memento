@@ -99,6 +99,44 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 | `/memory` | command | `list` · `query` · `add` · `remove` · `consolidate` · `proposals` · `budgets` · `audit` · `export` · `import <path>` · `adapters` |
 | web panel | client drawer | केवल-पठन: प्रविष्टियाँ ब्राउज़ करें, खोजें, बजट बार, ऑडिट पूँछ |
 
+## MCP server
+
+`dsh-memento` एक केवल-पठन stdio **MCP सर्वर** (`dsh-memento-mcp`) भी देता है ताकि बाहरी MCP क्लाइंट (Claude, Codex, …) बिना harness के मेमोरी स्टोर खोज सकें। यह newline-delimited JSON (NDJSON) पर JSON-RPC 2.0 बोलता है — प्रति पंक्ति एक JSON ऑब्जेक्ट, कोई `Content-Length` फ़्रेमिंग नहीं।
+
+**केवल-पठन।** डेटाबेस `node:sqlite` के `readOnly: true` से खुलता है (कोई माइग्रेशन नहीं, कोई WAL लेखन नहीं, recall-count में वृद्धि नहीं); अगर फ़ाइल मौजूद नहीं है तो क्रैश के बजाय खाली परिणाम मिलते हैं।
+
+| टूल | उद्देश्य |
+|---|---|
+| `memory_search` | `{query, limit?}` → क्रमबद्ध प्रविष्टियाँ (retrieval Provider seam से केस-इनसेंसिटिव सबस्ट्रिंग) |
+| `memory_stats` | `{}` → `{total, namespaces}` प्रविष्टि गणना + track/scope अवलोकन |
+
+सीधे चलाएँ:
+
+```sh
+node bin/mcp-server.mjs
+# या, npm install के बाद: npx dsh-memento-mcp
+```
+
+डेटाबेस पथ `$DSH_MEMENTO_DB_PATH` है (निरपेक्ष, या `$DSH_HOME` के सापेक्ष); डिफ़ॉल्ट `$DSH_HOME/dsh-memento/memory.db`।
+
+Claude Desktop (`claude_desktop_config.json`) उदाहरण:
+
+```json
+{
+  "mcpServers": {
+    "dsh-memento": {
+      "command": "npx",
+      "args": ["-y", "dsh-memento-mcp"],
+      "env": {
+        "DSH_MEMENTO_DB_PATH": "/home/you/.dsh/dsh-memento/memory.db"
+      }
+    }
+  }
+}
+```
+
+सर्वर केवल-पठन है: कोई नेटवर्क नहीं, कोई लेखन नहीं, कोई अनुमोदन द्वार नहीं — केवल खोज और आँकड़े।
+
 ## How it's different
 
 | Plugin | यह क्या है | dsh-memento का अंतर |

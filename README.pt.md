@@ -99,6 +99,44 @@ Todos os parâmetros são campos Schemastery `Config` (alteráveis pelo cordis.y
 | `/memory` | command | `list` · `query` · `add` · `remove` · `consolidate` · `proposals` · `budgets` · `audit` · `export` · `import <path>` · `adapters` |
 | web panel | client drawer | Somente leitura: navegar entradas, buscar, barras de orçamento, cauda de auditoria |
 
+## MCP server
+
+O `dsh-memento` inclui um **servidor MCP** stdio somente-leitura (`dsh-memento-mcp`) para que clientes MCP externos (Claude, Codex, …) pesquisem o armazenamento de memória sem o harness. Ele fala JSON-RPC 2.0 sobre JSON delimitado por novas linhas (NDJSON): um objeto JSON por linha, sem enquadramento `Content-Length`.
+
+**Somente leitura.** O banco é aberto com `readOnly: true` do `node:sqlite` (sem migrações, sem gravações WAL, sem incremento do contador de recall); um banco ausente retorna resultados vazios em vez de falhar.
+
+| Ferramenta | Propósito |
+|---|---|
+| `memory_search` | `{query, limit?}` → entradas ordenadas (substring sem distinção de maiúsculas via o seam do Provider de recuperação) |
+| `memory_stats` | `{}` → `{total, namespaces}` contagem de entradas + visão geral por track/scope |
+
+Execução direta:
+
+```sh
+node bin/mcp-server.mjs
+# ou, após npm install: npx dsh-memento-mcp
+```
+
+O caminho do banco é `$DSH_MEMENTO_DB_PATH` (absoluto, ou relativo a `$DSH_HOME`); padrão `$DSH_HOME/dsh-memento/memory.db`.
+
+Exemplo para o Claude Desktop (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "dsh-memento": {
+      "command": "npx",
+      "args": ["-y", "dsh-memento-mcp"],
+      "env": {
+        "DSH_MEMENTO_DB_PATH": "/home/you/.dsh/dsh-memento/memory.db"
+      }
+    }
+  }
+}
+```
+
+O servidor é somente-leitura: sem rede, sem gravações, sem porta de aprovação — apenas busca e estatísticas.
+
 ## How it's different
 
 | Plugin | O que é | A diferença do dsh-memento |

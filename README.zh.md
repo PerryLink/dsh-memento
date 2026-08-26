@@ -99,6 +99,44 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 | `/memory` | command | `list` · `query` · `add` · `remove` · `consolidate` · `proposals` · `budgets` · `audit` · `export` · `import <path>` · `adapters` |
 | web panel | client drawer | 只读：浏览条目、搜索、预算条、审计尾部 |
 
+## MCP server
+
+`dsh-memento` 附带一个只读 stdio **MCP 服务器**（`dsh-memento-mcp`），让外部 MCP 客户端（Claude、Codex 等）无需 harness 即可检索记忆库。它通过 newline-delimited JSON（NDJSON）承载 JSON-RPC 2.0——每行一个 JSON 对象，不支持 `Content-Length` 分帧。
+
+**只读。** 数据库以 `node:sqlite` 的 `readOnly: true` 打开（不跑迁移、不写 WAL、不 bump recall-count）；库文件不存在时返回空结果而非崩溃。
+
+| 工具 | 用途 |
+|---|---|
+| `memory_search` | `{query, limit?}` → 排序后的条目（经检索 Provider seam 的大小写不敏感子串检索） |
+| `memory_stats` | `{}` → `{total, namespaces}` 条目总数 + 按轨道/作用域概览 |
+
+直接运行：
+
+```sh
+node bin/mcp-server.mjs
+# 或 npm 安装后：npx dsh-memento-mcp
+```
+
+数据库路径取自 `$DSH_MEMENTO_DB_PATH`（绝对路径，或相对 `$DSH_HOME`）；默认为 `$DSH_HOME/dsh-memento/memory.db`。
+
+Claude Desktop（`claude_desktop_config.json`）配置示例：
+
+```json
+{
+  "mcpServers": {
+    "dsh-memento": {
+      "command": "npx",
+      "args": ["-y", "dsh-memento-mcp"],
+      "env": {
+        "DSH_MEMENTO_DB_PATH": "/home/you/.dsh/dsh-memento/memory.db"
+      }
+    }
+  }
+}
+```
+
+服务器只读：无网络、无写入、无审批门——仅检索与统计。
+
 ## How it's different
 
 | Plugin | 是什么 | dsh-memento 的差异 |

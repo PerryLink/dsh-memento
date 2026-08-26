@@ -5,6 +5,9 @@
   "type": "module",
   "main": "./index.mjs",
   "types": "./types.d.ts",
+  "bin": {
+    "dsh-memento-mcp": "./bin/mcp-server.mjs"
+  },
   "exports": {
     ".": {
       "types": "./types.d.ts",
@@ -20,6 +23,7 @@
   "files": [
     "index.mjs",
     "types.d.ts",
+    "bin",
     "lib",
     "client",
     "cordis.patch.yml",
