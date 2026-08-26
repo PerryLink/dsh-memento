@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-08-26
+
+### Added
+
+- **Embedding Provider seam (`ctx.memoryEmbedding`)** — new `lib/embedding.mjs` registry ships a deterministic fake-hash provider by default, so third-party plugins can register real embedding backends behind the same Service Definition.
+- **Retrieval Provider seam (`ctx.memoryRetrieval`)** — new `lib/retrieval.mjs` registry keeps the built-in substring retriever as the zero-dependency main path and adds an optional `VectorRetriever` for semantic recall, enabled when `config.retrieval.vector` is `true` and an embedding provider is detected (graceful fallback to substring otherwise).
+- **stdio MCP server export** — new `bin/mcp-server.mjs` and `lib/mcp.mjs` expose the memory seam as an MCP server through the `dsh-memento-mcp` bin.
+
 ## [0.4.5] - 2026-08-23
 
 ### Changed
