@@ -178,12 +178,84 @@ export interface MemoryAdaptersService {
   export(adapterId: string, entries: MemoryEntry[]): unknown
 }
 
+/** 嵌入 Provider 契约（embedding seam 的 Provider 面；第三方插件实现）。 */
+export interface EmbeddingProvider {
+  /** 唯一 provider id（小写 kebab-case）。 */
+  id: string
+  /** 人类可读名称。 */
+  name: string
+  /** 一句话说明嵌入来源与适用场景。 */
+  description: string
+  /** 固定向量维度（正整数）。 */
+  dimensions: number
+  /** 文本数组 → 等长向量数组（每向量长 dimensions）。 */
+  embed(texts: string[]): number[][]
+}
+
+/** 嵌入 Provider 描述（/introspection 展示面）。 */
+export interface EmbeddingProviderDescriptor {
+  id: string
+  name: string
+  description: string
+  dimensions: number
+}
+
+/** ctx.memoryEmbedding 服务（embedding seam 的 Service Definition 面）。 */
+export interface MemoryEmbeddingService {
+  /** 注册 provider（返回 disposer；id 冲突响亮失败）。 */
+  register(provider: EmbeddingProvider): () => void
+  /** 已注册 provider 描述（按 id 排序）。 */
+  list(): EmbeddingProviderDescriptor[]
+  /** 按 id 取 provider（缺省 undefined；调用方据此优雅降级）。 */
+  get(id: string): EmbeddingProvider | undefined
+  /** 按 id 取 provider（缺失响亮失败）。 */
+  resolve(id: string): EmbeddingProvider
+}
+
+/** 检索 Provider 契约（retrieval seam 的 Provider 面；第三方插件实现）。 */
+export interface RetrievalProvider {
+  /** 唯一 id（'substring' | 'vector' | 第三方自定义，小写 kebab-case）。 */
+  id: string
+  /** 人类可读名称。 */
+  name: string
+  /** 一句话说明检索方式与适用场景。 */
+  description: string
+  /** 检索类别（'vector' = 语义检索）。 */
+  kind: 'substring' | 'vector'
+  /** 检索：返回按相关度降序的全部命中（不截断）。 */
+  retrieve(query: string, entries: Array<{ id: string; text: string; recallCount?: number; updatedAt?: number }>): Array<{ id: string; text: string; recallCount?: number; updatedAt?: number }>
+}
+
+/** 检索 Provider 描述（/introspection 展示面）。 */
+export interface RetrievalProviderDescriptor {
+  id: string
+  name: string
+  description: string
+  kind: 'substring' | 'vector'
+}
+
+/** ctx.memoryRetrieval 服务（retrieval seam 的 Service Definition 面）。 */
+export interface MemoryRetrievalService {
+  /** 注册 provider（返回 disposer；id 冲突响亮失败）。 */
+  register(provider: RetrievalProvider): () => void
+  /** 已注册 provider 描述（按 id 排序）。 */
+  list(): RetrievalProviderDescriptor[]
+  /** 按 id 取 provider（缺省 undefined；调用方据此优雅降级）。 */
+  get(id: string): RetrievalProvider | undefined
+  /** 按 id 取 provider（缺失响亮失败）。 */
+  resolve(id: string): RetrievalProvider
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /** dsh-memento 记忆服务（本插件提供；其它插件可读写同一 store）。 */
     memory: MemoryService
     /** dsh-memory-protocol v1 适配器注册表（本插件提供；第三方记忆插件注册自己的适配器）。 */
     memoryAdapters: MemoryAdaptersService
+    /** embedding seam 注册表（本插件提供；第三方插件可注册真实嵌入 Provider）。 */
+    memoryEmbedding: MemoryEmbeddingService
+    /** retrieval seam 注册表（本插件提供；第三方插件可注册自定义检索 Provider）。 */
+    memoryRetrieval: MemoryRetrievalService
     /** 审批 seam（本插件消费的最小面；由 DSH interaction 能力提供）。 */
     approval: MemoryApprovalLike
   }

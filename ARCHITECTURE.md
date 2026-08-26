@@ -105,7 +105,7 @@ memory 工具(add)
     - 实测（Node 22 内置 SQLite，FTS5 可用）：trigram 分词器无法索引单字 CJK 字符——`'中文测试'` 中查 `'中文'` 零命中；unicode61 把 CJK 连续段当一个 token，仅前缀可查。本插件语料以中文记忆为主，子串语义必须对 CJK 成立，instr 是唯一正确的内置引擎。
     - query 大小写不敏感（lower() 折叠 ASCII；CJK 无大小写不受影响），与面板过滤、sessionQuery 文本检索语义一致；replace/remove/consolidate 定位同语义（`lib/match.mjs` 的 `findUniqueMatch` 统一折叠，store 层 lower(instr) 与之一致）。
     - 召回排序：query 命中页的条目 `recall_count` +1、`last_recalled` 落地（SCHEMA v3 列）；排序 `recall_count DESC, updated_at DESC`（高频即重要）。快照仍走 `listEntries` 创建序（冻结块稳定优先）。
-    - 未来真正的升级路径是 harness 出现 embedding seam 后的语义召回（Provider 角色天然兼容），不是 FTS5。
+    - 未来真正的升级路径是 harness 出现 embedding seam 后的语义召回（Provider 角色天然兼容），不是 FTS5——本仓库已按决策 16 落地检索/嵌入 seam 的最小接入。
 
 11. **第三维 agentKey（per-agent 作用域，SCHEMA v3）**。
     - 写方 session 的 `header.agentPreset` 经 `agentKeyOf` 规范化（缺失→'' 共享层）；条目与提案落 `agent_key`。
@@ -175,3 +175,25 @@ gate → 预算复审 → 落盘 → 审计的完整流水线、唯一子串定�
   仓库 CI 以黄金参考全绿；第三方 Provider 拷贝目录即可跑同一套用例。协议文档：
   `docs/protocol-v1.md`（双语）、`docs/schemas/dsh-memory-protocol-v1.schema.json`、
   `docs/adapters-guide.md`（双语）、`docs/upstream-proposal.md`（双语，官方 seam 采纳论证与迁移路径）。
+
+## P0：检索与嵌入 seam（可插拔检索 + 伪嵌入向量召回）
+
+### 16. 检索 Provider seam（lib/retrieval.mjs）与嵌入 Provider seam（lib/embedding.mjs）
+
+把 memory recall 的"检索"抽成可插拔检索器，并新增嵌入 Provider 接口，两者都是完整的
+三角色 seam（Service Definition / Provider / Consumer），零 DSH 依赖、零重依赖：
+
+- **检索 seam**（`ctx.memoryRetrieval`，`lib/retrieval.mjs`）：`RetrievalProvider` 契约 +
+  `RetrievalProviderRegistry`（register 可逆 / list / get / resolve）。内置 `SubstringRetriever`
+  是零依赖主路径（大小写不敏感子串 + 召回频次排序，语义与 `store.queryEntries` 的 instr 一致）；
+  `VectorRetriever` 是可选后端，消费嵌入 provider 做内存内暴力余弦排序（小语料，与决策 10 一致）。
+- **嵌入 seam**（`ctx.memoryEmbedding`，`lib/embedding.mjs`）：`EmbeddingProvider` 契约 +
+  `EmbeddingProviderRegistry`。默认 `FakeEmbeddingProvider` 是确定性的 token 哈希分桶计数 +
+  L2 归一化（固定 256 维单位向量）——它不做语义建模，只验证 seam 接线与余弦召回路径可复现；
+  真实嵌入由可选 provider 注册（本地模型 / peer），本仓库不引入 sqlite-vec / ONNX / 本地模型。
+- **Consumer 接线**：`Config.retrieval.vector`（默认 `false`）开启后，`memory_recall` 的记忆段改走
+  vector 检索器（可见集 = `visibleEntries` + 检索器排序 + `store.bumpRecall` + `recalled` 审计）；
+  默认仍走 `service.query` 的 substring 主路径，行为不变。
+- **探测 → 使用 → 优雅降级**：`detectVectorBackend` 只要求 embedding provider 可用；sqlite-vec 是
+  可选 loadable 扩展、恒不在本仓库打包（`sqliteVec: false`），P0 向量召回走内存内暴力余弦。
+  缺 embedding / vector 关闭时优雅降级回 substring，绝不响亮失败（可选后端缺失不是配置错误）。

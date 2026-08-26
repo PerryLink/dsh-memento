@@ -83,6 +83,7 @@ All tunables are Schemastery `Config` fields (changeable from cordis.yml). Inval
 | `recall.snippetCap` | `5` | `memory_recall` snippets per session |
 | `recall.snippetChars` | `300` | `memory_recall` snippet characters |
 | `recall.windowDays` | `30` | `memory_recall` recency window in days |
+| `retrieval.vector` | `false` | Semantic recall switch: `true` enables `memory_recall` vector recall (fake hash embedding) when an embedding provider is available; otherwise degrades to substring |
 | `panelEntriesLimit` | `200` | Web panel entries page size |
 | `panelAuditLimit` | `20` | Web panel audit rows by default |
 | `auditRetentionDays` | `0` | Audit retention (0 = keep forever) |

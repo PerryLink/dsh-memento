@@ -82,6 +82,7 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 | `recall.snippetCap` | `5` | `memory_recall` में प्रति-सत्र स्निपेट |
 | `recall.snippetChars` | `300` | `memory_recall` स्निपेट अक्षर |
 | `recall.windowDays` | `30` | `memory_recall` की दिनों में हाल-समय विंडो |
+| `retrieval.vector` | `false` | सिमेंटिक रिकॉल स्विच: `true` से `memory_recall` वेक्टर रिकॉल (फ़ेक हैश एम्बेडिंग) सक्षम होता है जब कोई एम्बेडिंग प्रदाता उपलब्ध हो; अन्यथा सबस्ट्रिंग पर डिग्रेड होता है |
 | `panelEntriesLimit` | `200` | वेब पैनल प्रविष्टि पृष्ठ आकार |
 | `panelAuditLimit` | `20` | वेब पैनल डिफ़ॉल्ट ऑडिट पंक्तियाँ |
 | `auditRetentionDays` | `0` | ऑडिट अवधारण (0 = हमेशा रखें) |

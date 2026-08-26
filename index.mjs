@@ -43,6 +43,8 @@ import { renderSnapshot, visibleEntries, visibleProposals } from './lib/snapshot
 import { openMemoryStore, resolveDbPath } from './lib/store.mjs'
 import { workspaceKeyOf, agentKeyOf } from './lib/workspace.mjs'
 import { extractEventText } from './lib/extract.mjs'
+import { EmbeddingProviderRegistry, FakeEmbeddingProvider } from './lib/embedding.mjs'
+import { RetrievalProviderRegistry, SubstringRetriever, VectorRetriever, detectVectorBackend } from './lib/retrieval.mjs'
 
 /**
  * @typedef {import('./types.js').MemoryEntry} MemoryEntry
@@ -55,6 +57,7 @@ import { extractEventText } from './lib/extract.mjs'
  * @typedef {object} StoreHandle - ctx.memory 依赖的 Provider 面。
  * @property {(filter?: {track?: string, scope?: string, text?: string, limit?: number}) => MemoryQueryResult} queryEntries
  * @property {() => MemoryEntry[]} listEntries
+ * @property {(ids: string[]) => void} bumpRecall
  * @property {(track: string, scope: string, match: string, opts?: {agentKey?: string, workspaceKey?: string}) => MemoryEntry[]} matchCandidates
  * @property {(track: string, scope: string) => number} usage
  * @property {(input: object) => MemoryEntry} insertEntry
@@ -91,6 +94,7 @@ import { extractEventText } from './lib/extract.mjs'
  * @property {number} [commandListLimit]
  * @property {number} [commandAuditLimit]
  * @property {{historyLimitDefault?: number, snippetCap?: number, snippetChars?: number, windowDays?: number}} [recall]
+ * @property {{vector?: boolean}} [retrieval]
  * @property {number} [panelEntriesLimit]
  * @property {number} [panelAuditLimit]
  * @property {number} [auditRetentionDays]
@@ -145,6 +149,8 @@ export const DEFAULT_SNAPSHOT_ORDER = -50
  * @property {number} [commandAuditLimit] /memory audit 单次渲染审计行上限（默认 10）。
  * @property {{historyLimitDefault?: number, snippetCap?: number, snippetChars?: number, windowDays?: number}} [recall]
  *   memory_recall 历史段默认值（默认 8/5/300/30）。
+ * @property {{vector?: boolean}} [retrieval] 语义召回开关（默认 false：substring 主路径；
+ *   true 且探测到 embedding provider 时 memory_recall 走向量召回，否则优雅降级回 substring）。
  * @property {number} [panelEntriesLimit] 面板条目页上限与钳制（默认 200）。
  * @property {number} [panelAuditLimit] 面板审计默认条数（默认 20；上限 200 为协议常量）。
  * @property {number} [auditRetentionDays] 审计保留天数（默认 0 = 不限）。
@@ -176,6 +182,9 @@ export const Config = Schema.object({
     snippetCap: Schema.number().default(5),
     snippetChars: Schema.number().default(300),
     windowDays: Schema.number().default(30),
+  }),
+  retrieval: Schema.object({
+    vector: Schema.boolean().default(false),
   }),
   panelEntriesLimit: Schema.number().default(200),
   panelAuditLimit: Schema.number().default(20),
@@ -656,6 +665,9 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
       snippetChars: config.recall?.snippetChars ?? 300,
       windowDays: config.recall?.windowDays ?? 30,
     },
+    retrieval: {
+      vector: config.retrieval?.vector ?? false,
+    },
     panelEntriesLimit: config.panelEntriesLimit ?? 200,
     panelAuditLimit: config.panelAuditLimit ?? 20,
     auditRetentionDays: config.auditRetentionDays ?? 0,
@@ -731,6 +743,21 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
     ctx.effect(() => adapters.register(adapter), `dsh-memento.adapter.${adapter.id}`)
   }
 
+  // embedding Provider seam（ctx.memoryEmbedding）：注册表 + 默认确定性伪嵌入
+  // Provider（零依赖，接口级演示；真实嵌入由可选 provider 注册）。register 可逆，
+  // 经 ctx.effect 随插件生命周期自动回收。
+  const embeddings = new EmbeddingProviderRegistry()
+  ctx.provide('memoryEmbedding', embeddings)
+  ctx.effect(() => embeddings.register(new FakeEmbeddingProvider()), 'dsh-memento.embedding.fake-hash')
+
+  // retrieval Provider seam（ctx.memoryRetrieval）：内置 substring 检索器（零依赖
+  // 主路径）+ 可选 vector 检索器。vector 仅当 Config.retrieval.vector=true 且探测到
+  // embedding provider 时启用；否则优雅降级回 substring（retriever 保持 null）。
+  const retrievers = new RetrievalProviderRegistry()
+  ctx.provide('memoryRetrieval', retrievers)
+  ctx.effect(() => retrievers.register(new SubstringRetriever()), 'dsh-memento.retrieval.substring')
+  const resolvedRetriever = resolved.retrieval.vector === true ? setupVectorRetriever(ctx, retrievers, embeddings) : null
+
   // 审批 answerer：认领本插件的记忆写请求并按粒度策略裁决（writePolicies 精确键 >
   // track/scope > 全局 writePolicy；prepend 保证 auto/off 的确定性先于 UI answerer；
   // 会话级 never 策略在审批服务内部先裁决，任何 answerer 都无法绕过）。
@@ -797,7 +824,7 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
   // V2 观察面：/memory 命令（用户触发）、memory_recall 工具、面板 JSON 路由。
   // commands/webServer 为可选服务，缺失（headless）自动跳过。
   registerCommands(ctx, service)
-  ctx.tools.register(/** @type {import('@deepseek-ai/dsh-tools').ToolDefinition} */ (makeMemoryRecallTool(service, ctx, resolved.recall, resolved.language)))
+  ctx.tools.register(/** @type {import('@deepseek-ai/dsh-tools').ToolDefinition} */ (makeMemoryRecallTool(service, ctx, resolved.recall, resolved.language, resolvedRetriever)))
   registerWebRoutes(ctx, service, resolved)
 
   // auto-capture：监听会话事件火线，压缩结束后生成记忆提案（只落提案，不写记忆、不调模型）。
@@ -805,6 +832,24 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
   ctx.on('session/event', (session, event) => {
     handleSessionEvent(store, session, event, resolved.proposals, summaries)
   })
+}
+
+/**
+ * 按 Config.retrieval.vector 探测并装配 vector 检索器：探测到 embedding provider
+ * 才注册 VectorRetriever 并返回之；否则优雅降级（返回 null，调用方回退 substring
+ * 主路径），绝不响亮失败——vector 是可选后端，缺 embedding 不构成配置错误。
+ * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文（注册 effect）。
+ * @param {import('./lib/retrieval.mjs').RetrievalProviderRegistry} retrievers - 检索注册表。
+ * @param {import('./lib/embedding.mjs').EmbeddingProviderRegistry} embeddings - 嵌入注册表。
+ * @returns {import('./lib/retrieval.mjs').RetrievalProvider | null} vector 检索器或 null（降级）。
+ */
+function setupVectorRetriever(ctx, retrievers, embeddings) {
+  const embedding = embeddings.get('fake-hash')
+  const probe = detectVectorBackend({ embedding })
+  if (!probe.available) return null
+  const retriever = new VectorRetriever({ embedding })
+  ctx.effect(() => retrievers.register(retriever), 'dsh-memento.retrieval.vector')
+  return retriever
 }
 
 /**
@@ -1439,9 +1484,11 @@ function renderEntryLine(/** @type {{track: string, scope: string, workspaceKey?
  * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文（查 sessionQuery）。
  * @param {{historyLimitDefault: number, snippetCap: number, snippetChars: number, windowDays: number}} recall - Config.recall（默认值）。
  * @param {'en'|'zh'} [language] - 'en' | 'zh'。
+ * @param {import('./lib/retrieval.mjs').RetrievalProvider | null} [retriever] - 语义检索器；
+ *   null = 默认 substring 主路径（走 service.query 的 SQL instr）。
  * @returns {object} 工具定义。
  */
-export function makeMemoryRecallTool(service, ctx, recall, language = 'en') {
+export function makeMemoryRecallTool(service, ctx, recall, language = 'en', retriever = null) {
   const description = language === 'zh'
     ? [
       '对记忆与会话历史的两段式召回：返回 (1) dsh-memento 库中与查询匹配的有界记忆条目，以及 (2) 经 session-query 服务的近期会话历史匹配。',
@@ -1529,15 +1576,13 @@ export function makeMemoryRecallTool(service, ctx, recall, language = 'en') {
     },
     execute: /** @type {(args: any, exec: any) => Promise<any>} */ (async (args, exec) => {
       exec.signal.throwIfAborted()
-      const memory = service.query(
-        { text: args.query, limit: args.memoryLimit ?? 10 },
-        {
-          sessionId: exec.agent?.session?.id,
-          session: exec.agent?.session,
-          // 与 memory 工具一致：会话内召回按可见集过滤（共享 + 本 agent）。
-          agentKey: agentKeyOf(/** @type {string | undefined} */ (exec.agent?.session?.header?.agentPreset)),
-        },
-      )
+      const sessionId = /** @type {string | undefined} */ (exec.agent?.session?.id)
+      const session = /** @type {MemorySessionLike | null | undefined} */ (exec.agent?.session ?? null)
+      const agentKey = agentKeyOf(/** @type {string | undefined} */ (exec.agent?.session?.header?.agentPreset))
+      const limit = args.memoryLimit ?? 10
+      const memory = retriever === null
+        ? service.query({ text: args.query, limit }, { sessionId, session, agentKey })
+        : recallViaRetriever(service, retriever, args.query, limit, { sessionId, session, agentKey })
       const history = await recallHistory(
         ctx,
         args.query,
@@ -1559,6 +1604,40 @@ export function makeMemoryRecallTool(service, ctx, recall, language = 'en') {
       }
     }),
   })
+}
+
+/**
+ * 语义召回路径（retrieval seam 的 Consumer 面）：可见条目 → 检索器排序 → 召回计数
+ * + 审计。与 service.query 的子串路径对齐：命中页召回计数 +1（bumpRecall）、带
+ * sessionId 时记 recalled 审计行。可见集 = 会话 cwd 工作区层 + 共享/本 agent 层
+ * （与快照 visibleEntries 同语义）。
+ * @param {MemoryService} service - ctx.memory（提供 store）。
+ * @param {import('./lib/retrieval.mjs').RetrievalProvider} retriever - 语义检索器。
+ * @param {string} query - 检索词。
+ * @param {number} limit - 返回上限。
+ * @param {{sessionId?: string, session?: MemorySessionLike | null, agentKey: string}} opts - {sessionId, session, agentKey}。
+ * @returns {MemoryQueryResult}。
+ */
+function recallViaRetriever(service, retriever, query, limit, opts) {
+  const workspaceKey = workspaceKeyOf(/** @type {string | undefined} */ (opts.session?.header?.cwd))
+  const entries = visibleEntries(
+    /** @type {Array<{id: string, track: string, scope: string, workspaceKey: string, agentKey: string, text: string, createdAt: number}>} */ (service.store.listEntries()),
+    workspaceKey,
+    opts.agentKey,
+  )
+  const ranked = /** @type {MemoryEntry[]} */ (retriever.retrieve(query, entries))
+  const shown = ranked.slice(0, limit)
+  service.store.bumpRecall(shown.map((entry) => entry.id))
+  if (opts.sessionId !== undefined) {
+    service.store.auditAppend({
+      action: 'recalled',
+      text: query,
+      outcome: 'ok',
+      source: /** @type {string} */ (service.sourceLabel),
+      sessionId: opts.sessionId,
+    })
+  }
+  return { entries: shown, total: ranked.length, truncated: ranked.length > shown.length }
 }
 
 /**

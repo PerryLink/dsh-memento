@@ -82,6 +82,7 @@ Todos los parámetros son campos Schemastery `Config` (modificables desde cordis
 | `recall.snippetCap` | `5` | Fragmentos por sesión en `memory_recall` |
 | `recall.snippetChars` | `300` | Caracteres de fragmento en `memory_recall` |
 | `recall.windowDays` | `30` | Ventana de antigüedad en días de `memory_recall` |
+| `retrieval.vector` | `false` | Interruptor de recuperación semántica: `true` activa la recuperación vectorial de `memory_recall` (incrustación hash falsa) cuando hay un proveedor de incrustación; en caso contrario degrada a subcadena |
 | `panelEntriesLimit` | `200` | Tamaño de página de entradas del panel web |
 | `panelAuditLimit` | `20` | Filas de auditoría del panel web por defecto |
 | `auditRetentionDays` | `0` | Retención de auditoría (0 = conservar para siempre) |

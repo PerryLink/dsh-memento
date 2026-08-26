@@ -82,6 +82,7 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 | `recall.snippetCap` | `5` | `memory_recall` 每个会话的片段数 |
 | `recall.snippetChars` | `300` | `memory_recall` 片段字符数 |
 | `recall.windowDays` | `30` | `memory_recall` 近期窗口天数 |
+| `retrieval.vector` | `false` | 语义召回开关：`true` 且探测到嵌入 provider 时 `memory_recall` 走向量召回（伪嵌入），否则优雅降级回 substring |
 | `panelEntriesLimit` | `200` | Web 面板条目分页大小 |
 | `panelAuditLimit` | `20` | Web 面板默认审计行数 |
 | `auditRetentionDays` | `0` | 审计保留天数（0 = 永久保留） |
