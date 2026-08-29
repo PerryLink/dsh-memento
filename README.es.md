@@ -1,6 +1,7 @@
 <div align="center">
 
 # dsh-memento
+- **Canal 1024 store**: `npm i -g dsh1024` una vez, luego `dsh1024 plugin --profile web add dsh-memento` (cuenta para el ranking de instalaciones de [deepseek1024.com](https://deepseek1024.com)).
 
 **Memoria entre sesiones acotada, por capas, con puerta de aprobación y auditable para DeepSeek Harness.**
 
