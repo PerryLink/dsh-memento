@@ -153,5 +153,9 @@
   "publishConfig": {
     "access": "public"
   },
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "funding": {
+    "type": "individual",
+    "url": "https://github.com/sponsors/PerryLink"
+  }
 }
