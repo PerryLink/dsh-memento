@@ -18,7 +18,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-const CallId = ((id) => id)
+const CallId = (/** @type {string} */ id) => /** @type {import('@deepseek-ai/dsh-tools').ToolExecution['callId']} */ (id)
 import { readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
