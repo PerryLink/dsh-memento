@@ -1,6 +1,6 @@
 {
   "name": "dsh-memento",
-  "description": "Bounded, layered, approval-gated, auditable cross-session memory for DeepSeek Harness 閳?a capability seam (ctx.memory service + local SQLite provider + memory tool + frozen snapshot injection), not another memory warehouse",
+  "description": "Bounded, layered, approval-gated, auditable cross-session memory for DeepSeek Harness 闁?a capability seam (ctx.memory service + local SQLite provider + memory tool + frozen snapshot injection), not another memory warehouse",
   "version": "0.5.0",
   "type": "module",
   "main": "./index.mjs",
@@ -91,7 +91,7 @@
     ],
     "compatibility": {
       "dshVersions": [
-        "0.1.1-rc.2"
+        "0.1.2-alpha.2"
       ]
     },
     "capability": {
