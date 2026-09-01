@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Compatibility baseline raised to **0.1.2-alpha.3**: the `@deepseek-ai/dsh-session` / `@deepseek-ai/dsh-tools` / `@deepseek-ai/dsh-attachment` dev dependencies are pinned to `0.1.2-alpha.3`, `cordis`/`schemastery` dev pins move to `^4.0.2`/`^3.18.2` (the `schemastery` peer keeps `>=3.0.0`), `dshWorkshop.compatibility.dshVersions` lists `0.1.2-alpha.3`, and the compat probe pins are raised to `0.1.2-alpha.3`. The adaptive session-event gate stays closed on `0.1.2-alpha.3` (`Session.append` still cannot stamp the `ignorable` envelope), so behavior is unchanged.
+
 ## [0.5.0] - 2026-08-26
 
 ### Added
