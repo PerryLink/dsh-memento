@@ -1,33 +1,27 @@
 // SPDX-License-Identifier: Apache-2.0
-// client/client.js — dsh-memento 浏览器观察面板（F9，零构建 vanilla）。
+// client/client.js — dsh-memento 浏览器半侧（零构建 vanilla，单模块）。
 //
 // host 端 dsh.client 扫描把本文件作为 classic script 注入 __DSH_BOOT__ 图，
-// 执行时经 window.__ModuleLoader__.load 注册工厂；apply 挂载浮层抽屉面板。
+// 执行时经 window.__ModuleLoader__.load 注册唯一 factory（id = 插件名，与
+// 宿主 graph row 一致；同文件多个 load 会产生永远不被物化的孤儿 factory）。
+// apply 挂载两块表面：浮层抽屉面板 + 宿主设置弹窗的一级设置项。
 // 面板只读：条目浏览/搜索/预算条/审计尾，全部走本插件自注册的
 // /api/memento/* JSON 路由（只走公开 API）。写与审批在 DSH 内置审批 UI 完成，
 // 面板不产生任何模型可见内容、不做任何审批决策。
 // 面板文案随 Config.language（en/zh）切换，语言来自 entries 路由响应。
-//
-// 本文件同时注册第二个客户端模块 dsh-memento/settings-section：宿主设置弹窗
-// 左侧菜单的一级设置项（settings.section，id = dsh-memento），与通用设置、
-// 插件、能力库等并列。页面经 ctx.settingsScope 读/写用户层（settings.yaml），
-// 暂存—保存语义与宿主内置卡片一致；factory 的 require 由宿主模块系统提供
-// （react 为平台内置模块）。
+// 设置页经 ctx.settingsScope 读/写用户层（settings.yaml），暂存—保存语义
+// 与宿主内置卡片一致；factory 的 require 由宿主模块系统提供（react 为平台
+// 内置模块）。
 
-(function () {
+;(function () {
   'use strict'
   if (typeof window === 'undefined' || !window.__ModuleLoader__ || !window.__ModuleLoader__.load) return
   window.__ModuleLoader__.load({
     id: 'dsh-memento',
-    factory: function () {
-      return {
-        name: 'memento-panel',
-        inject: [],
-        apply: function () { void bootPanel() },
-      }
-    },
-  })
-})()
+    factory: function (require) {
+      const react = require('react')
+      /** createElement 简写（宿主平台内置 react，无需构建期 JSX 编译）。 */
+      const jsx = react.createElement
 
 const PANEL_ID = 'dsh-memento-panel'
 
@@ -273,16 +267,6 @@ function escapeHtml(value) {
 }
 
 // ── 宿主设置页（settings.section 一级项，id = dsh-memento）──────────────
-;(function () {
-  'use strict'
-  if (typeof window === 'undefined' || !window.__ModuleLoader__ || !window.__ModuleLoader__.load) return
-  window.__ModuleLoader__.load({
-    id: 'dsh-memento/settings-section',
-    factory: function (require) {
-      const react = require('react')
-      /** createElement 简写（宿主平台内置 react，无需构建期 JSX 编译）。 */
-      const jsx = react.createElement
-
       /** 卡片文案（en 源文 / zh 译文；语言跟随 namespace value.language，保存后即时切换）。 */
       const CARD_STRINGS = {
         en: {
@@ -771,6 +755,7 @@ function escapeHtml(value) {
       }
 
       function apply(ctx) {
+        void bootPanel()
         if (!styleInstalled && typeof document !== 'undefined') {
           styleInstalled = true
           const tag = document.createElement('style')
@@ -789,7 +774,7 @@ function escapeHtml(value) {
       }
 
       return {
-        name: 'memento-settings-section',
+        name: 'memento-client',
         inject: ['slots', 'settingsScope'],
         apply,
       }
