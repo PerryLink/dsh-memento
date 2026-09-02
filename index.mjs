@@ -13,6 +13,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import { KNOWN_SESSION_EVENT_TYPES } from '@deepseek-ai/dsh-session'
+import * as dshSettings from '@deepseek-ai/dsh-settings'
 import { readFileSync } from 'node:fs'
 import {
   TOOL_NAME,
@@ -204,12 +205,7 @@ export const Config = Schema.object({
   ...SHARED_CONFIG_FIELDS,
 })
 
-/**
- * 宿主设置面板 namespace（settings.plugin.item 卡片以本 namespace 为键认领卡片）。
- * 字符串直传：npm 发布版 dsh-settings@alpha.3 未导出 settingsNamespace brand，
- * Desktop 内置副本的 register 同样接受字符串。
- * @type {'dsh-memento'}
- */
+/** 宿主设置面板 namespace（settings.plugin.item 卡片以本 namespace 为键认领卡片）。 */
 export const SETTINGS_NAMESPACE = 'dsh-memento'
 
 /** 设置面板用户面 schema：共享字段 + 悬浮窗开关；无 enabled（见 Config typedef）。 */
@@ -899,18 +895,28 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
     }
   }
   ctx.inject(['settings'], (sctx) => {
-    // 手写接线，不用 installSection/installSettingsSection：两份 dsh-settings 副本
-    // （npm 发布版与宿主内置版）的便捷安装 API 形状不同（npm 在类上、Desktop 是
-    // 模块级函数且导出面不同），而 register+watch 面完全一致——只依赖它。
-    // 卸载回退省略：settings 服务单独消失即宿主重组，插件 fiber 届时同样终结。
-    const settingsHost = /** @type {{settings: {register: (ns: string, schema: object, options: {base: object, validate: (value: object) => void}) => {get: () => MemoryRuntimeValues, watch: (cb: () => void) => () => void}}}} */ (/** @type {unknown} */ (sctx))
-    const scope = settingsHost.settings.register(SETTINGS_NAMESPACE, SettingsSchema, {
-      base: resolved,
+    // 官方安装 API 的双发布线取用。dsh-settings 有两条发布线：宿主内置副本
+    // （0.1.1-rc.1 形状，npm 未发布该形状）导出模块级 installSettingsSection；
+    // npm 发布线（alpha.3/alpha.4）把同能力放在 SettingsProvider 类方法
+    // installSection。两条线各自都是官方接口，这里只做形状分派，不自造机制。
+    /** @typedef {{setSource: (fn: () => MemoryRuntimeValues) => void, onChange: () => void, validate: (value: object) => void}} SettingsInstallHooks */
+    /** @type {SettingsInstallHooks} */
+    const hooks = {
+      setSource: (/** @type {() => MemoryRuntimeValues} */ fn) => { source = fn },
+      onChange,
       validate: (/** @type {object} */ value) => validateMemoryConfig(/** @type {MemoryRuntimeValues} */ (value)),
-    })
-    source = () => scope.get()
-    onChange()
-    scope.watch(onChange)
+    }
+    // 两副本的导出面在 checkJs 下类型不全，统一经 unknown 中转读属性。
+    const settingsModule = /** @type {Record<string, unknown>} */ (dshSettings)
+    const moduleInstall = /** @type {null | ((ctx: object, ns: string, schema: object, entry: object, hooks: SettingsInstallHooks) => void)} */ (settingsModule.installSettingsSection ?? null)
+    if (moduleInstall !== null) {
+      moduleInstall(sctx, SETTINGS_NAMESPACE, SettingsSchema, resolved, hooks)
+      return
+    }
+    const settingsService = /** @type {Record<string, unknown>} */ (/** @type {{settings: unknown}} */ (/** @type {unknown} */ (sctx)).settings)
+    // 方法须以 settingsService 为 receiver 调用（属性链调用），脱钩会丢 this。
+    const providerInstall = /** @type {(owner: object, ns: string, schema: object, entry: object, hooks: SettingsInstallHooks) => void} */ (settingsService.installSection)
+    providerInstall.call(settingsService, ctx, SETTINGS_NAMESPACE, SettingsSchema, resolved, hooks)
   })
   booted = true
   let store = openMemoryStore(resolveDbPath(resolved.dbPath), { retentionDays: resolved.auditRetentionDays })

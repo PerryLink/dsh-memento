@@ -40,6 +40,14 @@ function makeFakeSettings(userLayer = {}) {
       }
       return scope
     },
+    // npm alpha.3/4 线形态（本地 node_modules 副本）：类方法 installSection。
+    // 宿主内置线（模块级 installSettingsSection）与它只差取用方式，行为相同。
+    installSection(/** @type {object} */ _owner, /** @type {string} */ ns, /** @type {object} */ schema, /** @type {object} */ entry, /** @type {{setSource: (fn: () => object) => void, onChange: () => void, validate?: (value: object) => void}} */ hooks) {
+      const scope = service.register(ns, schema, { base: entry, validate: hooks.validate })
+      hooks.setSource(() => scope.get())
+      hooks.onChange()
+      scope.watch(() => hooks.onChange())
+    },
     /** 模拟一次已提交的用户层写入（provider → publish → watchers）。 */
     publish(/** @type {object} */ patch) {
       current = { .../** @type {Record<string, unknown>} */ (current), ...patch }
