@@ -25,7 +25,7 @@
 
 | Surface | Status |
 |---|---|
-| Harness | DeepSeek Harness `0.1.1-rc.2` 0.1.2-alpha.5 (adaptado el 2026-09-02): el sobre de sesión conserva su campo ignorable solo para compatibilidad de lectura de logs almacenados - Session.append aún no puede estamparlo, por lo que el comportamiento de la puerta no cambia. |
+| Harness | DeepSeek Harness `0.1.2-alpha.5` (adaptado el 2026-09-02): el sobre de sesión conserva su campo ignorable solo para compatibilidad de lectura de logs almacenados - Session.append aún no puede estamparlo, por lo que el comportamiento de la puerta no cambia. |
 | Node | `^22.19.0 || >=24.0.0` |
 | Platforms | Windows / macOS / Linux (solo host; sin código nativo, sin red) |
 | Model | Cualquiera |
