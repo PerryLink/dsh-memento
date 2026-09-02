@@ -17,7 +17,7 @@
       return {
         name: 'memento-panel',
         inject: [],
-        apply: function () { installPanel() },
+        apply: function () { void bootPanel() },
       }
     },
   })
@@ -63,9 +63,35 @@ const STRINGS = {
   },
 }
 
-function installPanel() {
+/**
+ * 启动探测：panel.enabled=false 时入口按钮不渲染（设置面板可随时改回）；
+ * 探测失败按开启处理，行为与未引入开关前的版本一致。
+ * @returns {Promise<{enabled: boolean, language: string}>}。
+ */
+async function probePanelState() {
+  try {
+    const response = await fetch('/api/memento/entries?limit=1')
+    if (response.ok) {
+      const data = await response.json()
+      if (data.error === undefined) {
+        return { enabled: data.panel?.enabled !== false, language: data.language ?? 'en' }
+      }
+    }
+  } catch {
+    // 探测失败：保持默认开启。
+  }
+  return { enabled: true, language: 'en' }
+}
+
+async function bootPanel() {
+  const state = await probePanelState()
+  if (!state.enabled) return
+  installPanel(state)
+}
+
+function installPanel(state) {
   if (document.getElementById(PANEL_ID)) return
-  let S = STRINGS.en
+  let S = STRINGS[state.language] ?? STRINGS.en
 
   const style = document.createElement('style')
   style.textContent = `
