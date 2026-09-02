@@ -64,9 +64,12 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 
 Todos los parámetros son campos Schemastery `Config` (modificables desde cordis.yml). Los valores inválidos fallan de forma ruidosa al cargar. Se sobrescriben bajo la fila `memento`.
 
+**Panel de ajustes.** Con el servicio de ajustes de DSH montado, todos los campos siguientes (salvo `enabled`) se editan desde **Ajustes → Plugins → Plugin configuration** mediante la tarjeta propia del plugin; los cambios se guardan en la capa de usuario de ajustes (`settings.yaml`) sin tocar archivos. La mayoría se aplican en vivo (políticas de escritura, idioma, presupuestos, topes, propuestas, panel); los marcados como de recarga (`dbPath`, `snapshotOrder`, `auditRetentionDays`, `retrieval.vector`) se aplican tras recargar DSH. Sin el servicio de ajustes todo vuelve a la configuración compuesta, igual que antes. El botón flotante del panel puede ocultarse desde la misma tarjeta (`panel.enabled`).
+
 | Key | Default | Meaning |
 |---|---|---|
-| `enabled` | `true` | Interruptor maestro; `false` elimina servicio, herramientas, instantánea, comando, panel y answerer |
+| `enabled` | `true` | Interruptor maestro; `false` elimina servicio, herramientas, instantánea, comando, panel y answerer (no editable desde la tarjeta: un plugin deshabilitado no tiene tarjeta) |
+| `panel.enabled` | `true` | Mostrar el botón flotante del panel web; `false` oculta la entrada 🧠 (la tarjeta de ajustes no se ve afectada) |
 | `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | Absoluto, o relativo a `$DSH_HOME` (en Windows cae a `~/.dsh`) |
 | `budgets.user.userGlobal` | `2000` | Presupuesto estricto de caracteres de la capa user-global de la pista user |
 | `budgets.user.workspace` | `2000` | Presupuesto estricto de caracteres de la capa workspace de la pista user |
@@ -98,7 +101,8 @@ Todos los parámetros son campos Schemastery `Config` (modificables desde cordis
 | `memory` | tool | add/replace/remove/consolidate/query con guía Save/Skip; las escrituras pasan por la puerta de aprobación |
 | `memory_recall` | tool | Coincidencias acotadas de memoria más coincidencias recientes del historial de sesión |
 | `/memory` | command | `list` · `query` · `add` · `remove` · `consolidate` · `proposals` · `budgets` · `audit` · `export` · `import <path>` · `adapters` |
-| web panel | client drawer | Solo lectura: explorar entradas, buscar, barras de presupuesto, cola de auditoría |
+| web panel | client drawer | Solo lectura: explorar entradas, buscar, barras de presupuesto, cola de auditoría; el botón flotante puede ocultarse (`panel.enabled`) |
+| settings card | Ajustes de DSH → Plugins | Edita todos los campos de configuración (salvo `enabled`) sin tocar archivos; el momento de aplicación (en vivo o tras recarga) se indica en la tarjeta |
 
 ## MCP server
 

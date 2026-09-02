@@ -64,9 +64,12 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 
 सभी ट्यूनेबल Schemastery `Config` फ़ील्ड हैं (cordis.yml से बदले जा सकते हैं)। अमान्य मान लोड पर ज़ोर से विफल होते हैं। `memento` पंक्ति के अंतर्गत ओवरराइड करें।
 
+**सेटिंग्स पैनल।** DSH सेटिंग्स सेवा माउंट होने पर नीचे के सभी फ़ील्ड (`enabled` को छोड़कर) **सेटिंग्स → Plugins → Plugin configuration** में प्लगइन के अपने कार्ड से संपादित होते हैं; बदलाव सेटिंग्स यूज़र लेयर (`settings.yaml`) में जाते हैं, फ़ाइल छूने की ज़रूरत नहीं। अधिकांश फ़ील्ड लाइव लागू होते हैं (राइट पॉलिसी, भाषा, बजट, सीमाएँ, प्रस्ताव, पैनल); रीलोड-आवश्यक चिह्नित फ़ील्ड (`dbPath`, `snapshotOrder`, `auditRetentionDays`, `retrieval.vector`) DSH रीलोड के बाद लागू होते हैं। सेटिंग्स सेवा के अभाव में सब कुछ संयुक्त cordis कॉन्फ़िग पर लौटता है, पहले जैसा। फ़्लोटिंग पैनल बटन उसी कार्ड से छिपाया जा सकता है (`panel.enabled`)।
+
 | Key | Default | Meaning |
 |---|---|---|
-| `enabled` | `true` | मुख्य स्विच; `false` सेवा, टूल, स्नैपशॉट, कमांड, पैनल और answerer हटा देता है |
+| `enabled` | `true` | मुख्य स्विच; `false` सेवा, टूल, स्नैपशॉट, कमांड, पैनल और answerer हटा देता है (सेटिंग्स कार्ड से संपादन योग्य नहीं — अक्षम प्लगइन का कोई कार्ड नहीं) |
+| `panel.enabled` | `true` | वेब पैनल का फ़्लोटिंग बटन दिखाएँ; `false` 🧠 प्रविष्टि छिपाता है (सेटिंग्स कार्ड अप्रभावित) |
 | `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | निरपेक्ष, या `$DSH_HOME` के सापेक्ष (Windows पर `~/.dsh` पर फ़ॉलबैक) |
 | `budgets.user.userGlobal` | `2000` | user ट्रैक की user-global परत का कठोर अक्षर बजट |
 | `budgets.user.workspace` | `2000` | user ट्रैक की workspace परत का कठोर अक्षर बजट |
@@ -98,7 +101,8 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 | `memory` | tool | Save/Skip मार्गदर्शन के साथ add/replace/remove/consolidate/query; लेखन अनुमोदन द्वार से गुज़रता है |
 | `memory_recall` | tool | परिबद्ध मेमोरी मिलान + हाल के सत्र-इतिहास मिलान |
 | `/memory` | command | `list` · `query` · `add` · `remove` · `consolidate` · `proposals` · `budgets` · `audit` · `export` · `import <path>` · `adapters` |
-| web panel | client drawer | केवल-पठन: प्रविष्टियाँ ब्राउज़ करें, खोजें, बजट बार, ऑडिट पूँछ |
+| web panel | client drawer | केवल-पठन: प्रविष्टियाँ ब्राउज़ करें, खोजें, बजट बार, ऑडिट पूँछ; फ़्लोटिंग बटन छिपाया जा सकता है (`panel.enabled`) |
+| settings card | DSH सेटिंग्स → Plugins | फ़ाइल छुए सभी कॉन्फ़िग फ़ील्ड संपादित करें (`enabled` को छोड़कर); लाइव/रीलोड समय कार्ड में अंकित |
 
 ## MCP server
 

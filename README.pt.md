@@ -64,9 +64,12 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 
 Todos os parâmetros são campos Schemastery `Config` (alteráveis pelo cordis.yml). Valores inválidos falham ruidosamente ao carregar. Sobrescreva na linha `memento`.
 
+**Painel de configurações.** Com o serviço de configurações do DSH montado, todos os campos abaixo (exceto `enabled`) são editáveis em **Configurações → Plugins → Plugin configuration** pelo próprio cartão do plugin; as alterações vão para a camada de usuário das configurações (`settings.yaml`) sem editar arquivos. A maioria aplica-se ao vivo (políticas de escrita, idioma, orçamentos, limites, propostas, painel); os campos marcados como recarregar (`dbPath`, `snapshotOrder`, `auditRetentionDays`, `retrieval.vector`) aplicam-se após recarregar o DSH. Sem o serviço de configurações, tudo volta à configuração composta, exatamente como antes. O botão flutuante do painel pode ser ocultado no mesmo cartão (`panel.enabled`).
+
 | Key | Default | Meaning |
 |---|---|---|
-| `enabled` | `true` | Interruptor mestre; `false` remove serviço, ferramentas, snapshot, comando, painel e answerer |
+| `enabled` | `true` | Interruptor mestre; `false` remove serviço, ferramentas, snapshot, comando, painel e answerer (não editável no cartão: um plugin desabilitado não tem cartão) |
+| `panel.enabled` | `true` | Mostrar o botão flutuante do painel web; `false` oculta a entrada 🧠 (o cartão de configurações não é afetado) |
 | `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | Absoluto, ou relativo a `$DSH_HOME` (no Windows cai para `~/.dsh`) |
 | `budgets.user.userGlobal` | `2000` | Orçamento rígido de caracteres da camada user-global da trilha user |
 | `budgets.user.workspace` | `2000` | Orçamento rígido de caracteres da camada workspace da trilha user |
@@ -98,7 +101,8 @@ Todos os parâmetros são campos Schemastery `Config` (alteráveis pelo cordis.y
 | `memory` | tool | add/replace/remove/consolidate/query com orientação Save/Skip; escritas passam pela porta de aprovação |
 | `memory_recall` | tool | Correspondências limitadas de memória mais correspondências recentes do histórico de sessão |
 | `/memory` | command | `list` · `query` · `add` · `remove` · `consolidate` · `proposals` · `budgets` · `audit` · `export` · `import <path>` · `adapters` |
-| web panel | client drawer | Somente leitura: navegar entradas, buscar, barras de orçamento, cauda de auditoria |
+| web panel | client drawer | Somente leitura: navegar entradas, buscar, barras de orçamento, cauda de auditoria; o botão flutuante pode ser ocultado (`panel.enabled`) |
+| settings card | Configurações do DSH → Plugins | Edita todos os campos de configuração (exceto `enabled`) sem tocar em arquivos; o momento de aplicação (ao vivo ou após recarga) é indicado no cartão |
 
 ## MCP server
 

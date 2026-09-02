@@ -139,6 +139,8 @@ memory 工具(add)
 
 全部字段可 cordis.yml 覆盖，schema 见 `index.mjs` 的 `Config`；完整字段表（`enabled` / `dbPath` / `budgets` / `writePolicy` / `writePolicies` / `language` / `snapshotOrder` / `maxEntriesPerQuery` / `commandListLimit` / `commandAuditLimit` / `recall.*` / `panelEntriesLimit` / `panelAuditLimit` / `auditRetentionDays` / `proposals.*`）以 README 配置表为准，本文件不再逐项复制以免漂移。非法值加载期响亮失败。
 - **harness 主目录回退（0.3.1）**：`dbPath` 为空或相对路径时，基准目录取 `$DSH_HOME`；`dsh web` 启动不会把官方 `resolveDshHome()` 解析出的主目录写回 `process.env.DSH_HOME`，因此未导出时回退 `~/.dsh`（与官方回退同语义）——否则默认 Windows 配置会在真实 boot 时整体崩溃（issue #1）。`lib/` 零 DSH 依赖的红线不允许 import `@deepseek-ai/dsh-home-paths`，用 `os.homedir()` 复刻同一回退。
+- **宿主设置面板接入（settings namespace）**：settings 服务挂载时经 `installSection` 注册 `dsh-memento` namespace（`SettingsSchema` = `Config` 去 `enabled` 加 `panel`，base = 组合配置，validate 复用同一业务校验）。生效分两级：热字段（writePolicy(s)/language/budgets/各 limit/proposals/panel）经 watch 即时生效——answerer 与命令门每次读 live 容器，service 实例属性同步更新；启动期字段（dbPath/snapshotOrder/auditRetentionDays/retrieval.vector）在 settings 先于本插件挂载的常态下于开库前合成用户层，运行期变更写 `settings-reload-required` 审计行并要求重载——不做半热切换（store 不热重开、section order 注册期固定）。`enabled` 不进 namespace：false 时插件整体卸载、卡片随 namespace 消失，从 UI 上无法恢复。settings 缺失（headless）时 live 保持组合值，行为与未接入前一致。
+- **设置卡片（零构建）**：`client/client.js` 同时注册第二个客户端模块 `dsh-memento/settings-card`（factory 经宿主模块系统 require 平台内置 react，无构建步骤），向 `settings.plugin.item` slot 注册键为 `dsh-memento` 的卡片。暂存—保存/放弃/单字段重置对齐宿主 CardForm 语义；写入按顶层字段聚合（`scope.set(top, 合并值)`），不依赖点路径写入面。悬浮窗开关经 `/api/memento/entries` 响应的 `panel` 字段贯通到面板启动探测——host 与面板同源，不依赖浏览器读 settings。
 
 ## 协议 v1（0.4.0：dsh-memory-protocol 社区预演）
 

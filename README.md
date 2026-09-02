@@ -65,9 +65,12 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 
 All tunables are Schemastery `Config` fields (changeable from cordis.yml). Invalid values fail loudly at load. Override under the `memento` row.
 
+**Settings panel.** When the DSH settings service is mounted, every field below (except `enabled`) is editable from **Settings → Plugins → Plugin configuration** via the plugin's own card; edits land in the settings user layer (`settings.yaml`) and need no file editing. Most fields apply live (write policies, language, budgets, limits, proposals, panel); the fields marked as reload-required (`dbPath`, `snapshotOrder`, `auditRetentionDays`, `retrieval.vector`) apply after DSH reloads. Without the settings service everything falls back to the composed cordis config, exactly as before. The floating panel button can be hidden from the same card (`panel.enabled`).
+
 | Key | Default | Meaning |
 |---|---|---|
-| `enabled` | `true` | Master switch; `false` removes the service, tools, snapshot, command, panel, and answerer |
+| `enabled` | `true` | Master switch; `false` removes the service, tools, snapshot, command, panel, and answerer (not editable from the settings card — a disabled plugin has no card) |
+| `panel.enabled` | `true` | Show the web panel's floating button; `false` hides the 🧠 entry (the settings card itself stays reachable) |
 | `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | Absolute, or relative to `$DSH_HOME` (falls back to `~/.dsh` on Windows) |
 | `budgets.user.userGlobal` | `2000` | Hard character budget for the user track's user-global layer |
 | `budgets.user.workspace` | `2000` | Hard character budget for the user track's workspace layer |
@@ -99,7 +102,8 @@ All tunables are Schemastery `Config` fields (changeable from cordis.yml). Inval
 | `memory` | tool | add/replace/remove/consolidate/query with Save/Skip guidance; writes ride the approval gate |
 | `memory_recall` | tool | Bounded memory matches plus recent session-history matches |
 | `/memory` | command | `list` · `query` · `add` · `remove` · `consolidate` · `proposals` · `budgets` · `audit` · `export` · `import <path>` · `adapters` |
-| web panel | client drawer | Read-only: browse entries, search, budget bars, audit tail |
+| web panel | client drawer | Read-only: browse entries, search, budget bars, audit tail; the floating entry button can be hidden (`panel.enabled`) |
+| settings card | DSH Settings → Plugins | Edit every config field (except `enabled`) without touching files; live vs reload-required timing is marked in-card |
 
 ## MCP server
 

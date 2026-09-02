@@ -64,9 +64,12 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 
 所有可调项均为 Schemastery `Config` 字段（可在 cordis.yml 中修改）。非法值在加载期响亮失败。在 `memento` 行下覆盖。
 
+**设置面板。** DSH 设置服务挂载时，下表除 `enabled` 外的全部字段可在 **设置 → 插件 → 插件配置** 页经插件自己的卡片编辑；修改写入设置用户层（`settings.yaml`），无需改文件。大多数字段即时生效（写策略、语言、预算、各上限、提案、面板）；标注重载生效的字段（`dbPath`、`snapshotOrder`、`auditRetentionDays`、`retrieval.vector`）在 DSH 重载后生效。设置服务缺失时一切回退组合配置，与从前完全一致。悬浮窗按钮可在同一卡片隐藏（`panel.enabled`）。
+
 | Key | Default | Meaning |
 |---|---|---|
-| `enabled` | `true` | 总开关；`false` 移除服务、工具、快照、命令、面板与 answerer |
+| `enabled` | `true` | 总开关；`false` 移除服务、工具、快照、命令、面板与 answerer（设置卡片不可编辑——禁用的插件没有卡片） |
+| `panel.enabled` | `true` | 显示 Web 面板悬浮按钮；`false` 隐藏 🧠 入口（设置卡片本身不受影响） |
 | `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | 绝对路径，或相对 `$DSH_HOME`（Windows 上回退到 `~/.dsh`） |
 | `budgets.user.userGlobal` | `2000` | user 轨 user-global 层的硬字符预算 |
 | `budgets.user.workspace` | `2000` | user 轨 workspace 层的硬字符预算 |
@@ -98,7 +101,8 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 | `memory` | tool | 带 Save/Skip 指引的 add/replace/remove/consolidate/query；写入走审批门 |
 | `memory_recall` | tool | 有界的记忆匹配 + 近期会话历史匹配 |
 | `/memory` | command | `list` · `query` · `add` · `remove` · `consolidate` · `proposals` · `budgets` · `audit` · `export` · `import <path>` · `adapters` |
-| web panel | client drawer | 只读：浏览条目、搜索、预算条、审计尾部 |
+| web panel | client drawer | 只读：浏览条目、搜索、预算条、审计尾部；悬浮入口按钮可隐藏（`panel.enabled`） |
+| settings card | DSH 设置 → 插件 | 免改文件编辑除 `enabled` 外的全部配置字段；即时/重载生效时机在卡片内标注 |
 
 ## MCP server
 
