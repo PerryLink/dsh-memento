@@ -10,28 +10,27 @@ import { apply, DEFAULT_BUDGETS } from '../index.mjs'
 import { createMockCtx, makeAgent, makeExec } from './helpers/mock-ctx.mjs'
 
 /**
- * 假 settings 服务：installSection 语义对齐 @deepseek-ai/dsh-settings（npm alpha.3）。
- * current = 组合层 + 用户层浅覆盖；publish 模拟一次用户写入提交。
+ * 假 settings 服务：register 语义对齐 @deepseek-ai/dsh-settings（npm alpha.3 与
+ * 宿主内置副本一致的共同面）。current = 组合层 + 用户层浅覆盖；publish 模拟一次
+ * 用户写入提交。
  * @param {object} [userLayer] - settings.yaml 用户层（相对组合层的覆盖）。
  */
 function makeFakeSettings(userLayer = {}) {
-  /** @type {Array<{owner: object, ns: string, entry: object}>} */
+  /** @type {Array<{ns: string, entry: object}>} */
   const installs = []
   /** @type {Array<() => void>} */
   const watchers = []
   let current = /** @type {Record<string, unknown> | undefined} */ (undefined)
   const service = {
-    installSection(/** @type {object} */ owner, /** @type {string} */ ns, /** @type {object} */ _schema, /** @type {object} */ entry, /** @type {{setSource: (fn: () => object) => void, onChange: () => void, validate?: (value: object) => void}} */ hooks) {
-      installs.push({ owner, ns, entry })
+    register(/** @type {string} */ ns, /** @type {object} */ _schema, /** @type {{base: object, validate?: (value: object) => void}} */ options) {
+      installs.push({ ns, entry: options.base })
       current = {
-        ...entry,
+        ...options.base,
         ...userLayer,
         panel: { enabled: true, ...(userLayer.panel ?? {}) },
       }
       // 对齐真件语义：register 内 resolve 时先过 validate，非法存量在注册路径响亮抛出。
-      if (hooks.validate !== undefined) hooks.validate(current)
-      hooks.setSource(() => current)
-      hooks.onChange()
+      if (options.validate !== undefined) options.validate(current)
       const scope = {
         get: () => current,
         watch(/** @type {() => void} */ cb) {
@@ -39,7 +38,6 @@ function makeFakeSettings(userLayer = {}) {
           return () => {}
         },
       }
-      scope.watch(() => hooks.onChange())
       return scope
     },
     /** 模拟一次已提交的用户层写入（provider → publish → watchers）。 */

@@ -899,14 +899,18 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
     }
   }
   ctx.inject(['settings'], (sctx) => {
-    // npm alpha.3 的 dsh-settings 无类型面：按运行时事实收窄（installSection 是
-    // Desktop 副本 installSettingsSection 的同源 API：注册 + source 注入 + 回退 + watch）。
-    const settingsHost = /** @type {{settings: {installSection: (owner: object, ns: string, schema: object, entry: object, hooks: {setSource: (fn: () => MemoryRuntimeValues) => void, onChange: () => void, validate?: (value: object) => void}) => void}}} */ (/** @type {unknown} */ (sctx))
-    settingsHost.settings.installSection(ctx, SETTINGS_NAMESPACE, SettingsSchema, resolved, {
-      setSource: (/** @type {() => MemoryRuntimeValues} */ fn) => { source = fn },
-      onChange,
+    // 手写接线，不用 installSection/installSettingsSection：两份 dsh-settings 副本
+    // （npm 发布版与宿主内置版）的便捷安装 API 形状不同（npm 在类上、Desktop 是
+    // 模块级函数且导出面不同），而 register+watch 面完全一致——只依赖它。
+    // 卸载回退省略：settings 服务单独消失即宿主重组，插件 fiber 届时同样终结。
+    const settingsHost = /** @type {{settings: {register: (ns: string, schema: object, options: {base: object, validate: (value: object) => void}) => {get: () => MemoryRuntimeValues, watch: (cb: () => void) => () => void}}}} */ (/** @type {unknown} */ (sctx))
+    const scope = settingsHost.settings.register(SETTINGS_NAMESPACE, SettingsSchema, {
+      base: resolved,
       validate: (/** @type {object} */ value) => validateMemoryConfig(/** @type {MemoryRuntimeValues} */ (value)),
     })
+    source = () => scope.get()
+    onChange()
+    scope.watch(onChange)
   })
   booted = true
   let store = openMemoryStore(resolveDbPath(resolved.dbPath), { retentionDays: resolved.auditRetentionDays })
