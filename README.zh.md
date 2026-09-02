@@ -69,7 +69,7 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 | Key | Default | Meaning |
 |---|---|---|
 | `enabled` | `true` | 总开关；`false` 移除服务、工具、快照、命令、面板与 answerer（设置页不可编辑——禁用的插件没有设置项） |
-| `panel.enabled` | `true` | 显示 Web 面板悬浮按钮；`false` 在设置页切换后立即隐藏 🧠 入口，无需刷新（设置页本身不受影响） |
+| `panel.enabled` | `true` | 显示 Web 面板悬浮按钮；在设置页保存 `false` 后立即隐藏 🧠 入口，无需刷新（设置页本身不受影响） |
 | `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | 绝对路径，或相对 `$DSH_HOME`（Windows 上回退到 `~/.dsh`） |
 | `budgets.user.userGlobal` | `2000` | user 轨 user-global 层的硬字符预算 |
 | `budgets.user.workspace` | `2000` | user 轨 workspace 层的硬字符预算 |

@@ -515,8 +515,10 @@ function escapeHtml(value) {
        * 顶层聚合：同顶层字段的多个子字段草稿一次 scope.set(top, 合并值)。
        */
       class CardForm {
-        constructor(scope) {
+        constructor(scope, onLanded) {
           this.scope = scope
+          /** @type {((tops: Map<string, object>) => void) | undefined} 落盘成功回调（panel 显隐同步用）。 */
+          this.onLanded = onLanded
           /** @type {Map<string, string>} */
           this.staged = new Map()
           this.saving = false
@@ -575,6 +577,7 @@ function escapeHtml(value) {
               landed = false
             }
           }
+          if (landed && typeof this.onLanded === 'function') this.onLanded(tops)
           if (landed) this.staged.clear()
           this.saving = false
           this.failed = !landed
@@ -653,7 +656,7 @@ function escapeHtml(value) {
 .memcard-override { font-size: 11px; color: var(--dsw-alias-label-secondary, #98a2b3); white-space: nowrap; }
 .memcard-badge { white-space: nowrap; background: var(--dsw-alias-bg-module-platform, rgba(128, 128, 128, 0.15)); color: var(--dsw-alias-label-secondary, #98a2b3); border-radius: 999px; padding: 1px 8px; font-size: 11px; }
 .memcard-reset { font: inherit; font-size: 12px; color: var(--dsw-alias-label-secondary, #98a2b3); cursor: pointer; background: 0 0; border: none; padding: 0; white-space: nowrap; }
-.memsec-footer { display: flex; gap: 8px; align-items: center; margin-top: 16px; }
+.memsec-footer { display: flex; gap: 8px; align-items: center; margin: 0 0 6px; }
 .memsec-spacer { flex: 1; }
 .memsec-dirty { font-size: 12px; color: var(--dsw-alias-label-secondary, #98a2b3); }
 .memsec-failed { font-size: 12px; color: var(--dsw-alias-label-error, #e5534b); }
@@ -709,33 +712,11 @@ function escapeHtml(value) {
         const state = props.useMementoCard((snapshot) => snapshot)
         const language = state.language === 'zh' ? 'zh' : 'en'
         const t = (key) => CARD_STRINGS[language][key] ?? key
-        const groups = state.available
-          ? FIELD_GROUPS.map((group) => jsx('div', { key: group.key },
-              jsx('div', { className: 'memsec-group' }, t(group.key)),
-              group.paths.map((path) => {
-                const spec = SPEC_BY_PATH.get(path)
-                // panel.enabled 即时生效：不走暂存，点击立即写盘并切换本页悬浮按钮。
-                const instant = spec.path === 'panel.enabled'
-                return jsx(FieldRow, {
-                  key: path, t, spec, disabled: !state.writable,
-                  state: state.fields[path],
-                  onEdit: instant ? (text) => props.applyPanel(text) : (text) => props.edit(path, text),
-                  onReset: () => {
-                    const baseValue = pathValue(props.base, path)
-                    const text = spec.kind === 'policies' ? formatPolicies(baseValue) : formatValue(baseValue)
-                    if (instant) props.applyPanel(text)
-                    else props.edit(path, text)
-                  },
-                })
-              }),
-            ))
-          : null
         const blocked = !state.dirty || state.saving || state.invalid
         return jsx('div', { className: 'memsec' },
           jsx('h2', { className: 'memsec-title' }, t('title')),
           jsx('p', { className: 'memsec-desc' }, t('description')),
           !state.available || !state.writable ? jsx('p', { className: 'memsec-note' }, t('readOnly')) : null,
-          groups,
           jsx('div', { className: 'memsec-footer' },
             state.dirty ? jsx('span', { className: 'memsec-dirty' }, t('unsaved')) : null,
             state.failed ? jsx('span', { className: 'memsec-failed' }, t('saveFailed')) : null,
@@ -743,14 +724,36 @@ function escapeHtml(value) {
             jsx('button', { type: 'button', className: 'memsec-btn', disabled: !state.dirty || state.saving, onClick: props.discard }, t('discard')),
             jsx('button', { type: 'button', className: 'memsec-btn', disabled: blocked, onClick: props.save }, state.saving ? t('saving') : t('save')),
           ),
+          state.available
+            ? FIELD_GROUPS.map((group) => jsx('div', { key: group.key },
+                jsx('div', { className: 'memsec-group' }, t(group.key)),
+                group.paths.map((path) => {
+                  const spec = SPEC_BY_PATH.get(path)
+                  return jsx(FieldRow, {
+                    key: path, t, spec, disabled: !state.writable,
+                    state: state.fields[path],
+                    onEdit: (text) => props.edit(path, text),
+                    onReset: () => {
+                      const baseValue = pathValue(props.base, path)
+                      props.edit(path, spec.kind === 'policies' ? formatPolicies(baseValue) : formatValue(baseValue))
+                    },
+                  })
+                }),
+              ))
+            : null,
         )
       }
 
-      /** 控制器：scope → 暂存表单 → 设置页快照。 */
+      /** 控制器：scope → 暂存表单 → 设置页快照。保存落盘后同步本页悬浮按钮显隐。 */
       class MementoCardController {
         constructor(scope) {
           this.scope = scope
-          this.form = new CardForm(scope)
+          this.form = new CardForm(scope, (tops) => {
+            const panel = tops instanceof Map ? tops.get('panel') : undefined
+            if (panel !== null && typeof panel === 'object' && 'enabled' in panel) {
+              setPanelButtonVisible(panel.enabled === true)
+            }
+          })
           this.store = this.form.bind(() => this.projection())
         }
 
@@ -767,21 +770,6 @@ function escapeHtml(value) {
             edit: (path, text) => this.form.stage(path, text),
             discard: () => this.form.discard(),
             save: () => { void this.form.save() },
-            applyPanel: (text) => { void this.applyPanelEnabled(text) },
-          }
-        }
-
-        /** panel.enabled 即时生效：立即写盘并切换本页悬浮按钮显隐，不进暂存。 */
-        async applyPanelEnabled(text) {
-          const snapshot = this.scope.getSnapshot()
-          if (snapshot.status !== 'ready' || !snapshot.writable) return
-          const next = text === 'true'
-          const current = snapshot.value !== null && typeof snapshot.value === 'object' ? snapshot.value.panel : undefined
-          try {
-            await this.scope.set('panel', { ...(typeof current === 'object' && current !== null ? current : {}), enabled: next })
-            setPanelButtonVisible(next)
-          } catch {
-            // 写入失败：静默放弃本次切换，控件由 scope 快照回滚渲染，无半状态。
           }
         }
       }
