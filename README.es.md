@@ -64,7 +64,7 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 
 Todos los parámetros son campos Schemastery `Config` (modificables desde cordis.yml). Los valores inválidos fallan de forma ruidosa al cargar. Se sobrescriben bajo la fila `memento`.
 
-**Panel de ajustes.** Con el servicio de ajustes de DSH montado, todos los campos siguientes (salvo `enabled`) se editan desde **Ajustes → Plugins → Plugin configuration** mediante la tarjeta propia del plugin; los cambios se guardan en la capa de usuario de ajustes (`settings.yaml`) sin tocar archivos. La mayoría se aplican en vivo (políticas de escritura, idioma, presupuestos, topes, propuestas, panel); los marcados como de recarga (`dbPath`, `snapshotOrder`, `auditRetentionDays`, `retrieval.vector`) se aplican tras recargar DSH. Sin el servicio de ajustes todo vuelve a la configuración compuesta, igual que antes. El botón flotante del panel puede ocultarse desde la misma tarjeta (`panel.enabled`).
+**Panel de ajustes.** Con el servicio de ajustes de DSH montado, todos los campos siguientes (salvo `enabled`) se editan desde **Ajustes → Plugins → Plugin configuration** mediante la tarjeta propia del plugin; los cambios se guardan en la capa de usuario de ajustes (`settings.yaml`) sin tocar archivos. Casi todo se aplica en vivo (políticas de escritura, idioma, presupuestos, topes, propuestas, panel; `dbPath` / `auditRetentionDays` reabriendo el almacén; `retrieval.vector` cambiando el recuperador) — solo `snapshotOrder` requiere recargar DSH. Sin el servicio de ajustes todo vuelve a la configuración compuesta, igual que antes. El botón flotante del panel puede ocultarse desde la misma tarjeta (`panel.enabled`).
 
 | Key | Default | Meaning |
 |---|---|---|

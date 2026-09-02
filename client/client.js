@@ -296,7 +296,8 @@ function escapeHtml(value) {
           sectionRecall: 'Recall defaults',
           sectionPanelPage: 'Panel page limits',
           sectionProposals: 'Auto-capture proposals',
-          sectionReload: 'Reload-required (applied after DSH reload)',
+          sectionStorage: 'Storage & audit retention',
+          sectionAdvanced: 'Advanced (applied after DSH reload)',
           writePolicy: 'Global write policy',
           writePolicies: 'Per-track/scope policies',
           writePoliciesHint: 'One per line: track/scope=policy or source:name=policy. Unknown keys fail validation on save.',
@@ -319,7 +320,7 @@ function escapeHtml(value) {
           proposalsMaxChars: 'proposal max characters',
           proposalsMaxPending: 'max pending proposals',
           dbPath: 'Memory database path',
-          dbPathHint: 'Empty = default ($DSH_HOME/dsh-memento/memory.db). Takes effect after DSH reload.',
+          dbPathHint: 'Empty = default ($DSH_HOME/dsh-memento/memory.db). Saving reopens the store immediately.',
           snapshotOrder: 'Snapshot section order',
           auditRetentionDays: 'Audit retention (days, 0 = unlimited)',
           retrievalVector: 'Vector recall (when an embedding provider exists)',
@@ -347,7 +348,8 @@ function escapeHtml(value) {
           sectionRecall: '召回默认值',
           sectionPanelPage: '面板页上限',
           sectionProposals: '自动捕捉提案',
-          sectionReload: '重载后生效（DSH 重载时应用）',
+          sectionStorage: '存储与审计保留',
+          sectionAdvanced: '高级（DSH 重载后生效）',
           writePolicy: '全局写策略',
           writePolicies: '按轨道/层粒度策略',
           writePoliciesHint: '每行一条：track/scope=策略 或 source:name=策略。保存时无法识别的键会被校验拒绝。',
@@ -370,7 +372,7 @@ function escapeHtml(value) {
           proposalsMaxChars: '提案最大字符数',
           proposalsMaxPending: '待审批提案上限',
           dbPath: '记忆库路径',
-          dbPathHint: '留空 = 默认（$DSH_HOME/dsh-memento/memory.db）。DSH 重载后生效。',
+          dbPathHint: '留空 = 默认（$DSH_HOME/dsh-memento/memory.db）。保存后立即重开记忆库。',
           snapshotOrder: '快照段注入顺序',
           auditRetentionDays: '审计保留天数（0 = 不限）',
           retrievalVector: '向量召回（存在 embedding provider 时）',
@@ -461,7 +463,7 @@ function escapeHtml(value) {
         { path: 'retrieval.vector', kind: 'bool' },
       ]
       const SPEC_BY_PATH = new Map(FIELD_SPECS.map((spec) => [spec.path, spec]))
-      const RELOAD_PATHS = new Set(['dbPath', 'snapshotOrder', 'auditRetentionDays', 'retrieval.vector'])
+      const RELOAD_PATHS = new Set(['snapshotOrder'])
 
       /** 草稿文本 → 顶层字段写入计划；无法解析的草稿返回 undefined（阻塞保存）。 */
       function parseDraftText(spec, text, currentValue) {
@@ -624,10 +626,11 @@ function escapeHtml(value) {
         { key: 'sectionLanguage', paths: ['language'] },
         { key: 'sectionBudgets', paths: ['budgets.user.userGlobal', 'budgets.user.workspace', 'budgets.agent.userGlobal', 'budgets.agent.workspace'] },
         { key: 'sectionLimits', paths: ['maxEntriesPerQuery', 'commandListLimit', 'commandAuditLimit'] },
-        { key: 'sectionRecall', paths: ['recall.historyLimitDefault', 'recall.snippetCap', 'recall.snippetChars', 'recall.windowDays'] },
+        { key: 'sectionRecall', paths: ['recall.historyLimitDefault', 'recall.snippetCap', 'recall.snippetChars', 'recall.windowDays', 'retrieval.vector'] },
         { key: 'sectionPanelPage', paths: ['panelEntriesLimit', 'panelAuditLimit'] },
         { key: 'sectionProposals', paths: ['proposals.enabled', 'proposals.maxChars', 'proposals.maxPending'] },
-        { key: 'sectionReload', paths: ['dbPath', 'snapshotOrder', 'auditRetentionDays', 'retrieval.vector'], reload: true },
+        { key: 'sectionStorage', paths: ['dbPath', 'auditRetentionDays'] },
+        { key: 'sectionAdvanced', paths: ['snapshotOrder'] },
       ]
 
       let styleInstalled = false

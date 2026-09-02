@@ -150,9 +150,11 @@ test('settings 后到：热字段即时生效，启动期字段留痕并要求�
     mock.ctx.provide('settings', fake.service) // pendingInjects flush → 接线
     assert.equal(fake.installs.length, 1)
     assert.equal(mock.ctx.get('memory').language, 'en') // 热字段即时生效
-    // 启动期字段（dbPath）变更留痕：settings-reload-required 审计行
+    // 启动期字段（dbPath）变更：重开 store 并响亮留痕（settings-startup-fields）
     const audit = mock.ctx.get('memory').store.auditList(10)
-    assert.ok(audit.some((row) => row.action === 'settings-reload-required'))
+    const row = audit.find((entry) => entry.action === 'settings-startup-fields')
+    assert.ok(row)
+    assert.match(row.text, /applied: .*dbPath\/auditRetentionDays/)
   } finally {
     mock.dispose()
     rmSync(dir, { recursive: true, force: true })

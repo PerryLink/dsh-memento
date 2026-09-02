@@ -64,7 +64,7 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 
 Todos os parâmetros são campos Schemastery `Config` (alteráveis pelo cordis.yml). Valores inválidos falham ruidosamente ao carregar. Sobrescreva na linha `memento`.
 
-**Painel de configurações.** Com o serviço de configurações do DSH montado, todos os campos abaixo (exceto `enabled`) são editáveis em **Configurações → Plugins → Plugin configuration** pelo próprio cartão do plugin; as alterações vão para a camada de usuário das configurações (`settings.yaml`) sem editar arquivos. A maioria aplica-se ao vivo (políticas de escrita, idioma, orçamentos, limites, propostas, painel); os campos marcados como recarregar (`dbPath`, `snapshotOrder`, `auditRetentionDays`, `retrieval.vector`) aplicam-se após recarregar o DSH. Sem o serviço de configurações, tudo volta à configuração composta, exatamente como antes. O botão flutuante do painel pode ser ocultado no mesmo cartão (`panel.enabled`).
+**Painel de configurações.** Com o serviço de configurações do DSH montado, todos os campos abaixo (exceto `enabled`) são editáveis em **Configurações → Plugins → Plugin configuration** pelo próprio cartão do plugin; as alterações vão para a camada de usuário das configurações (`settings.yaml`) sem editar arquivos. Quase tudo se aplica ao vivo (políticas de escrita, idioma, orçamentos, limites, propostas, painel; `dbPath` / `auditRetentionDays` reabrindo o armazém; `retrieval.vector` trocando o recuperador) — só `snapshotOrder` exige recarregar o DSH. Sem o serviço de configurações, tudo volta à configuração composta, exatamente como antes. O botão flutuante do painel pode ser ocultado no mesmo cartão (`panel.enabled`).
 
 | Key | Default | Meaning |
 |---|---|---|

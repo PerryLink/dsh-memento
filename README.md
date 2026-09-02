@@ -65,7 +65,7 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 
 All tunables are Schemastery `Config` fields (changeable from cordis.yml). Invalid values fail loudly at load. Override under the `memento` row.
 
-**Settings panel.** When the DSH settings service is mounted, every field below (except `enabled`) is editable from **Settings → Plugins → Plugin configuration** via the plugin's own card; edits land in the settings user layer (`settings.yaml`) and need no file editing. Most fields apply live (write policies, language, budgets, limits, proposals, panel); the fields marked as reload-required (`dbPath`, `snapshotOrder`, `auditRetentionDays`, `retrieval.vector`) apply after DSH reloads. Without the settings service everything falls back to the composed cordis config, exactly as before. The floating panel button can be hidden from the same card (`panel.enabled`).
+**Settings panel.** When the DSH settings service is mounted, every field below (except `enabled`) is editable from **Settings → Plugins → Plugin configuration** via the plugin's own card; edits land in the settings user layer (`settings.yaml`) and need no file editing. Nearly everything applies live (write policies, language, budgets, limits, proposals, panel, `dbPath` / `auditRetentionDays` via a store reopen, `retrieval.vector` via a retriever swap) — only `snapshotOrder` needs a DSH reload. Without the settings service everything falls back to the composed cordis config, exactly as before. The floating panel button can be hidden from the same card (`panel.enabled`).
 
 | Key | Default | Meaning |
 |---|---|---|

@@ -141,7 +141,7 @@ export const DEFAULT_SNAPSHOT_ORDER = -50
  * 字段 schema（SHARED_CONFIG_FIELDS），面板改的是 settings.yaml 用户层。
  * @typedef {object} Config
  * @property {boolean} [enabled] 整体开关；false 时工具/注入/服务/审批 answerer 全部消失。
- * @property {string} [dbPath] 记忆库路径；空 = $DSH_HOME/dsh-memento/memory.db（重载 DSH 后生效）。
+ * @property {string} [dbPath] 记忆库路径；空 = $DSH_HOME/dsh-memento/memory.db（变更时重开 store，即时生效）。
  * @property {{user: {userGlobal: number, workspace: number}, agent: {userGlobal: number, workspace: number}}} [budgets]
  *   每轨每层硬字符预算（热生效）。
  * @property {'ask'|'auto'|'off'} [writePolicy] 写审批策略；模型不可见、不可改（热生效）。
@@ -153,10 +153,10 @@ export const DEFAULT_SNAPSHOT_ORDER = -50
  * @property {number} [commandAuditLimit] /memory audit 单次渲染审计行上限（默认 10；热生效）。
  * @property {{historyLimitDefault?: number, snippetCap?: number, snippetChars?: number, windowDays?: number}} [recall]
  *   memory_recall 历史段默认值（默认 8/5/300/30；热生效）。
- * @property {{vector?: boolean}} [retrieval] 语义召回开关（默认 false：substring 主路径；重载 DSH 后生效）。
+ * @property {{vector?: boolean}} [retrieval] 语义召回开关（默认 false：substring 主路径；变更时拆旧装新检索器，即时生效）。
  * @property {number} [panelEntriesLimit] 面板条目页上限与钳制（默认 200；热生效）。
  * @property {number} [panelAuditLimit] 面板审计默认条数（默认 20；上限 200 为协议常量；热生效）。
- * @property {number} [auditRetentionDays] 审计保留天数（默认 0 = 不限；重载 DSH 后生效）。
+ * @property {number} [auditRetentionDays] 审计保留天数（默认 0 = 不限；变更时随 dbPath 重开 store，即时生效）。
  * @property {{enabled?: boolean, maxChars?: number, maxPending?: number}} [proposals]
  *   auto-capture 压缩记忆提案（默认 true / 2000 / 8；热生效）。
  * @property {{enabled?: boolean}} [panel] Web 面板悬浮窗（热生效；false 时面板入口按钮消失，仅记忆面板，设置卡片不受影响）。
@@ -682,6 +682,7 @@ export function renderMemoryResult(/** @type {object} */ _args, /** @type {Memor
  * @property {number} auditRetentionDays
  * @property {{enabled: boolean, maxChars: number, maxPending: number}} proposals
  * @property {{enabled: boolean}} panel
+ * @property {import('./lib/retrieval.mjs').RetrievalProvider | null} [retriever] - 当前向量检索器（vector 开启且探测到 embedding 时非空；运行面非配置面）。
  */
 /**
  * 组合配置补默认（与 SettingsSchema 默认值同源，SHARED_CONFIG_FIELDS / DEFAULT_*）。
@@ -798,10 +799,13 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
   validateMemoryConfig(resolved)
   // 运行期可变值容器：settings onChange 维护；服务缺失时保持组合值。
   /** @type {MemoryRuntimeValues} */
-  const live = { ...resolved }
+  const live = { ...resolved, retriever: null }
   /** @type {MemoryService | undefined} */
   let service
   let booted = false
+  /** 当前 vector 检索器的注册 disposer（null = 未注册）。 */
+  /** @type {(() => void) | null} */
+  let vectorDisposer = null
   /** 当前解析值来源（settings 接线后指向 namespace scope）。 */
   /** @type {() => MemoryRuntimeValues} */
   let source = () => resolved
@@ -826,14 +830,51 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
       return
     }
     if (!booted) {
-      // settings 先于本插件挂载（常态）：启动期字段在 store 打开前采用用户层。
+      // 真 cordis 下 inject 回调恒为异步 fiber（apply 同步段先完成），此分支
+      // 仅在理论同步时序下触达：吸收解析值，启动期字段由下方 booted 路径统一处理。
       Object.assign(live, next)
       return
     }
-    const stale = next.dbPath !== live.dbPath
-      || next.snapshotOrder !== live.snapshotOrder
-      || next.auditRetentionDays !== live.auditRetentionDays
-      || next.retrieval.vector !== live.retrieval.vector
+    // 启动期字段差异逐项检测（比较须在 Object.assign 前，用旧 live 值）。
+    /** @type {string[]} */
+    const applied = []
+    /** @type {string[]} */
+    const reloadRequired = []
+    if (service !== undefined) {
+      if (next.dbPath !== live.dbPath || next.auditRetentionDays !== live.auditRetentionDays) {
+        // dbPath / auditRetentionDays：重开 store（早期时序=首启应用用户层；运行期=热切换）。
+        const reopened = openMemoryStore(resolveDbPath(next.dbPath), { retentionDays: next.auditRetentionDays })
+        const previous = service.store
+        service.store = reopened
+        store = reopened
+        try {
+          previous.close()
+        } catch {
+          // 旧库关闭失败不阻断新库服务：句柄随进程退出释放（WAL 安全）。
+        }
+        applied.push('dbPath/auditRetentionDays')
+      }
+      if (next.retrieval.vector !== live.retrieval.vector) {
+        // retrieval.vector：拆旧检索器，按新值重装（探测不到 embedding 时降级 null）。
+        if (vectorDisposer !== null) {
+          vectorDisposer()
+          vectorDisposer = null
+        }
+        live.retriever = null
+        if (next.retrieval.vector === true) {
+          const retriever = buildVectorRetriever(embeddings)
+          if (retriever !== null) {
+            vectorDisposer = ctx.effect(() => retrievers.register(retriever), 'dsh-memento.retrieval.vector')
+            live.retriever = retriever
+          }
+        }
+        applied.push('retrieval.vector')
+      }
+      if (next.snapshotOrder !== live.snapshotOrder) {
+        // snapshotOrder：systemPrompt section 注册期固定，无法热重挂——响亮留痕。
+        reloadRequired.push('snapshotOrder')
+      }
+    }
     Object.assign(live, next)
     if (service !== undefined) {
       service.budgetsConfig = next.budgets
@@ -843,14 +884,14 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
       service.commandAuditLimit = next.commandAuditLimit
       service.language = next.language
     }
-    if (stale && service !== undefined) {
-      // 启动期字段变更：响亮留痕（重载 DSH 后生效），绝不静默。
+    if ((applied.length > 0 || reloadRequired.length > 0) && service !== undefined) {
+      // 启动期字段变更：响亮留痕，绝不静默。
       service.store.auditAppend({
-        action: 'settings-reload-required',
+        action: 'settings-startup-fields',
         track: null,
         scope: null,
         entryId: null,
-        text: 'dbPath / snapshotOrder / auditRetentionDays / retrieval.vector changed; reload DSH to apply',
+        text: `applied: ${applied.length > 0 ? applied.join(', ') : 'none'}; reload required: ${reloadRequired.length > 0 ? reloadRequired.join(', ') : 'none'}`,
         outcome: 'ok',
         source: DEFAULT_SOURCE,
         sessionId: null,
@@ -868,8 +909,7 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
     })
   })
   booted = true
-  const dbPath = resolveDbPath(resolved.dbPath)
-  const store = openMemoryStore(dbPath, { retentionDays: resolved.auditRetentionDays })
+  let store = openMemoryStore(resolveDbPath(resolved.dbPath), { retentionDays: resolved.auditRetentionDays })
   service = new MemoryService({
     store,
     budgets: live.budgets,
@@ -903,11 +943,18 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
 
   // retrieval Provider seam（ctx.memoryRetrieval）：内置 substring 检索器（零依赖
   // 主路径）+ 可选 vector 检索器。vector 仅当 Config.retrieval.vector=true 且探测到
-  // embedding provider 时启用；否则优雅降级回 substring（retriever 保持 null）。
+  // embedding provider 时启用；否则优雅降级回 substring（live.retriever 保持 null）。
+  // 装配走 buildVectorRetriever + 调用方注册：settings 回调可在运行期拆旧装新。
   const retrievers = new RetrievalProviderRegistry()
   ctx.provide('memoryRetrieval', retrievers)
   ctx.effect(() => retrievers.register(new SubstringRetriever()), 'dsh-memento.retrieval.substring')
-  const resolvedRetriever = live.retrieval.vector === true ? setupVectorRetriever(ctx, retrievers, embeddings) : null
+  if (live.retrieval.vector === true) {
+    const initialRetriever = buildVectorRetriever(embeddings)
+    if (initialRetriever !== null) {
+      vectorDisposer = ctx.effect(() => retrievers.register(initialRetriever), 'dsh-memento.retrieval.vector')
+      live.retriever = initialRetriever
+    }
+  }
 
   // 审批 answerer：认领本插件的记忆写请求并按粒度策略裁决（writePolicies 精确键 >
   // track/scope > 全局 writePolicy；prepend 保证 auto/off 的确定性先于 UI answerer；
@@ -975,7 +1022,7 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
   // V2 观察面：/memory 命令（用户触发）、memory_recall 工具、面板 JSON 路由。
   // commands/webServer 为可选服务，缺失（headless）自动跳过。
   registerCommands(ctx, service)
-  ctx.tools.register(/** @type {import('@deepseek-ai/dsh-tools').ToolDefinition} */ (makeMemoryRecallTool(service, ctx, live, resolvedRetriever)))
+  ctx.tools.register(/** @type {import('@deepseek-ai/dsh-tools').ToolDefinition} */ (makeMemoryRecallTool(service, ctx, live)))
   registerWebRoutes(ctx, service, live)
 
   // auto-capture：监听会话事件火线，压缩结束后生成记忆提案（只落提案，不写记忆、不调模型）。
@@ -986,21 +1033,17 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
 }
 
 /**
- * 按 Config.retrieval.vector 探测并装配 vector 检索器：探测到 embedding provider
- * 才注册 VectorRetriever 并返回之；否则优雅降级（返回 null，调用方回退 substring
- * 主路径），绝不响亮失败——vector 是可选后端，缺 embedding 不构成配置错误。
- * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文（注册 effect）。
- * @param {import('./lib/retrieval.mjs').RetrievalProviderRegistry} retrievers - 检索注册表。
+ * 构造 vector 检索器：探测到 embedding provider 才构造并返回；否则返回 null
+ * （vector 是可选后端，缺 embedding 不构成配置错误）。注册由调用方经
+ * ctx.effect 管理——settings 回调需要在运行期拆旧装新。
  * @param {import('./lib/embedding.mjs').EmbeddingProviderRegistry} embeddings - 嵌入注册表。
  * @returns {import('./lib/retrieval.mjs').RetrievalProvider | null} vector 检索器或 null（降级）。
  */
-function setupVectorRetriever(ctx, retrievers, embeddings) {
+function buildVectorRetriever(embeddings) {
   const embedding = embeddings.get('fake-hash')
   const probe = detectVectorBackend({ embedding })
   if (!probe.available) return null
-  const retriever = new VectorRetriever({ embedding })
-  ctx.effect(() => retrievers.register(retriever), 'dsh-memento.retrieval.vector')
-  return retriever
+  return new VectorRetriever({ embedding })
 }
 
 /**
@@ -1630,16 +1673,15 @@ function renderEntryLine(/** @type {{track: string, scope: string, workspaceKey?
 /**
  * memory_recall 工具（F11）：语义不明确时把记忆 query 与近期会话历史合并
  * 返回两段式召回（"记忆 + 历史会话"）。sessionQuery 服务缺失时降级为纯记忆
- * 结果（history 段为空，绝不报错）。recall 参数与渲染语言读 live（热生效）；
- * 工具描述/参数文案注册期固定（换语言重载后更新）。
+ * 结果（history 段为空，绝不报错）。recall 参数、渲染语言与向量检索器读
+ * live（热生效，检索器可随 retrieval.vector 变更重装）；工具描述/参数文案
+ * 注册期固定（换语言重载后更新）。
  * @param {MemoryService} service - ctx.memory。
  * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文（查 sessionQuery）。
- * @param {{recall: {historyLimitDefault: number, snippetCap: number, snippetChars: number, windowDays: number}, language: 'en'|'zh'}} live - 运行期可变值容器（onChange 维护）。
- * @param {import('./lib/retrieval.mjs').RetrievalProvider | null} [retriever] - 语义检索器；
- *   null = 默认 substring 主路径（走 service.query 的 SQL instr）。
+ * @param {{recall: {historyLimitDefault: number, snippetCap: number, snippetChars: number, windowDays: number}, language: 'en'|'zh', retriever?: import('./lib/retrieval.mjs').RetrievalProvider | null}} live - 运行期可变值容器（onChange 维护）。
  * @returns {object} 工具定义。
  */
-export function makeMemoryRecallTool(service, ctx, live, retriever = null) {
+export function makeMemoryRecallTool(service, ctx, live) {
   const language = live.language
   const description = language === 'zh'
     ? [
@@ -1732,6 +1774,7 @@ export function makeMemoryRecallTool(service, ctx, live, retriever = null) {
       const session = /** @type {MemorySessionLike | null | undefined} */ (exec.agent?.session ?? null)
       const agentKey = agentKeyOf(/** @type {string | undefined} */ (exec.agent?.session?.header?.agentPreset))
       const limit = args.memoryLimit ?? 10
+      const retriever = live.retriever ?? null
       const memory = retriever === null
         ? service.query({ text: args.query, limit }, { sessionId, session, agentKey })
         : recallViaRetriever(service, retriever, args.query, limit, { sessionId, session, agentKey })

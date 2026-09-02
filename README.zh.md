@@ -64,7 +64,7 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 
 所有可调项均为 Schemastery `Config` 字段（可在 cordis.yml 中修改）。非法值在加载期响亮失败。在 `memento` 行下覆盖。
 
-**设置面板。** DSH 设置服务挂载时，下表除 `enabled` 外的全部字段可在 **设置 → 插件 → 插件配置** 页经插件自己的卡片编辑；修改写入设置用户层（`settings.yaml`），无需改文件。大多数字段即时生效（写策略、语言、预算、各上限、提案、面板）；标注重载生效的字段（`dbPath`、`snapshotOrder`、`auditRetentionDays`、`retrieval.vector`）在 DSH 重载后生效。设置服务缺失时一切回退组合配置，与从前完全一致。悬浮窗按钮可在同一卡片隐藏（`panel.enabled`）。
+**设置面板。** DSH 设置服务挂载时，下表除 `enabled` 外的全部字段可在 **设置 → 插件 → 插件配置** 页经插件自己的卡片编辑；修改写入设置用户层（`settings.yaml`），无需改文件。几乎全部即时生效（写策略、语言、预算、各上限、提案、面板；`dbPath` / `auditRetentionDays` 经重开 store 生效；`retrieval.vector` 经重装检索器生效）——只有 `snapshotOrder` 需要 DSH 重载。设置服务缺失时一切回退组合配置，与从前完全一致。悬浮窗按钮可在同一卡片隐藏（`panel.enabled`）。
 
 | Key | Default | Meaning |
 |---|---|---|
