@@ -4,7 +4,7 @@
 // - `declare module '@deepseek-ai/cordis'`：ctx.memory 服务（F1，三角色 seam 的
 //   Service Definition 面）。
 // - `declare module '@deepseek-ai/dsh-session'`：memory/* 会话事件词汇（F7）。
-//   alpha.3 复核（2026-09-01）：harness 仍无插件事件注册面
+//   alpha.5 复核（2026-09-02）：harness 仍无插件事件注册面
 //   （KNOWN_SESSION_EVENT_TYPES 不含 memory/*，Session.append 写入面也仍不接受
 //   ignorable 标记），运行时按已知集合自适应派发——未被 harness 收录时跳过
 //   append，审计由审批审计对 + 插件审计表承担；词汇与载荷形状在本文件定死，

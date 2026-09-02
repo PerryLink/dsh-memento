@@ -77,11 +77,11 @@ npm run test:conformance  # 协议一致性套件（黄金参考；第三方 Pro
 - **审批门不可绕过**：写路径的强制点位于 `MemoryProtocolCore`（`lib/protocol.mjs`）写方法内部（`MemoryService` 继承它并注入 `ctx.approval.request` 传输），不在工具层；`writePolicy` 是 Config，模型不可见、不可改；禁用（`enabled:false`）时一切贡献整体消失，不留半残状态。
 - **失败要大声**：库损坏/版本过新/非法配置在加载期抛错；写满报 `BUDGET_EXCEEDED`；子串歧义报 `AMBIGUOUS_MATCH`；绝不静默吞、绝不静默截断。
 - **本地优先**：零网络、零凭据；记忆库只写 `dbPath`（默认 `$DSH_HOME/dsh-memento/memory.db`），POSIX 权限 0600。
-- **systemPrompt 提供者必须同步**（0.1.2-alpha.3 不 await）：SQLite 同步读 + WeakMap 按 Session 冻结。
+- **systemPrompt 提供者必须同步**（0.1.2-alpha.5 不 await）：SQLite 同步读 + WeakMap 按 Session 冻结。
 
-## 会话事件的 alpha.3 约束（必读）
+## 会话事件的 alpha.5 约束（必读）
 
-本插件在 `types.d.ts` 声明了 `memory/added|updated|removed|recalled|snapshot` 的 SessionEventMap 合并，但**运行时默认不向会话日志 append 这些事件**：截至 0.1.2-alpha.3 harness 仍无插件事件注册面（`KNOWN_SESSION_EVENT_TYPES` 不含 memory/*，且 `Session.append` 写入面不接受 `ignorable` 标记），append 未注册类型会让该会话下次加载被持久化层拒绝。审计链由审批 seam 的 `approval/asked + approval/decided`（已知事件类型）与插件审计表承担；未来 harness 收录 memory/* 后自适应开启。**不要"顺手"取消这个自适应门。**
+本插件在 `types.d.ts` 声明了 `memory/added|updated|removed|recalled|snapshot` 的 SessionEventMap 合并，但**运行时默认不向会话日志 append 这些事件**：截至 0.1.2-alpha.5 harness 仍无插件事件注册面（`KNOWN_SESSION_EVENT_TYPES` 不含 memory/*，且 `Session.append` 写入面不接受 `ignorable` 标记），append 未注册类型会让该会话下次加载被持久化层拒绝。审计链由审批 seam 的 `approval/asked + approval/decided`（已知事件类型）与插件审计表承担；未来 harness 收录 memory/* 后自适应开启。**不要"顺手"取消这个自适应门。**
 
 ## 质量约定
 
