@@ -1,29 +1,42 @@
 // SPDX-License-Identifier: Apache-2.0
-// client/client.js — dsh-memento 浏览器观察面板（F9，零构建 vanilla）。
+// client/client.js — dsh-memento 浏览器半侧（零构建 vanilla，单模块）。
 //
 // host 端 dsh.client 扫描把本文件作为 classic script 注入 __DSH_BOOT__ 图，
-// 执行时经 window.__ModuleLoader__.load 注册工厂；apply 挂载浮层抽屉面板。
+// 执行时经 window.__ModuleLoader__.load 注册唯一 factory（id = 插件名，与
+// 宿主 graph row 一致；同文件多个 load 会产生永远不被物化的孤儿 factory）。
+// apply 挂载两块表面：浮层抽屉面板 + 宿主设置弹窗的一级设置项。
 // 面板只读：条目浏览/搜索/预算条/审计尾，全部走本插件自注册的
 // /api/memento/* JSON 路由（只走公开 API）。写与审批在 DSH 内置审批 UI 完成，
 // 面板不产生任何模型可见内容、不做任何审批决策。
 // 面板文案随 Config.language（en/zh）切换，语言来自 entries 路由响应。
+// 设置页经 ctx.settingsScope 读/写用户层（settings.yaml），暂存—保存语义
+// 与宿主内置卡片一致；factory 的 require 由宿主模块系统提供（react 为平台
+// 内置模块）。
 
-(function () {
+;(function () {
   'use strict'
   if (typeof window === 'undefined' || !window.__ModuleLoader__ || !window.__ModuleLoader__.load) return
   window.__ModuleLoader__.load({
     id: 'dsh-memento',
-    factory: function () {
-      return {
-        name: 'memento-panel',
-        inject: [],
-        apply: function () { installPanel() },
-      }
-    },
-  })
-})()
+    factory: function (require) {
+      const react = require('react')
+      /** createElement 简写（宿主平台内置 react，无需构建期 JSX 编译）。 */
+      const jsx = react.createElement
 
 const PANEL_ID = 'dsh-memento-panel'
+
+/** 本页已渲染的悬浮入口按钮引用（设置页 panel.enabled 开关即时切换用）。 */
+let panelOpenButton = null
+
+/** 悬浮窗开关的即时生效面：切显隐；开启时按钮缺失（上次探测为关）则重建。 */
+function setPanelButtonVisible(visible) {
+  if (panelOpenButton === null) panelOpenButton = document.getElementById('mem-open')
+  if (panelOpenButton !== null) {
+    panelOpenButton.style.display = visible ? '' : 'none'
+  } else if (visible) {
+    void bootPanel()
+  }
+}
 
 /** 面板文案（en 源文 / zh 译文；语言来自 /api/memento/entries 响应的 language 字段，缺省 en）。 */
 const STRINGS = {
@@ -63,9 +76,35 @@ const STRINGS = {
   },
 }
 
-function installPanel() {
+/**
+ * 启动探测：panel.enabled=false 时入口按钮不渲染（设置面板可随时改回）；
+ * 探测失败按开启处理，行为与未引入开关前的版本一致。
+ * @returns {Promise<{enabled: boolean, language: string}>}。
+ */
+async function probePanelState() {
+  try {
+    const response = await fetch('/api/memento/entries?limit=1')
+    if (response.ok) {
+      const data = await response.json()
+      if (data.error === undefined) {
+        return { enabled: data.panel?.enabled !== false, language: data.language ?? 'en' }
+      }
+    }
+  } catch {
+    // 探测失败：保持默认开启。
+  }
+  return { enabled: true, language: 'en' }
+}
+
+async function bootPanel() {
+  const state = await probePanelState()
+  if (!state.enabled) return
+  installPanel(state)
+}
+
+function installPanel(state) {
   if (document.getElementById(PANEL_ID)) return
-  let S = STRINGS.en
+  let S = STRINGS[state.language] ?? STRINGS.en
 
   const style = document.createElement('style')
   style.textContent = `
@@ -95,6 +134,7 @@ function installPanel() {
   const openBtn = document.createElement('button')
   openBtn.id = 'mem-open'
   openBtn.textContent = S.open
+  panelOpenButton = openBtn
 
   const root = document.createElement('div')
   root.id = PANEL_ID
@@ -239,3 +279,525 @@ function installPanel() {
 function escapeHtml(value) {
   return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
 }
+
+// ── 宿主设置页（settings.section 一级项，id = dsh-memento）──────────────
+      /** 卡片文案（en 源文 / zh 译文；语言跟随 namespace value.language，保存后即时切换）。 */
+      const CARD_STRINGS = {
+        en: {
+          title: 'dsh-memento memory',
+          description: 'Approval-gated cross-session memory. Writes, snapshot wording and the floating panel follow these values.',
+          sectionPermissions: 'Write approval policy',
+          sectionPanel: 'Floating panel',
+          sectionLanguage: 'Language',
+          sectionBudgets: 'Character budgets (per track/layer)',
+          sectionLimits: 'Query & command limits',
+          sectionRecall: 'Recall defaults',
+          sectionPanelPage: 'Panel page limits',
+          sectionProposals: 'Auto-capture proposals',
+          sectionStorage: 'Storage & audit retention',
+          sectionAdvanced: 'Advanced (applied after DSH reload)',
+          writePolicy: 'Global write policy',
+          writePolicies: 'Per-track/scope policies',
+          writePoliciesHint: 'One per line: track/scope=policy or source:name=policy. Unknown keys fail validation on save.',
+          panelEnabled: 'Show the floating panel button',
+          language: 'Language',
+          budgetUserGlobal: 'user / user-global',
+          budgetUserWorkspace: 'user / workspace',
+          budgetAgentGlobal: 'agent / user-global',
+          budgetAgentWorkspace: 'agent / workspace',
+          maxEntriesPerQuery: 'query default limit',
+          commandListLimit: '/memory list|query page limit',
+          commandAuditLimit: '/memory audit page limit',
+          recallHistoryLimit: 'history sessions per recall',
+          recallSnippetCap: 'snippets per session',
+          recallSnippetChars: 'snippet characters',
+          recallWindowDays: 'history window (days)',
+          panelEntriesLimit: 'entries page limit',
+          panelAuditLimit: 'audit page limit',
+          proposalsEnabled: 'Generate proposals after compaction',
+          proposalsMaxChars: 'proposal max characters',
+          proposalsMaxPending: 'max pending proposals',
+          dbPath: 'Memory database path',
+          dbPathHint: 'Empty = default ($DSH_HOME/dsh-memento/memory.db). Saving reopens the store immediately.',
+          snapshotOrder: 'Snapshot section order',
+          auditRetentionDays: 'Audit retention (days, 0 = unlimited)',
+          retrievalVector: 'Vector recall (when an embedding provider exists)',
+          reloadHint: 'Applied after DSH reload',
+          overridden: 'Overridden',
+          reset: 'Reset',
+          resetField: 'Reset field',
+          save: 'Save',
+          saving: 'Saving…',
+          discard: 'Discard',
+          unsaved: 'Unsaved changes',
+          saveFailed: 'Save failed — drafts kept for correction.',
+          readOnly: 'Read-only (settings service unavailable).',
+          invalidNumber: 'Must be a whole number.',
+          invalidPolicy: 'Must be ask, auto or off.',
+        },
+        zh: {
+          title: 'dsh-memento 记忆',
+          description: '带审批门的跨会话记忆。写入策略、快照文案与悬浮窗跟随这些值。',
+          sectionPermissions: '写审批策略',
+          sectionPanel: '悬浮窗',
+          sectionLanguage: '语言',
+          sectionBudgets: '字符预算（每轨道/层）',
+          sectionLimits: '查询与命令上限',
+          sectionRecall: '召回默认值',
+          sectionPanelPage: '面板页上限',
+          sectionProposals: '自动捕捉提案',
+          sectionStorage: '存储与审计保留',
+          sectionAdvanced: '高级（DSH 重载后生效）',
+          writePolicy: '全局写策略',
+          writePolicies: '按轨道/层粒度策略',
+          writePoliciesHint: '每行一条：track/scope=策略 或 source:name=策略。保存时无法识别的键会被校验拒绝。',
+          panelEnabled: '显示悬浮窗入口按钮',
+          language: '语言',
+          budgetUserGlobal: 'user / user-global',
+          budgetUserWorkspace: 'user / workspace',
+          budgetAgentGlobal: 'agent / user-global',
+          budgetAgentWorkspace: 'agent / workspace',
+          maxEntriesPerQuery: 'query 默认上限',
+          commandListLimit: '/memory list|query 单页上限',
+          commandAuditLimit: '/memory audit 单页上限',
+          recallHistoryLimit: '每次召回扫描会话数',
+          recallSnippetCap: '每会话片段数',
+          recallSnippetChars: '片段字符数',
+          recallWindowDays: '历史窗口（天）',
+          panelEntriesLimit: '条目单页上限',
+          panelAuditLimit: '审计单页上限',
+          proposalsEnabled: '压缩结束后生成提案',
+          proposalsMaxChars: '提案最大字符数',
+          proposalsMaxPending: '待审批提案上限',
+          dbPath: '记忆库路径',
+          dbPathHint: '留空 = 默认（$DSH_HOME/dsh-memento/memory.db）。保存后立即重开记忆库。',
+          snapshotOrder: '快照段注入顺序',
+          auditRetentionDays: '审计保留天数（0 = 不限）',
+          retrievalVector: '向量召回（存在 embedding provider 时）',
+          reloadHint: 'DSH 重载后生效',
+          overridden: '已覆盖',
+          reset: '重置',
+          resetField: '重置该字段',
+          save: '保存',
+          saving: '保存中…',
+          discard: '放弃修改',
+          unsaved: '有未保存修改',
+          saveFailed: '保存失败——草稿已保留，可修正后重试。',
+          readOnly: '只读（设置服务不可用）。',
+          invalidNumber: '必须是整数。',
+          invalidPolicy: '必须是 ask、auto 或 off。',
+        },
+      }
+
+      /** 顶层字段名（保存按顶层聚合：scope.set(topField, 合并值)，不依赖点路径写入面）。 */
+      const POLICIES = ['ask', 'auto', 'off']
+
+      /** 简版快照 store（useSyncExternalStore 形状：{getSnapshot, subscribe}+set）。 */
+      function createSnapshotStore(initial) {
+        let snapshot = initial
+        const listeners = new Set()
+        return {
+          getSnapshot() { return snapshot },
+          subscribe(fn) { listeners.add(fn); return () => { listeners.delete(fn) } },
+          set(next) { snapshot = next; for (const fn of listeners) fn() },
+        }
+      }
+
+      /** 读点路径（'a.b' → obj?.a?.b）。 */
+      function pathValue(obj, path) {
+        let cursor = obj
+        for (const key of path.split('.')) {
+          if (cursor === null || typeof cursor !== 'object') return undefined
+          cursor = cursor[key]
+        }
+        return cursor
+      }
+
+      /** 判定子字段是否被用户层覆盖（user 层子路径 hasOwn）。 */
+      function pathStored(user, path) {
+        const keys = path.split('.')
+        const last = keys.pop()
+        let cursor = user
+        for (const key of keys) {
+          if (cursor === null || typeof cursor !== 'object') return false
+          cursor = cursor[key]
+        }
+        return cursor !== null && typeof cursor === 'object' && Object.hasOwn(cursor, last)
+      }
+
+      /** 深合并（草稿子树 → 当前顶层值；数组与标量直接替换）。 */
+      function deepMerge(base, patch) {
+        if (patch === null || typeof patch !== 'object' || Array.isArray(patch)) return patch
+        const out = { ...(base !== null && typeof base === 'object' && !Array.isArray(base) ? base : {}) }
+        for (const [key, value] of Object.entries(patch)) out[key] = deepMerge(out[key], value)
+        return out
+      }
+
+      /** 子字段规格：path + kind（number/text/bool/choice/policies）+ choice 候选 + key（文案键）。 */
+      const FIELD_SPECS = [
+        { path: 'writePolicy', kind: 'choice', choices: POLICIES, key: 'writePolicy' },
+        { path: 'writePolicies', kind: 'policies', key: 'writePolicies' },
+        { path: 'panel.enabled', kind: 'bool', key: 'panelEnabled' },
+        { path: 'language', kind: 'choice', choices: ['en', 'zh'], key: 'language' },
+        { path: 'budgets.user.userGlobal', kind: 'number', key: 'budgetUserGlobal' },
+        { path: 'budgets.user.workspace', kind: 'number', key: 'budgetUserWorkspace' },
+        { path: 'budgets.agent.userGlobal', kind: 'number', key: 'budgetAgentGlobal' },
+        { path: 'budgets.agent.workspace', kind: 'number', key: 'budgetAgentWorkspace' },
+        { path: 'maxEntriesPerQuery', kind: 'number', key: 'maxEntriesPerQuery' },
+        { path: 'commandListLimit', kind: 'number', key: 'commandListLimit' },
+        { path: 'commandAuditLimit', kind: 'number', key: 'commandAuditLimit' },
+        { path: 'recall.historyLimitDefault', kind: 'number', key: 'recallHistoryLimit' },
+        { path: 'recall.snippetCap', kind: 'number', key: 'recallSnippetCap' },
+        { path: 'recall.snippetChars', kind: 'number', key: 'recallSnippetChars' },
+        { path: 'recall.windowDays', kind: 'number', key: 'recallWindowDays' },
+        { path: 'panelEntriesLimit', kind: 'number', key: 'panelEntriesLimit' },
+        { path: 'panelAuditLimit', kind: 'number', key: 'panelAuditLimit' },
+        { path: 'proposals.enabled', kind: 'bool', key: 'proposalsEnabled' },
+        { path: 'proposals.maxChars', kind: 'number', key: 'proposalsMaxChars' },
+        { path: 'proposals.maxPending', kind: 'number', key: 'proposalsMaxPending' },
+        { path: 'dbPath', kind: 'text', key: 'dbPath' },
+        { path: 'snapshotOrder', kind: 'number', key: 'snapshotOrder' },
+        { path: 'auditRetentionDays', kind: 'number', key: 'auditRetentionDays' },
+        { path: 'retrieval.vector', kind: 'bool', key: 'retrievalVector' },
+      ]
+      const SPEC_BY_PATH = new Map(FIELD_SPECS.map((spec) => [spec.path, spec]))
+      const RELOAD_PATHS = new Set(['snapshotOrder'])
+
+      /** 草稿文本 → 顶层字段写入计划；无法解析的草稿返回 undefined（阻塞保存）。 */
+      function parseDraftText(spec, text, currentValue) {
+        if (spec.kind === 'bool') {
+          if (text === 'true') return { ok: true, value: true }
+          if (text === 'false') return { ok: true, value: false }
+          return { ok: false }
+        }
+        if (spec.kind === 'choice') {
+          return spec.choices.includes(text) ? { ok: true, value: text } : { ok: false }
+        }
+        if (spec.kind === 'number') {
+          const trimmed = text.trim()
+          const parsed = Number(trimmed)
+          return trimmed !== '' && Number.isFinite(parsed) && Number.isInteger(parsed) ? { ok: true, value: parsed } : { ok: false }
+        }
+        if (spec.kind === 'policies') {
+          const next = {}
+          for (const rawLine of text.split('\n')) {
+            const line = rawLine.trim()
+            if (line === '') continue
+            const eq = line.indexOf('=')
+            if (eq <= 0) return { ok: false }
+            const key = line.slice(0, eq).trim()
+            const policy = line.slice(eq + 1).trim()
+            if (key === '' || !POLICIES.includes(policy)) return { ok: false }
+            next[key] = policy
+          }
+          return { ok: true, value: next }
+        }
+        // text：空串 = 恢复 base 语义由 clear 处理，这里空串写空字符串（dbPath 空 = 默认路径）。
+        void currentValue
+        return { ok: true, value: text }
+      }
+
+      /** 子字段格式化（快照值 → 控件文本）。 */
+      function formatValue(value) {
+        if (value === undefined || value === null) return ''
+        if (typeof value === 'boolean') return value ? 'true' : 'false'
+        return String(value)
+      }
+
+      /** policies 顶层对象的控件文本（每行 key=policy）。 */
+      function formatPolicies(value) {
+        if (value === null || typeof value !== 'object') return ''
+        return Object.entries(value).map(([key, policy]) => `${key}=${policy}`).join('\n')
+      }
+
+      /**
+       * 暂存表单（学宿主 CardForm：staged → save 才写；revision 栅防并发覆盖）。
+       * 顶层聚合：同顶层字段的多个子字段草稿一次 scope.set(top, 合并值)。
+       */
+      class CardForm {
+        constructor(scope, onLanded) {
+          this.scope = scope
+          /** @type {((tops: Map<string, object>) => void) | undefined} 落盘成功回调（panel 显隐同步用）。 */
+          this.onLanded = onLanded
+          /** @type {Map<string, string>} */
+          this.staged = new Map()
+          this.saving = false
+          this.failed = false
+          this.listeners = new Set()
+          scope.subscribe(() => this.publish())
+        }
+
+        bind(project) {
+          const store = createSnapshotStore(project())
+          this.listeners.add(() => store.set(project()))
+          return store
+        }
+
+        stage(path, text) {
+          this.staged.set(path, text)
+          this.failed = false
+          this.publish()
+        }
+
+        discard() {
+          if (this.staged.size === 0 && !this.failed) return
+          this.staged.clear()
+          this.failed = false
+          this.publish()
+        }
+
+        async save() {
+          if (this.saving || this.staged.size === 0) return
+          const snapshot = this.scope.getSnapshot()
+          if (snapshot.status !== 'ready' || !snapshot.writable) return
+          /** @type {Map<string, object>} */
+          const tops = new Map()
+          let valid = true
+          for (const [path, text] of this.staged) {
+            const spec = SPEC_BY_PATH.get(path)
+            const keys = path.split('.')
+            const top = keys[0]
+            const parsed = parseDraftText(spec, text, snapshot.value)
+            if (!parsed.ok) { valid = false; continue }
+            const base = tops.get(top) ?? (snapshot.value !== null && typeof snapshot.value === 'object' ? snapshot.value[top] : undefined)
+            const merged = keys.length === 1
+              ? parsed.value
+              : deepMerge(base, (() => { /** @type {Record<string, unknown>} */ const out = {}; let cursor = out; for (let i = 1; i < keys.length - 1; i++) { cursor[keys[i]] = {}; cursor = cursor[keys[i]] } cursor[keys[keys.length - 1]] = parsed.value; return out })())
+            tops.set(top, merged)
+          }
+          if (!valid || this.staged.size === 0) { this.publish(); return }
+          this.saving = true
+          this.failed = false
+          this.publish()
+          let landed = true
+          for (const [top, value] of tops) {
+            try {
+              await this.scope.set(top, value)
+            } catch {
+              landed = false
+            }
+          }
+          if (landed && typeof this.onLanded === 'function') this.onLanded(tops)
+          if (landed) this.staged.clear()
+          this.saving = false
+          this.failed = !landed
+          this.publish()
+        }
+
+        fieldState(path) {
+          const spec = SPEC_BY_PATH.get(path)
+          const snapshot = this.scope.getSnapshot()
+          const staged = this.staged.get(path)
+          const effective = pathValue(snapshot.value, path)
+          const overridden = pathStored(snapshot.user, path)
+          if (staged === undefined) {
+            const text = spec.kind === 'policies' ? formatPolicies(effective) : formatValue(effective)
+            return { text, overridden, invalid: false }
+          }
+          const parsed = parseDraftText(spec, staged, snapshot.value)
+          return { text: staged, overridden, invalid: !parsed.ok }
+        }
+
+        shell() {
+          const snapshot = this.scope.getSnapshot()
+          let invalid = false
+          for (const [path, text] of this.staged) {
+            if (!parseDraftText(SPEC_BY_PATH.get(path), text, snapshot.value).ok) invalid = true
+          }
+          // 界面语言跟随「所选」语言：草稿里的 language 合法即生效，保存与否不影响 UI 语言。
+          const stagedLanguage = this.staged.get('language')
+          const draftLanguage = stagedLanguage === 'en' || stagedLanguage === 'zh' ? stagedLanguage : undefined
+          return {
+            available: snapshot.status === 'ready',
+            writable: snapshot.writable === true,
+            dirty: this.staged.size > 0,
+            invalid,
+            saving: this.saving,
+            failed: this.failed,
+            language: draftLanguage ?? snapshot.value?.language,
+          }
+        }
+
+        publish() {
+          for (const listener of this.listeners) listener()
+        }
+      }
+
+      /** 字段分组（卡片 UI 布局；reload 组标注重载生效）。 */
+      const FIELD_GROUPS = [
+        { key: 'sectionPermissions', paths: ['writePolicy', 'writePolicies'] },
+        { key: 'sectionPanel', paths: ['panel.enabled'] },
+        { key: 'sectionLanguage', paths: ['language'] },
+        { key: 'sectionBudgets', paths: ['budgets.user.userGlobal', 'budgets.user.workspace', 'budgets.agent.userGlobal', 'budgets.agent.workspace'] },
+        { key: 'sectionLimits', paths: ['maxEntriesPerQuery', 'commandListLimit', 'commandAuditLimit'] },
+        { key: 'sectionRecall', paths: ['recall.historyLimitDefault', 'recall.snippetCap', 'recall.snippetChars', 'recall.windowDays', 'retrieval.vector'] },
+        { key: 'sectionPanelPage', paths: ['panelEntriesLimit', 'panelAuditLimit'] },
+        { key: 'sectionProposals', paths: ['proposals.enabled', 'proposals.maxChars', 'proposals.maxPending'] },
+        { key: 'sectionStorage', paths: ['dbPath', 'auditRetentionDays'] },
+        { key: 'sectionAdvanced', paths: ['snapshotOrder'] },
+      ]
+
+      let styleInstalled = false
+      const CARD_CSS = `
+.memsec { max-width: 720px; color: inherit; font-size: 13px; }
+.memsec-title { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+.memsec-desc { margin: 0 0 8px; font-size: 13px; color: var(--dsw-alias-label-secondary, #8a93a6); }
+.memsec-note { margin: 0 0 8px; font-size: 12px; color: var(--dsw-alias-label-tertiary, #98a2b3); }
+.memsec-group { margin: 20px 0 0; padding-bottom: 4px; font-size: 12px; font-weight: 600; color: var(--dsw-alias-label-secondary, #6f87ad); }
+.memcard-field { display: flex; flex-direction: column; padding: 8px 0; border-top: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.22)); }
+.memcard-row { display: flex; flex: 1; flex-wrap: wrap; min-width: 0; align-items: center; gap: 8px; }
+.memcard-label { flex: 1 1 auto; min-width: 0; font-size: 13px; }
+.memcard-input { border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35)); background: transparent; color: inherit; border-radius: 6px; padding: 4px 8px; font: inherit; min-width: 0; width: 240px; }
+.memcard-input[aria-invalid="true"] { border-color: var(--dsw-alias-label-error, #e5534b); }
+.memcard-textarea { flex-basis: 100%; width: 100%; min-height: 64px; font: 12px/1.5 ui-monospace, monospace; resize: vertical; }
+.memcard-hint, .memcard-invalid { margin: 2px 0 0; font-size: 12px; }
+.memcard-hint { color: var(--dsw-alias-label-tertiary, #98a2b3); }
+.memcard-invalid { color: var(--dsw-alias-label-error, #e5534b); }
+.memcard-override { font-size: 11px; color: var(--dsw-alias-label-secondary, #98a2b3); white-space: nowrap; }
+.memcard-badge { white-space: nowrap; background: var(--dsw-alias-bg-module-platform, rgba(128, 128, 128, 0.15)); color: var(--dsw-alias-label-secondary, #98a2b3); border-radius: 999px; padding: 1px 8px; font-size: 11px; }
+.memcard-reset { font: inherit; font-size: 12px; color: var(--dsw-alias-label-secondary, #98a2b3); cursor: pointer; background: 0 0; border: none; padding: 0; white-space: nowrap; }
+.memsec-footer { display: flex; gap: 8px; align-items: center; margin: 0 0 6px; }
+.memsec-spacer { flex: 1; }
+.memsec-dirty { font-size: 12px; color: var(--dsw-alias-label-secondary, #98a2b3); }
+.memsec-failed { font-size: 12px; color: var(--dsw-alias-label-error, #e5534b); }
+.memsec-btn { font: inherit; font-size: 13px; border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35)); background: transparent; color: inherit; border-radius: 6px; padding: 4px 14px; cursor: pointer; }
+.memsec-btn:disabled { opacity: 0.5; cursor: default; }
+`
+
+      /** 单字段控件行（label + input/checkbox/select + override 徽标 + reset + hint/invalid）。 */
+      function FieldRow(props) {
+        const { t, spec, state, disabled, onEdit, onReset } = props
+        const label = t(spec.key ?? spec.path)
+        const reloadBadge = RELOAD_PATHS.has(spec.path) ? jsx('span', { className: 'memcard-badge', title: t('reloadHint') }, '⟳') : null
+        const invalid = spec.kind === 'choice' ? t('invalidPolicy') : t('invalidNumber')
+        const control = spec.kind === 'bool'
+          ? jsx('input', {
+              type: 'checkbox', disabled,
+              checked: state.text === 'true',
+              onChange: (event) => onEdit(event.target.checked ? 'true' : 'false'),
+            })
+          : spec.kind === 'choice'
+            ? jsx('select', {
+                className: 'memcard-input', disabled, value: state.text,
+                onChange: (event) => onEdit(event.target.value),
+              }, spec.choices.map((choice) => jsx('option', { key: choice, value: choice }, choice)))
+            : spec.kind === 'policies'
+              ? jsx('textarea', {
+                  className: 'memcard-input memcard-textarea', disabled,
+                  value: state.text, 'aria-invalid': state.invalid,
+                  onChange: (event) => onEdit(event.target.value),
+                })
+              : jsx('input', {
+                  type: spec.kind === 'number' ? 'text' : 'text',
+                  inputMode: spec.kind === 'number' ? 'numeric' : undefined,
+                  className: 'memcard-input', disabled,
+                  value: state.text, 'aria-invalid': state.invalid,
+                  onChange: (event) => onEdit(event.target.value),
+                })
+        return jsx('div', { className: 'memcard-field' },
+          jsx('div', { className: 'memcard-row' },
+            jsx('label', { className: 'memcard-label' }, label, state.overridden ? jsx('span', { className: 'memcard-override' }, ` · ${t('overridden')}`) : null, reloadBadge),
+            state.overridden ? jsx('button', { type: 'button', className: 'memcard-reset', disabled, title: t('resetField'), onClick: onReset }, t('reset')) : null,
+            control,
+          ),
+          spec.path === 'writePolicies' ? jsx('p', { className: 'memcard-hint' }, t('writePoliciesHint'))
+            : spec.path === 'dbPath' ? jsx('p', { className: 'memcard-hint' }, t('dbPathHint'))
+              : null,
+          state.invalid ? jsx('p', { className: 'memcard-invalid' }, invalid) : null,
+        )
+      }
+
+      /** 设置页组件（settings.section 渲染入口；hooks share: mementoCard → useMementoCard）。 */
+      function MementoSection(props) {
+        const state = props.useMementoCard((snapshot) => snapshot)
+        const language = state.language === 'zh' ? 'zh' : 'en'
+        const t = (key) => CARD_STRINGS[language][key] ?? key
+        const blocked = !state.dirty || state.saving || state.invalid
+        return jsx('div', { className: 'memsec' },
+          jsx('h2', { className: 'memsec-title' }, t('title')),
+          jsx('p', { className: 'memsec-desc' }, t('description')),
+          !state.available || !state.writable ? jsx('p', { className: 'memsec-note' }, t('readOnly')) : null,
+          jsx('div', { className: 'memsec-footer' },
+            state.dirty ? jsx('span', { className: 'memsec-dirty' }, t('unsaved')) : null,
+            state.failed ? jsx('span', { className: 'memsec-failed' }, t('saveFailed')) : null,
+            jsx('span', { className: 'memsec-spacer' }),
+            jsx('button', { type: 'button', className: 'memsec-btn', disabled: !state.dirty || state.saving, onClick: props.discard }, t('discard')),
+            jsx('button', { type: 'button', className: 'memsec-btn', disabled: blocked, onClick: props.save }, state.saving ? t('saving') : t('save')),
+          ),
+          state.available
+            ? FIELD_GROUPS.map((group) => jsx('div', { key: group.key },
+                jsx('div', { className: 'memsec-group' }, t(group.key)),
+                group.paths.map((path) => {
+                  const spec = SPEC_BY_PATH.get(path)
+                  return jsx(FieldRow, {
+                    key: path, t, spec, disabled: !state.writable,
+                    state: state.fields[path],
+                    onEdit: (text) => props.edit(path, text),
+                    onReset: () => {
+                      const baseValue = pathValue(props.base, path)
+                      props.edit(path, spec.kind === 'policies' ? formatPolicies(baseValue) : formatValue(baseValue))
+                    },
+                  })
+                }),
+              ))
+            : null,
+        )
+      }
+
+      /** 控制器：scope → 暂存表单 → 设置页快照。保存落盘后同步本页悬浮按钮显隐。 */
+      class MementoCardController {
+        constructor(scope) {
+          this.scope = scope
+          this.form = new CardForm(scope, (tops) => {
+            const panel = tops instanceof Map ? tops.get('panel') : undefined
+            if (panel !== null && typeof panel === 'object' && 'enabled' in panel) {
+              setPanelButtonVisible(panel.enabled === true)
+            }
+          })
+          this.store = this.form.bind(() => this.projection())
+        }
+
+        projection() {
+          /** @type {Record<string, {text: string, overridden: boolean, invalid: boolean}>} */
+          const fields = {}
+          for (const spec of FIELD_SPECS) fields[spec.path] = this.form.fieldState(spec.path)
+          return { ...this.form.shell(), fields, base: this.scope.getSnapshot().base }
+        }
+
+        inject() {
+          return {
+            hooks: { mementoCard: this.store },
+            edit: (path, text) => this.form.stage(path, text),
+            discard: () => this.form.discard(),
+            save: () => { void this.form.save() },
+          }
+        }
+      }
+
+      function apply(ctx) {
+        void bootPanel()
+        if (!styleInstalled && typeof document !== 'undefined') {
+          styleInstalled = true
+          const tag = document.createElement('style')
+          tag.dataset.plugin = 'dsh-memento'
+          tag.textContent = CARD_CSS
+          document.head.appendChild(tag)
+        }
+        const controller = new MementoCardController(ctx.settingsScope.bind({ namespace: 'dsh-memento' }))
+        ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register({
+          name: 'settings.section',
+          id: 'dsh-memento',
+          order: 16,
+          label: 'dsh-memento',
+          inject: () => controller.inject(),
+        }, MementoSection)), 'dsh-memento: settings section')
+      }
+
+      return {
+        name: 'memento-client',
+        inject: ['slots', 'settingsScope'],
+        apply,
+      }
+    },
+  })
+})()

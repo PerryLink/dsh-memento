@@ -65,9 +65,12 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 
 All tunables are Schemastery `Config` fields (changeable from cordis.yml). Invalid values fail loudly at load. Override under the `memento` row.
 
+**Settings panel.** When the DSH settings service is mounted, every field below (except `enabled`) is editable from the plugin's own **`dsh-memento` entry in the DSH settings sidebar** (a top-level section, like General or Plugins); edits land in the settings user layer (`settings.yaml`) and need no file editing. Nearly everything applies live (write policies, language, budgets, limits, proposals, panel, `dbPath` / `auditRetentionDays` via a store reopen, `retrieval.vector` via a retriever swap) — only `snapshotOrder` needs a DSH reload. Without the settings service everything falls back to the composed cordis config, exactly as before. The floating panel button can be hidden from the same page (`panel.enabled`).
+
 | Key | Default | Meaning |
 |---|---|---|
-| `enabled` | `true` | Master switch; `false` removes the service, tools, snapshot, command, panel, and answerer |
+| `enabled` | `true` | Master switch; `false` removes the service, tools, snapshot, command, panel, and answerer (not editable from the settings page — a disabled plugin has no settings entry) |
+| `panel.enabled` | `true` | Show the web panel's floating button; saving `false` from the settings page hides the 🧠 entry immediately, no reload needed (the settings page itself stays reachable) |
 | `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | Absolute, or relative to `$DSH_HOME` (falls back to `~/.dsh` on Windows) |
 | `budgets.user.userGlobal` | `2000` | Hard character budget for the user track's user-global layer |
 | `budgets.user.workspace` | `2000` | Hard character budget for the user track's workspace layer |
@@ -99,7 +102,8 @@ All tunables are Schemastery `Config` fields (changeable from cordis.yml). Inval
 | `memory` | tool | add/replace/remove/consolidate/query with Save/Skip guidance; writes ride the approval gate |
 | `memory_recall` | tool | Bounded memory matches plus recent session-history matches |
 | `/memory` | command | `list` · `query` · `add` · `remove` · `consolidate` · `proposals` · `budgets` · `audit` · `export` · `import <path>` · `adapters` |
-| web panel | client drawer | Read-only: browse entries, search, budget bars, audit tail |
+| web panel | client drawer | Read-only: browse entries, search, budget bars, audit tail; the floating entry button can be hidden (`panel.enabled`) |
+| settings section | DSH settings sidebar → `dsh-memento` | Edit every config field (except `enabled`) without touching files; live vs reload-required timing is marked on the page |
 
 ## MCP server
 

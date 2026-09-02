@@ -1,9 +1,10 @@
 // test/helpers/mock-ctx.mjs — 极简 Cordis 模拟（集成测试用）。
 //
-// 只实现 dsh-memento 用到的面：on/effect/provide/get/tools.register/
+// 只实现 dsh-memento 用到的面：on/effect/inject/provide/get/tools.register/
 // systemPrompt.section/waterfall/approval。语义对齐真 Cordis 的关键点：
 // - effect 回调返回清理函数，卸载时逆序执行；
 // - provide 的 disposer 与 effect 一样随卸载生效（近似 fiber 自动回收）；
+// - inject 在依赖服务齐备时立即回调，否则登记、provide 齐备时补回调；
 // - waterfall 的 next() 续链、prepend 排序。
 
 /**
@@ -17,6 +18,8 @@ export function createMockCtx(opts = {}) {
   const sections = []
   const listeners = new Map()
   const cleanups = []
+  /** @type {Array<() => boolean>} */
+  const pendingInjects = []
   const approval = opts.approval ?? { request: async () => 'unavailable' }
 
   const ctx = {
@@ -38,8 +41,24 @@ export function createMockCtx(opts = {}) {
       if (typeof cleanup === 'function') cleanups.push(cleanup)
       return { dispose() {} }
     },
+    inject(deps, callback) {
+      const attempt = () => {
+        const faces = deps.map((name) => services.get(name))
+        if (faces.some((face) => face === undefined)) return false
+        /** @type {Record<string, unknown>} */
+        const host = {}
+        deps.forEach((/** @type {string} */ name, /** @type {number} */ index) => { host[name] = faces[index] })
+        callback(host)
+        return true
+      }
+      if (!attempt()) pendingInjects.push(attempt)
+      return () => {}
+    },
     provide(name, value) {
       services.set(name, value)
+      for (let index = pendingInjects.length - 1; index >= 0; index--) {
+        if (pendingInjects[index]()) pendingInjects.splice(index, 1)
+      }
       const remove = () => { services.delete(name) }
       cleanups.push(remove)
       return remove
