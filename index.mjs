@@ -205,7 +205,7 @@ export const Config = Schema.object({
   ...SHARED_CONFIG_FIELDS,
 })
 
-/** 宿主设置面板 namespace（settings.plugin.item 卡片以本 namespace 为键认领卡片）。 */
+/** 宿主设置弹窗一级项（client 端 settings.section 注册以本 namespace 为 id/页面来源）。 */
 export const SETTINGS_NAMESPACE = 'dsh-memento'
 
 /** 设置面板用户面 schema：共享字段 + 悬浮窗开关；无 enabled（见 Config typedef）。 */

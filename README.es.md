@@ -64,12 +64,12 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 
 Todos los parámetros son campos Schemastery `Config` (modificables desde cordis.yml). Los valores inválidos fallan de forma ruidosa al cargar. Se sobrescriben bajo la fila `memento`.
 
-**Panel de ajustes.** Con el servicio de ajustes de DSH montado, todos los campos siguientes (salvo `enabled`) se editan desde **Ajustes → Plugins → Plugin configuration** mediante la tarjeta propia del plugin; los cambios se guardan en la capa de usuario de ajustes (`settings.yaml`) sin tocar archivos. Casi todo se aplica en vivo (políticas de escritura, idioma, presupuestos, topes, propuestas, panel; `dbPath` / `auditRetentionDays` reabriendo el almacén; `retrieval.vector` cambiando el recuperador) — solo `snapshotOrder` requiere recargar DSH. Sin el servicio de ajustes todo vuelve a la configuración compuesta, igual que antes. El botón flotante del panel puede ocultarse desde la misma tarjeta (`panel.enabled`).
+**Panel de ajustes.** Con el servicio de ajustes de DSH montado, todos los campos siguientes (salvo `enabled`) se editan desde la **entrada `dsh-memento` en la barra lateral de ajustes de DSH** (una sección de primer nivel, como General o Plugins); los cambios se guardan en la capa de usuario de ajustes (`settings.yaml`) sin tocar archivos. Casi todo se aplica en vivo (políticas de escritura, idioma, presupuestos, topes, propuestas, panel; `dbPath` / `auditRetentionDays` reabriendo el almacén; `retrieval.vector` cambiando el recuperador) — solo `snapshotOrder` requiere recargar DSH. Sin el servicio de ajustes todo vuelve a la configuración compuesta, igual que antes. El botón flotante del panel puede ocultarse desde la misma página (`panel.enabled`).
 
 | Key | Default | Meaning |
 |---|---|---|
-| `enabled` | `true` | Interruptor maestro; `false` elimina servicio, herramientas, instantánea, comando, panel y answerer (no editable desde la tarjeta: un plugin deshabilitado no tiene tarjeta) |
-| `panel.enabled` | `true` | Mostrar el botón flotante del panel web; `false` oculta la entrada 🧠 (la tarjeta de ajustes no se ve afectada) |
+| `enabled` | `true` | Interruptor maestro; `false` elimina servicio, herramientas, instantánea, comando, panel y answerer (no editable desde la página de ajustes: un plugin deshabilitado no tiene entrada de ajustes) |
+| `panel.enabled` | `true` | Mostrar el botón flotante del panel web; `false` oculta la entrada 🧠 (la página de ajustes no se ve afectada) |
 | `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | Absoluto, o relativo a `$DSH_HOME` (en Windows cae a `~/.dsh`) |
 | `budgets.user.userGlobal` | `2000` | Presupuesto estricto de caracteres de la capa user-global de la pista user |
 | `budgets.user.workspace` | `2000` | Presupuesto estricto de caracteres de la capa workspace de la pista user |
@@ -102,7 +102,7 @@ Todos los parámetros son campos Schemastery `Config` (modificables desde cordis
 | `memory_recall` | tool | Coincidencias acotadas de memoria más coincidencias recientes del historial de sesión |
 | `/memory` | command | `list` · `query` · `add` · `remove` · `consolidate` · `proposals` · `budgets` · `audit` · `export` · `import <path>` · `adapters` |
 | web panel | client drawer | Solo lectura: explorar entradas, buscar, barras de presupuesto, cola de auditoría; el botón flotante puede ocultarse (`panel.enabled`) |
-| settings card | Ajustes de DSH → Plugins | Edita todos los campos de configuración (salvo `enabled`) sin tocar archivos; el momento de aplicación (en vivo o tras recarga) se indica en la tarjeta |
+| settings section | Barra lateral de ajustes de DSH → `dsh-memento` | Edita todos los campos de configuración (salvo `enabled`) sin tocar archivos; el momento de aplicación (en vivo o tras recarga) se indica en la página |
 
 ## MCP server
 

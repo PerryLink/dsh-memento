@@ -8,10 +8,10 @@
 // 面板不产生任何模型可见内容、不做任何审批决策。
 // 面板文案随 Config.language（en/zh）切换，语言来自 entries 路由响应。
 //
-// 本文件同时注册第二个客户端模块 dsh-memento/settings-card：宿主设置面板
-// 「插件配置」页的 dsh-memento 卡片（settings.plugin.item，键 = settings
-// namespace）。卡片经 ctx.settingsScope 读/写用户层（settings.yaml），暂存—
-// 保存语义与宿主内置卡片一致；factory 的 require 由宿主模块系统提供
+// 本文件同时注册第二个客户端模块 dsh-memento/settings-section：宿主设置弹窗
+// 左侧菜单的一级设置项（settings.section，id = dsh-memento），与通用设置、
+// 插件、能力库等并列。页面经 ctx.settingsScope 读/写用户层（settings.yaml），
+// 暂存—保存语义与宿主内置卡片一致；factory 的 require 由宿主模块系统提供
 // （react 为平台内置模块）。
 
 (function () {
@@ -272,12 +272,12 @@ function escapeHtml(value) {
   return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
 }
 
-// ── 宿主设置卡片（settings.plugin.item，键 = dsh-memento namespace）────────
+// ── 宿主设置页（settings.section 一级项，id = dsh-memento）──────────────
 ;(function () {
   'use strict'
   if (typeof window === 'undefined' || !window.__ModuleLoader__ || !window.__ModuleLoader__.load) return
   window.__ModuleLoader__.load({
-    id: 'dsh-memento/settings-card',
+    id: 'dsh-memento/settings-section',
     factory: function (require) {
       const react = require('react')
       /** createElement 简写（宿主平台内置 react，无需构建期 JSX 编译）。 */
@@ -636,7 +636,7 @@ function escapeHtml(value) {
       let styleInstalled = false
       const CARD_CSS = `
 .memcard { border: 1px solid var(--dsw-alias-border-l2, #2a3a55); border-radius: 10px; margin: 10px 0; background: var(--dsw-alias-bg-layer-3, #131e33); color: inherit; }
-.memcard-head { display: flex; gap: 8px; align-items: center; padding: 12px; cursor: pointer; }
+.memcard-head { display: flex; gap: 8px; align-items: center; padding: 12px; }
 .memcard-title { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; }
 .memcard-sub { font-size: 12px; color: var(--dsw-alias-label-secondary, #9fb4d4); }
 .memcard-badge { white-space: nowrap; background: var(--dsw-alias-bg-module-platform, #1c2a42); color: var(--dsw-alias-label-secondary, #9fb4d4); border-radius: 999px; padding: 1px 8px; font-size: 11px; }
@@ -703,12 +703,11 @@ function escapeHtml(value) {
         )
       }
 
-      /** 卡片组件（slot 渲染入口；hooks share: mementoCard → useMementoCard）。 */
-      function MementoCard(props) {
+      /** 设置页组件（settings.section 渲染入口；hooks share: mementoCard → useMementoCard）。 */
+      function MementoSection(props) {
         const state = props.useMementoCard((snapshot) => snapshot)
         const language = state.language === 'zh' ? 'zh' : 'en'
         const t = (key) => CARD_STRINGS[language][key] ?? key
-        const [open, setOpen] = react.useState(false)
         const groups = state.available
           ? FIELD_GROUPS.map((group) => jsx('div', { key: group.key },
               jsx('div', { className: 'memcard-group' }, t(group.key)),
@@ -728,13 +727,12 @@ function escapeHtml(value) {
           : null
         const blocked = !state.dirty || state.saving || state.invalid
         return jsx('div', { className: 'memcard' },
-          jsx('div', { className: 'memcard-head', role: 'button', tabIndex: 0, onClick: () => setOpen(!open), onKeyDown: (event) => { if (event.key === 'Enter' || event.key === ' ') setOpen(!open) } },
+          jsx('div', { className: 'memcard-head' },
             jsx('span', { className: 'memcard-title' }, t('title')),
             jsx('span', { className: 'memcard-sub' }, t('description')),
             state.dirty ? jsx('span', { className: 'memcard-badge' }, t('unsaved')) : null,
-            jsx('span', { className: 'memcard-badge' }, open ? '▾' : '▸'),
           ),
-          open ? jsx('div', { className: 'memcard-body' },
+          jsx('div', { className: 'memcard-body' },
             !state.available ? jsx('p', { className: 'memcard-readonly' }, t('readOnly')) : null,
             !state.writable ? jsx('p', { className: 'memcard-readonly' }, t('readOnly')) : null,
             groups,
@@ -743,11 +741,11 @@ function escapeHtml(value) {
               jsx('button', { type: 'button', className: 'memcard-btn', disabled: !state.dirty || state.saving, onClick: props.discard }, t('discard')),
               jsx('button', { type: 'button', className: 'memcard-btn', disabled: blocked, onClick: props.save }, state.saving ? t('saving') : t('save')),
             ),
-          ) : null,
+          ),
         )
       }
 
-      /** 控制器：scope → 暂存表单 → 卡片快照。 */
+      /** 控制器：scope → 暂存表单 → 设置页快照。 */
       class MementoCardController {
         constructor(scope) {
           this.scope = scope
@@ -781,17 +779,17 @@ function escapeHtml(value) {
           document.head.appendChild(tag)
         }
         const controller = new MementoCardController(ctx.settingsScope.bind({ namespace: 'dsh-memento' }))
-        ctx.effect(() => ctx.slots.inject('settings.plugin.item', function* () {
-          yield ctx.slots.register({
-            name: 'settings.plugin.item',
-            key: 'dsh-memento',
-            inject: () => controller.inject(),
-          }, MementoCard)
-        }), 'dsh-memento: settings card')
+        ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register({
+          name: 'settings.section',
+          id: 'dsh-memento',
+          order: 16,
+          label: 'dsh-memento',
+          inject: () => controller.inject(),
+        }, MementoSection)), 'dsh-memento: settings section')
       }
 
       return {
-        name: 'memento-settings-card',
+        name: 'memento-settings-section',
         inject: ['slots', 'settingsScope'],
         apply,
       }
