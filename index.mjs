@@ -99,6 +99,7 @@ import { RetrievalProviderRegistry, SubstringRetriever, VectorRetriever, detectV
  * @property {number} [panelAuditLimit]
  * @property {number} [auditRetentionDays]
  * @property {{enabled?: boolean, maxChars?: number, maxPending?: number}} [proposals]
+ * @property {{enabled?: boolean}} [panel]
  * @typedef {{action: string, track: string, scope: string, text: string, count?: number, source?: string}} WritePayload
  * @typedef {{agent?: {session?: MemorySessionLike | null} | null, callId?: unknown, signal?: AbortSignal}} AskWrite
  * @typedef {{track: string, scope: string, text: string}} PublicEntry
@@ -134,31 +135,33 @@ export const DEFAULT_BUDGETS = Object.freeze({
 export const DEFAULT_SNAPSHOT_ORDER = -50
 
 /**
- * 插件配置（Schemastery，全部可 cordis.yml 覆盖；无硬编码 tunable）。
+ * 插件配置（Schemastery）。Config 是 cordis 组合面（含 enabled 整体开关）；
+ * SettingsSchema 是宿主设置面板的用户面（dsh-memento namespace，无 enabled——
+ * false 时插件整体卸载、namespace 随之消失，从设置页开不回来）。两者共享同一组
+ * 字段 schema（SHARED_CONFIG_FIELDS），面板改的是 settings.yaml 用户层。
  * @typedef {object} Config
  * @property {boolean} [enabled] 整体开关；false 时工具/注入/服务/审批 answerer 全部消失。
- * @property {string} [dbPath] 记忆库路径；空 = $DSH_HOME/dsh-memento/memory.db。
+ * @property {string} [dbPath] 记忆库路径；空 = $DSH_HOME/dsh-memento/memory.db（重载 DSH 后生效）。
  * @property {{user: {userGlobal: number, workspace: number}, agent: {userGlobal: number, workspace: number}}} [budgets]
- *   每轨每层硬字符预算。
- * @property {'ask'|'auto'|'off'} [writePolicy] 写审批策略；模型不可见、不可改。
- * @property {Record<string, 'ask'|'auto'|'off'>} [writePolicies] 粒度写策略（键 `track/scope` 或 `source:<name>`；未命中回退 writePolicy）。
- * @property {'en'|'zh'} [language] 模型可见文案与命令输出语言（默认 en；快照/工具描述/命令随选）。
- * @property {number} [snapshotOrder] 快照段注入顺序（默认 -50，靠前负值）。
- * @property {number} [maxEntriesPerQuery] query 默认返回条目上限（显式 limit 可超出，Provider 硬钳 1000）。
- * @property {number} [commandListLimit] /memory list|query 单次渲染条目上限（默认 50）。
- * @property {number} [commandAuditLimit] /memory audit 单次渲染审计行上限（默认 10）。
+ *   每轨每层硬字符预算（热生效）。
+ * @property {'ask'|'auto'|'off'} [writePolicy] 写审批策略；模型不可见、不可改（热生效）。
+ * @property {Record<string, 'ask'|'auto'|'off'>} [writePolicies] 粒度写策略（键 `track/scope` 或 `source:<name>`；未命中回退 writePolicy；热生效）。
+ * @property {'en'|'zh'} [language] 模型可见文案与命令输出语言（默认 en；命令/快照/面板热生效，工具描述注册期固定）。
+ * @property {number} [snapshotOrder] 快照段注入顺序（默认 -50，靠前负值；重载 DSH 后生效）。
+ * @property {number} [maxEntriesPerQuery] query 默认返回条目上限（显式 limit 可超出，Provider 硬钳 1000；热生效）。
+ * @property {number} [commandListLimit] /memory list|query 单次渲染条目上限（默认 50；热生效）。
+ * @property {number} [commandAuditLimit] /memory audit 单次渲染审计行上限（默认 10；热生效）。
  * @property {{historyLimitDefault?: number, snippetCap?: number, snippetChars?: number, windowDays?: number}} [recall]
- *   memory_recall 历史段默认值（默认 8/5/300/30）。
- * @property {{vector?: boolean}} [retrieval] 语义召回开关（默认 false：substring 主路径；
- *   true 且探测到 embedding provider 时 memory_recall 走向量召回，否则优雅降级回 substring）。
- * @property {number} [panelEntriesLimit] 面板条目页上限与钳制（默认 200）。
- * @property {number} [panelAuditLimit] 面板审计默认条数（默认 20；上限 200 为协议常量）。
- * @property {number} [auditRetentionDays] 审计保留天数（默认 0 = 不限）。
+ *   memory_recall 历史段默认值（默认 8/5/300/30；热生效）。
+ * @property {{vector?: boolean}} [retrieval] 语义召回开关（默认 false：substring 主路径；重载 DSH 后生效）。
+ * @property {number} [panelEntriesLimit] 面板条目页上限与钳制（默认 200；热生效）。
+ * @property {number} [panelAuditLimit] 面板审计默认条数（默认 20；上限 200 为协议常量；热生效）。
+ * @property {number} [auditRetentionDays] 审计保留天数（默认 0 = 不限；重载 DSH 后生效）。
  * @property {{enabled?: boolean, maxChars?: number, maxPending?: number}} [proposals]
- *   auto-capture 压缩记忆提案（默认 true / 2000 / 8）。
+ *   auto-capture 压缩记忆提案（默认 true / 2000 / 8；热生效）。
+ * @property {{enabled?: boolean}} [panel] Web 面板悬浮窗（热生效；false 时面板入口按钮消失，仅记忆面板，设置卡片不受影响）。
  */
-export const Config = Schema.object({
-  enabled: Schema.boolean().default(true),
+const SHARED_CONFIG_FIELDS = {
   dbPath: Schema.string().default(''),
   budgets: Schema.object({
     user: Schema.object({
@@ -193,6 +196,27 @@ export const Config = Schema.object({
     enabled: Schema.boolean().default(true),
     maxChars: Schema.number().default(2000),
     maxPending: Schema.number().default(8),
+  }),
+}
+
+export const Config = Schema.object({
+  enabled: Schema.boolean().default(true),
+  ...SHARED_CONFIG_FIELDS,
+})
+
+/**
+ * 宿主设置面板 namespace（settings.plugin.item 卡片以本 namespace 为键认领卡片）。
+ * 字符串直传：npm 发布版 dsh-settings@alpha.3 未导出 settingsNamespace brand，
+ * Desktop 内置副本的 register 同样接受字符串。
+ * @type {'dsh-memento'}
+ */
+export const SETTINGS_NAMESPACE = 'dsh-memento'
+
+/** 设置面板用户面 schema：共享字段 + 悬浮窗开关；无 enabled（见 Config typedef）。 */
+export const SettingsSchema = Schema.object({
+  ...SHARED_CONFIG_FIELDS,
+  panel: Schema.object({
+    enabled: Schema.boolean().default(true),
   }),
 })
 
@@ -638,8 +662,34 @@ export function renderMemoryResult(/** @type {object} */ _args, /** @type {Memor
  * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文。
  * @param {object} config - 插件配置（cordis loader 已套 schema 默认值）。
  */
-export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
-  const resolved = {
+/**
+ * 补默认后的运行时配置（组合层与 settings 解析层同形）。
+ * @typedef {object} MemoryRuntimeValues
+ * @property {boolean} enabled
+ * @property {string} dbPath
+ * @property {{user: {userGlobal: number, workspace: number}, agent: {userGlobal: number, workspace: number}}} budgets
+ * @property {'ask'|'auto'|'off'} writePolicy
+ * @property {Record<string, 'ask'|'auto'|'off'>} writePolicies
+ * @property {'en'|'zh'} language
+ * @property {number} snapshotOrder
+ * @property {number} maxEntriesPerQuery
+ * @property {number} commandListLimit
+ * @property {number} commandAuditLimit
+ * @property {{historyLimitDefault: number, snippetCap: number, snippetChars: number, windowDays: number}} recall
+ * @property {{vector: boolean}} retrieval
+ * @property {number} panelEntriesLimit
+ * @property {number} panelAuditLimit
+ * @property {number} auditRetentionDays
+ * @property {{enabled: boolean, maxChars: number, maxPending: number}} proposals
+ * @property {{enabled: boolean}} panel
+ */
+/**
+ * 组合配置补默认（与 SettingsSchema 默认值同源，SHARED_CONFIG_FIELDS / DEFAULT_*）。
+ * @param {PluginConfig} config - cordis loader 传入的插件配置。
+ * @returns {MemoryRuntimeValues} 完整配置。
+ */
+function resolveComposed(config) {
+  return {
     enabled: config.enabled ?? true,
     dbPath: config.dbPath ?? '',
     budgets: {
@@ -652,8 +702,8 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
         workspace: config.budgets?.agent?.workspace ?? DEFAULT_BUDGETS.agent.workspace,
       },
     },
-    writePolicy: config.writePolicy ?? 'ask',
-    writePolicies: config.writePolicies ?? {},
+    writePolicy: /** @type {'ask'|'auto'|'off'} */ (config.writePolicy ?? 'ask'),
+    writePolicies: /** @type {Record<string, 'ask'|'auto'|'off'>} */ (config.writePolicies ?? {}),
     language: config.language ?? 'en',
     snapshotOrder: config.snapshotOrder ?? DEFAULT_SNAPSHOT_ORDER,
     maxEntriesPerQuery: config.maxEntriesPerQuery ?? 20,
@@ -676,57 +726,158 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
       maxChars: config.proposals?.maxChars ?? 2000,
       maxPending: config.proposals?.maxPending ?? 8,
     },
+    panel: { enabled: config.panel?.enabled ?? true },
   }
-  if (resolved.enabled === false) return
-  const budgetCheck = validateBudgets(resolved.budgets)
+}
+
+/**
+ * 运行时值的业务校验（schema 之外的整数/枚举约束）。apply 加载期与 settings
+ * namespace 的 validate hook 共用同一函数：面板保存非法值在写入路径即被拒绝，
+ * 存量非法在注册路径响亮失败——绝不静默收下。
+ * @param {MemoryRuntimeValues} values - 补默认后的完整配置。
+ */
+function validateMemoryConfig(values) {
+  const budgetCheck = validateBudgets(values.budgets)
   if (!budgetCheck.ok) throw new InvalidInputError(`dsh-memento config: ${/** @type {{message: string}} */ (budgetCheck).message}`)
-  normalizeWritePolicy(resolved.writePolicy)
-  validateWritePolicies(resolved.writePolicies)
-  if (resolved.language !== 'en' && resolved.language !== 'zh') {
-    throw new InvalidInputError(`dsh-memento config: language must be 'en' or 'zh' (got ${JSON.stringify(resolved.language)})`)
+  normalizeWritePolicy(values.writePolicy)
+  validateWritePolicies(values.writePolicies)
+  if (values.language !== 'en' && values.language !== 'zh') {
+    throw new InvalidInputError(`dsh-memento config: language must be 'en' or 'zh' (got ${JSON.stringify(values.language)})`)
   }
-  if (!Number.isFinite(resolved.snapshotOrder)) {
+  if (!Number.isFinite(values.snapshotOrder)) {
     throw new InvalidInputError('dsh-memento config: snapshotOrder must be a finite number')
   }
-  if (!Number.isInteger(resolved.maxEntriesPerQuery) || resolved.maxEntriesPerQuery <= 0) {
+  if (!Number.isInteger(values.maxEntriesPerQuery) || values.maxEntriesPerQuery <= 0) {
     throw new InvalidInputError('dsh-memento config: maxEntriesPerQuery must be a positive integer')
   }
-  if (!Number.isInteger(resolved.commandListLimit) || resolved.commandListLimit <= 0) {
+  if (!Number.isInteger(values.commandListLimit) || values.commandListLimit <= 0) {
     throw new InvalidInputError('dsh-memento config: commandListLimit must be a positive integer')
   }
-  if (!Number.isInteger(resolved.commandAuditLimit) || resolved.commandAuditLimit <= 0) {
+  if (!Number.isInteger(values.commandAuditLimit) || values.commandAuditLimit <= 0) {
     throw new InvalidInputError('dsh-memento config: commandAuditLimit must be a positive integer')
   }
-  for (const [key, value] of Object.entries(resolved.recall)) {
+  for (const [key, value] of Object.entries(values.recall)) {
     if (!Number.isInteger(value) || value <= 0) {
       throw new InvalidInputError(`dsh-memento config: recall.${key} must be a positive integer`)
     }
   }
-  if (!Number.isInteger(resolved.panelEntriesLimit) || resolved.panelEntriesLimit <= 0) {
+  if (!Number.isInteger(values.panelEntriesLimit) || values.panelEntriesLimit <= 0) {
     throw new InvalidInputError('dsh-memento config: panelEntriesLimit must be a positive integer')
   }
-  if (!Number.isInteger(resolved.panelAuditLimit) || resolved.panelAuditLimit <= 0) {
+  if (!Number.isInteger(values.panelAuditLimit) || values.panelAuditLimit <= 0) {
     throw new InvalidInputError('dsh-memento config: panelAuditLimit must be a positive integer')
   }
-  if (!Number.isInteger(resolved.auditRetentionDays) || resolved.auditRetentionDays < 0) {
+  if (!Number.isInteger(values.auditRetentionDays) || values.auditRetentionDays < 0) {
     throw new InvalidInputError('dsh-memento config: auditRetentionDays must be a non-negative integer')
   }
-  if (!Number.isInteger(resolved.proposals.maxChars) || resolved.proposals.maxChars <= 0) {
+  if (!Number.isInteger(values.proposals.maxChars) || values.proposals.maxChars <= 0) {
     throw new InvalidInputError('dsh-memento config: proposals.maxChars must be a positive integer')
   }
-  if (!Number.isInteger(resolved.proposals.maxPending) || resolved.proposals.maxPending <= 0) {
+  if (!Number.isInteger(values.proposals.maxPending) || values.proposals.maxPending <= 0) {
     throw new InvalidInputError('dsh-memento config: proposals.maxPending must be a positive integer')
   }
+  if (values.panel !== undefined && typeof values.panel.enabled !== 'boolean') {
+    throw new InvalidInputError('dsh-memento config: panel.enabled must be a boolean')
+  }
+}
+
+/**
+ * 插件挂载。enabled:false 时不注册任何东西（工具/注入/服务/审批 answerer
+ * 整体消失，不留半残状态）；库损坏/迁移失败/非法配置在加载期响亮抛错（S5）。
+ * settings 服务可用时注册 dsh-memento namespace：启动早于首会话的常态下，
+ * 启动期字段（dbPath/snapshotOrder/auditRetentionDays/retrieval.vector）在
+ * store 打开前就吃到用户层；热字段（writePolicy(s)/language/budgets/proposals/
+ * 各 limit/panel）随 onChange 即时生效。服务缺失（headless）时行为与组合配置
+ * 完全一致。
+ * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文。
+ * @param {object} config - 插件配置（cordis loader 已套 schema 默认值）。
+ */
+export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
+  const resolved = resolveComposed(config)
+  if (resolved.enabled === false) return
+  validateMemoryConfig(resolved)
+  // 运行期可变值容器：settings onChange 维护；服务缺失时保持组合值。
+  /** @type {MemoryRuntimeValues} */
+  const live = { ...resolved }
+  /** @type {MemoryService | undefined} */
+  let service
+  let booted = false
+  /** 当前解析值来源（settings 接线后指向 namespace scope）。 */
+  /** @type {() => MemoryRuntimeValues} */
+  let source = () => resolved
+  const onChange = () => {
+    const next = source()
+    try {
+      validateMemoryConfig(next)
+    } catch (error) {
+      // 注册路径已挡存量非法；这里是运行期防御：保持旧值并审计留痕。
+      if (booted && service !== undefined) {
+        service.store.auditAppend({
+          action: 'settings-rejected',
+          track: null,
+          scope: null,
+          entryId: null,
+          text: error instanceof Error ? error.message : String(error),
+          outcome: 'error',
+          source: DEFAULT_SOURCE,
+          sessionId: null,
+        })
+      }
+      return
+    }
+    if (!booted) {
+      // settings 先于本插件挂载（常态）：启动期字段在 store 打开前采用用户层。
+      Object.assign(live, next)
+      return
+    }
+    const stale = next.dbPath !== live.dbPath
+      || next.snapshotOrder !== live.snapshotOrder
+      || next.auditRetentionDays !== live.auditRetentionDays
+      || next.retrieval.vector !== live.retrieval.vector
+    Object.assign(live, next)
+    if (service !== undefined) {
+      service.budgetsConfig = next.budgets
+      service.writePolicy = normalizeWritePolicy(next.writePolicy)
+      service.defaultQueryLimit = next.maxEntriesPerQuery
+      service.commandListLimit = next.commandListLimit
+      service.commandAuditLimit = next.commandAuditLimit
+      service.language = next.language
+    }
+    if (stale && service !== undefined) {
+      // 启动期字段变更：响亮留痕（重载 DSH 后生效），绝不静默。
+      service.store.auditAppend({
+        action: 'settings-reload-required',
+        track: null,
+        scope: null,
+        entryId: null,
+        text: 'dbPath / snapshotOrder / auditRetentionDays / retrieval.vector changed; reload DSH to apply',
+        outcome: 'ok',
+        source: DEFAULT_SOURCE,
+        sessionId: null,
+      })
+    }
+  }
+  ctx.inject(['settings'], (sctx) => {
+    // npm alpha.3 的 dsh-settings 无类型面：按运行时事实收窄（installSection 是
+    // Desktop 副本 installSettingsSection 的同源 API：注册 + source 注入 + 回退 + watch）。
+    const settingsHost = /** @type {{settings: {installSection: (owner: object, ns: string, schema: object, entry: object, hooks: {setSource: (fn: () => MemoryRuntimeValues) => void, onChange: () => void, validate?: (value: object) => void}) => void}}} */ (/** @type {unknown} */ (sctx))
+    settingsHost.settings.installSection(ctx, SETTINGS_NAMESPACE, SettingsSchema, resolved, {
+      setSource: (/** @type {() => MemoryRuntimeValues} */ fn) => { source = fn },
+      onChange,
+      validate: (/** @type {object} */ value) => validateMemoryConfig(/** @type {MemoryRuntimeValues} */ (value)),
+    })
+  })
+  booted = true
   const dbPath = resolveDbPath(resolved.dbPath)
   const store = openMemoryStore(dbPath, { retentionDays: resolved.auditRetentionDays })
-  const service = new MemoryService({
+  service = new MemoryService({
     store,
-    budgets: resolved.budgets,
-    writePolicy: resolved.writePolicy,
-    maxEntriesPerQuery: resolved.maxEntriesPerQuery,
-    commandListLimit: resolved.commandListLimit,
-    commandAuditLimit: resolved.commandAuditLimit,
-    language: resolved.language,
+    budgets: live.budgets,
+    writePolicy: live.writePolicy,
+    maxEntriesPerQuery: live.maxEntriesPerQuery,
+    commandListLimit: live.commandListLimit,
+    commandAuditLimit: live.commandAuditLimit,
+    language: live.language,
     approval: ctx.approval,
     sourceLabel: DEFAULT_SOURCE,
   })
@@ -756,7 +907,7 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
   const retrievers = new RetrievalProviderRegistry()
   ctx.provide('memoryRetrieval', retrievers)
   ctx.effect(() => retrievers.register(new SubstringRetriever()), 'dsh-memento.retrieval.substring')
-  const resolvedRetriever = resolved.retrieval.vector === true ? setupVectorRetriever(ctx, retrievers, embeddings) : null
+  const resolvedRetriever = live.retrieval.vector === true ? setupVectorRetriever(ctx, retrievers, embeddings) : null
 
   // 审批 answerer：认领本插件的记忆写请求并按粒度策略裁决（writePolicies 精确键 >
   // track/scope > 全局 writePolicy；prepend 保证 auto/off 的确定性先于 UI answerer；
@@ -765,8 +916,8 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
     if (!isMemoryWriteRequest(req)) return next()
     const parsed = parseWriteReason(/** @type {string} */ (/** @type {{reason: string}} */ (req).reason))
     const effective = parsed === null
-      ? resolved.writePolicy
-      : resolveWritePolicy(resolved.writePolicies, resolved.writePolicy, parsed.track, parsed.scope, parsed.source)
+      ? live.writePolicy
+      : resolveWritePolicy(live.writePolicies, live.writePolicy, parsed.track, parsed.scope, parsed.source)
     return applyWritePolicy(effective, req, next)
   }, { prepend: true })
 
@@ -778,7 +929,7 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
   const snapshots = new WeakMap()
   ctx.systemPrompt.section({
     name: 'dsh-memento:memory',
-    order: resolved.snapshotOrder,
+    order: live.snapshotOrder,
     text: (assemble) => {
       // rc.6 实测路径：assemble 携带 agent（AssembleContext 声明面未含该字段），收窄处理。
       const context = /** @type {{agent?: {session?: MemorySessionLike | null} | null} | null | undefined} */ (assemble)
@@ -795,11 +946,11 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
           agentKey,
         )
         const proposals = visibleProposals(
-          /** @type {MemoryProposal[]} */ (store.proposalList('pending', resolved.proposals.maxPending)),
+          /** @type {MemoryProposal[]} */ (store.proposalList('pending', live.proposals.maxPending)),
           workspaceKey,
           agentKey,
         )
-        frozen = renderSnapshot(entries, resolved.budgets, proposals, resolved.language)
+        frozen = renderSnapshot(entries, live.budgets, proposals, live.language)
         snapshots.set(session, frozen)
         store.auditAppend({
           action: 'snapshot',
@@ -824,13 +975,13 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
   // V2 观察面：/memory 命令（用户触发）、memory_recall 工具、面板 JSON 路由。
   // commands/webServer 为可选服务，缺失（headless）自动跳过。
   registerCommands(ctx, service)
-  ctx.tools.register(/** @type {import('@deepseek-ai/dsh-tools').ToolDefinition} */ (makeMemoryRecallTool(service, ctx, resolved.recall, resolved.language, resolvedRetriever)))
-  registerWebRoutes(ctx, service, resolved)
+  ctx.tools.register(/** @type {import('@deepseek-ai/dsh-tools').ToolDefinition} */ (makeMemoryRecallTool(service, ctx, live, resolvedRetriever)))
+  registerWebRoutes(ctx, service, live)
 
   // auto-capture：监听会话事件火线，压缩结束后生成记忆提案（只落提案，不写记忆、不调模型）。
   const summaries = new WeakMap()
   ctx.on('session/event', (session, event) => {
-    handleSessionEvent(store, session, event, resolved.proposals, summaries)
+    handleSessionEvent(store, session, event, live.proposals, summaries)
   })
 }
 
@@ -1479,16 +1630,17 @@ function renderEntryLine(/** @type {{track: string, scope: string, workspaceKey?
 /**
  * memory_recall 工具（F11）：语义不明确时把记忆 query 与近期会话历史合并
  * 返回两段式召回（"记忆 + 历史会话"）。sessionQuery 服务缺失时降级为纯记忆
- * 结果（history 段为空，绝不报错）。
+ * 结果（history 段为空，绝不报错）。recall 参数与渲染语言读 live（热生效）；
+ * 工具描述/参数文案注册期固定（换语言重载后更新）。
  * @param {MemoryService} service - ctx.memory。
  * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文（查 sessionQuery）。
- * @param {{historyLimitDefault: number, snippetCap: number, snippetChars: number, windowDays: number}} recall - Config.recall（默认值）。
- * @param {'en'|'zh'} [language] - 'en' | 'zh'。
+ * @param {{recall: {historyLimitDefault: number, snippetCap: number, snippetChars: number, windowDays: number}, language: 'en'|'zh'}} live - 运行期可变值容器（onChange 维护）。
  * @param {import('./lib/retrieval.mjs').RetrievalProvider | null} [retriever] - 语义检索器；
  *   null = 默认 substring 主路径（走 service.query 的 SQL instr）。
  * @returns {object} 工具定义。
  */
-export function makeMemoryRecallTool(service, ctx, recall, language = 'en', retriever = null) {
+export function makeMemoryRecallTool(service, ctx, live, retriever = null) {
+  const language = live.language
   const description = language === 'zh'
     ? [
       '对记忆与会话历史的两段式召回：返回 (1) dsh-memento 库中与查询匹配的有界记忆条目，以及 (2) 经 session-query 服务的近期会话历史匹配。',
@@ -1572,7 +1724,7 @@ export function makeMemoryRecallTool(service, ctx, recall, language = 'en', retr
           },
         },
       },
-      render: (/** @type {object} */ _args, /** @type {RecallToolValue} */ value) => renderMemoryRecallResult(_args, value, language),
+      render: (/** @type {object} */ _args, /** @type {RecallToolValue} */ value) => renderMemoryRecallResult(_args, value, live.language),
     },
     execute: /** @type {(args: any, exec: any) => Promise<any>} */ (async (args, exec) => {
       exec.signal.throwIfAborted()
@@ -1586,12 +1738,12 @@ export function makeMemoryRecallTool(service, ctx, recall, language = 'en', retr
       const history = await recallHistory(
         ctx,
         args.query,
-        args.historyLimit ?? recall.historyLimitDefault,
-        recall.snippetCap,
-        recall.snippetChars,
+        args.historyLimit ?? live.recall.historyLimitDefault,
+        live.recall.snippetCap,
+        live.recall.snippetChars,
         exec.signal,
         /** @type {string | undefined} */ (exec.agent?.session?.header?.cwd),
-        recall.windowDays,
+        live.recall.windowDays,
       )
       return {
         ok: true,
@@ -1736,9 +1888,11 @@ export function renderMemoryRecallResult(/** @type {object} */ _args, /** @type 
  * 注册面板 JSON 路由（F9，只读；webServer 缺失的 profile 自动跳过）。
  * 写操作（含审批）不进面板路由：审批在 DSH 内置审批 UI 完成，面板只做
  * 条目浏览/搜索/预算条/审计尾。路由随插件生命周期自动撤销。
+ * options 传 live（热字段：panelEntriesLimit/panelAuditLimit/panel/language 随
+ * 设置变更即时生效）。
  * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文。
  * @param {MemoryService} service - ctx.memory。
- * @param {{panelEntriesLimit: number, panelAuditLimit: number}} options - Config 面板上限。
+ * @param {{panelEntriesLimit: number, panelAuditLimit: number, panel: {enabled: boolean}, language: 'en'|'zh'}} options - 运行期可变值容器。
  */
 export function registerWebRoutes(ctx, service, options) {
   withService(ctx, 'webServer', (/** @type {{register?: (route: object) => (() => void) | undefined} | null | undefined} */ webServer) => {
@@ -1766,7 +1920,7 @@ export function registerWebRoutes(ctx, service, options) {
             ...filter,
             ...(limit === undefined ? {} : { limit }),
           })
-          sendPanelJson(res, 200, { entries, total, truncated, budgets: service.budgets(), language: service.language })
+          sendPanelJson(res, 200, { entries, total, truncated, budgets: service.budgets(), language: service.language, panel: { enabled: options.panel.enabled } })
         } catch (error) {
           sendPanelJson(res, 500, { error: error instanceof Error ? error.message : String(error) })
         }
