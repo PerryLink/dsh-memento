@@ -69,7 +69,7 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 | Key | Default | Meaning |
 |---|---|---|
 | `enabled` | `true` | मुख्य स्विच; `false` सेवा, टूल, स्नैपशॉट, कमांड, पैनल और answerer हटा देता है (सेटिंग्स पृष्ठ से संपादन योग्य नहीं — अक्षम प्लगइन की कोई सेटिंग्स प्रविष्टि नहीं) |
-| `panel.enabled` | `true` | वेब पैनल का फ़्लोटिंग बटन दिखाएँ; `false` 🧠 प्रविष्टि छिपाता है (सेटिंग्स पृष्ठ अप्रभावित) |
+| `panel.enabled` | `true` | वेब पैनल का फ़्लोटिंग बटन दिखाएँ; `false` सेटिंग्स पृष्ठ से 🧠 प्रविष्टि तुरंत छिपाता है, रीलोड की ज़रूरत नहीं (सेटिंग्स पृष्ठ अप्रभावित) |
 | `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | निरपेक्ष, या `$DSH_HOME` के सापेक्ष (Windows पर `~/.dsh` पर फ़ॉलबैक) |
 | `budgets.user.userGlobal` | `2000` | user ट्रैक की user-global परत का कठोर अक्षर बजट |
 | `budgets.user.workspace` | `2000` | user ट्रैक की workspace परत का कठोर अक्षर बजट |

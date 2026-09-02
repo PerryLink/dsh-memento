@@ -25,6 +25,19 @@
 
 const PANEL_ID = 'dsh-memento-panel'
 
+/** 本页已渲染的悬浮入口按钮引用（设置页 panel.enabled 开关即时切换用）。 */
+let panelOpenButton = null
+
+/** 悬浮窗开关的即时生效面：切显隐；开启时按钮缺失（上次探测为关）则重建。 */
+function setPanelButtonVisible(visible) {
+  if (panelOpenButton === null) panelOpenButton = document.getElementById('mem-open')
+  if (panelOpenButton !== null) {
+    panelOpenButton.style.display = visible ? '' : 'none'
+  } else if (visible) {
+    void bootPanel()
+  }
+}
+
 /** 面板文案（en 源文 / zh 译文；语言来自 /api/memento/entries 响应的 language 字段，缺省 en）。 */
 const STRINGS = {
   en: {
@@ -121,6 +134,7 @@ function installPanel(state) {
   const openBtn = document.createElement('button')
   openBtn.id = 'mem-open'
   openBtn.textContent = S.open
+  panelOpenButton = openBtn
 
   const root = document.createElement('div')
   root.id = PANEL_ID
@@ -419,32 +433,32 @@ function escapeHtml(value) {
         return out
       }
 
-      /** 子字段规格：path + kind（number/text/bool/choice/policies）+ choice 候选。 */
+      /** 子字段规格：path + kind（number/text/bool/choice/policies）+ choice 候选 + key（文案键）。 */
       const FIELD_SPECS = [
-        { path: 'writePolicy', kind: 'choice', choices: POLICIES },
-        { path: 'writePolicies', kind: 'policies' },
-        { path: 'panel.enabled', kind: 'bool' },
-        { path: 'language', kind: 'choice', choices: ['en', 'zh'] },
-        { path: 'budgets.user.userGlobal', kind: 'number' },
-        { path: 'budgets.user.workspace', kind: 'number' },
-        { path: 'budgets.agent.userGlobal', kind: 'number' },
-        { path: 'budgets.agent.workspace', kind: 'number' },
-        { path: 'maxEntriesPerQuery', kind: 'number' },
-        { path: 'commandListLimit', kind: 'number' },
-        { path: 'commandAuditLimit', kind: 'number' },
-        { path: 'recall.historyLimitDefault', kind: 'number' },
-        { path: 'recall.snippetCap', kind: 'number' },
-        { path: 'recall.snippetChars', kind: 'number' },
-        { path: 'recall.windowDays', kind: 'number' },
-        { path: 'panelEntriesLimit', kind: 'number' },
-        { path: 'panelAuditLimit', kind: 'number' },
-        { path: 'proposals.enabled', kind: 'bool' },
-        { path: 'proposals.maxChars', kind: 'number' },
-        { path: 'proposals.maxPending', kind: 'number' },
-        { path: 'dbPath', kind: 'text' },
-        { path: 'snapshotOrder', kind: 'number' },
-        { path: 'auditRetentionDays', kind: 'number' },
-        { path: 'retrieval.vector', kind: 'bool' },
+        { path: 'writePolicy', kind: 'choice', choices: POLICIES, key: 'writePolicy' },
+        { path: 'writePolicies', kind: 'policies', key: 'writePolicies' },
+        { path: 'panel.enabled', kind: 'bool', key: 'panelEnabled' },
+        { path: 'language', kind: 'choice', choices: ['en', 'zh'], key: 'language' },
+        { path: 'budgets.user.userGlobal', kind: 'number', key: 'budgetUserGlobal' },
+        { path: 'budgets.user.workspace', kind: 'number', key: 'budgetUserWorkspace' },
+        { path: 'budgets.agent.userGlobal', kind: 'number', key: 'budgetAgentGlobal' },
+        { path: 'budgets.agent.workspace', kind: 'number', key: 'budgetAgentWorkspace' },
+        { path: 'maxEntriesPerQuery', kind: 'number', key: 'maxEntriesPerQuery' },
+        { path: 'commandListLimit', kind: 'number', key: 'commandListLimit' },
+        { path: 'commandAuditLimit', kind: 'number', key: 'commandAuditLimit' },
+        { path: 'recall.historyLimitDefault', kind: 'number', key: 'recallHistoryLimit' },
+        { path: 'recall.snippetCap', kind: 'number', key: 'recallSnippetCap' },
+        { path: 'recall.snippetChars', kind: 'number', key: 'recallSnippetChars' },
+        { path: 'recall.windowDays', kind: 'number', key: 'recallWindowDays' },
+        { path: 'panelEntriesLimit', kind: 'number', key: 'panelEntriesLimit' },
+        { path: 'panelAuditLimit', kind: 'number', key: 'panelAuditLimit' },
+        { path: 'proposals.enabled', kind: 'bool', key: 'proposalsEnabled' },
+        { path: 'proposals.maxChars', kind: 'number', key: 'proposalsMaxChars' },
+        { path: 'proposals.maxPending', kind: 'number', key: 'proposalsMaxPending' },
+        { path: 'dbPath', kind: 'text', key: 'dbPath' },
+        { path: 'snapshotOrder', kind: 'number', key: 'snapshotOrder' },
+        { path: 'auditRetentionDays', kind: 'number', key: 'auditRetentionDays' },
+        { path: 'retrieval.vector', kind: 'bool', key: 'retrievalVector' },
       ]
       const SPEC_BY_PATH = new Map(FIELD_SPECS.map((spec) => [spec.path, spec]))
       const RELOAD_PATHS = new Set(['snapshotOrder'])
@@ -578,7 +592,7 @@ function escapeHtml(value) {
             return { text, overridden, invalid: false }
           }
           const parsed = parseDraftText(spec, staged, snapshot.value)
-          return { text: staged, overridden: true, invalid: !parsed.ok }
+          return { text: staged, overridden, invalid: !parsed.ok }
         }
 
         shell() {
@@ -587,6 +601,9 @@ function escapeHtml(value) {
           for (const [path, text] of this.staged) {
             if (!parseDraftText(SPEC_BY_PATH.get(path), text, snapshot.value).ok) invalid = true
           }
+          // 界面语言跟随「所选」语言：草稿里的 language 合法即生效，保存与否不影响 UI 语言。
+          const stagedLanguage = this.staged.get('language')
+          const draftLanguage = stagedLanguage === 'en' || stagedLanguage === 'zh' ? stagedLanguage : undefined
           return {
             available: snapshot.status === 'ready',
             writable: snapshot.writable === true,
@@ -594,7 +611,7 @@ function escapeHtml(value) {
             invalid,
             saving: this.saving,
             failed: this.failed,
-            language: snapshot.value?.language,
+            language: draftLanguage ?? snapshot.value?.language,
           }
         }
 
@@ -619,35 +636,35 @@ function escapeHtml(value) {
 
       let styleInstalled = false
       const CARD_CSS = `
-.memcard { border: 1px solid var(--dsw-alias-border-l2, #2a3a55); border-radius: 10px; margin: 10px 0; background: var(--dsw-alias-bg-layer-3, #131e33); color: inherit; }
-.memcard-head { display: flex; gap: 8px; align-items: center; padding: 12px; }
-.memcard-title { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; }
-.memcard-sub { font-size: 12px; color: var(--dsw-alias-label-secondary, #9fb4d4); }
-.memcard-badge { white-space: nowrap; background: var(--dsw-alias-bg-module-platform, #1c2a42); color: var(--dsw-alias-label-secondary, #9fb4d4); border-radius: 999px; padding: 1px 8px; font-size: 11px; }
-.memcard-body { padding: 0 12px 12px; }
-.memcard-group { margin: 10px 0 2px; font-size: 12px; font-weight: 600; color: var(--dsw-alias-label-secondary, #8fb4e8); }
-.memcard-field { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-top: 1px solid var(--dsw-alias-border-l2, #24344d); }
-.memcard-row { display: flex; gap: 8px; align-items: center; }
-.memcard-label { flex: 1; min-width: 0; font-size: 13px; }
-.memcard-input { border: 1px solid var(--dsw-alias-border-l2, #24344d); background: var(--dsw-alias-bg-layer-3, #0b1120); color: inherit; border-radius: 6px; padding: 4px 8px; font: inherit; min-width: 0; width: 220px; }
+.memsec { max-width: 720px; color: inherit; font-size: 13px; }
+.memsec-title { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+.memsec-desc { margin: 0 0 8px; font-size: 13px; color: var(--dsw-alias-label-secondary, #8a93a6); }
+.memsec-note { margin: 0 0 8px; font-size: 12px; color: var(--dsw-alias-label-tertiary, #98a2b3); }
+.memsec-group { margin: 20px 0 0; padding-bottom: 4px; font-size: 12px; font-weight: 600; color: var(--dsw-alias-label-secondary, #6f87ad); }
+.memcard-field { display: flex; flex-direction: column; padding: 8px 0; border-top: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.22)); }
+.memcard-row { display: flex; flex: 1; flex-wrap: wrap; min-width: 0; align-items: center; gap: 8px; }
+.memcard-label { flex: 1 1 auto; min-width: 0; font-size: 13px; }
+.memcard-input { border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35)); background: transparent; color: inherit; border-radius: 6px; padding: 4px 8px; font: inherit; min-width: 0; width: 240px; }
 .memcard-input[aria-invalid="true"] { border-color: var(--dsw-alias-label-error, #e5534b); }
-.memcard-textarea { width: 100%; min-height: 64px; font: 12px/1.5 ui-monospace, monospace; }
-.memcard-hint, .memcard-invalid { margin: 0; font-size: 12px; }
-.memcard-hint { color: var(--dsw-alias-label-tertiary, #6f87ad); }
+.memcard-textarea { flex-basis: 100%; width: 100%; min-height: 64px; font: 12px/1.5 ui-monospace, monospace; resize: vertical; }
+.memcard-hint, .memcard-invalid { margin: 2px 0 0; font-size: 12px; }
+.memcard-hint { color: var(--dsw-alias-label-tertiary, #98a2b3); }
 .memcard-invalid { color: var(--dsw-alias-label-error, #e5534b); }
-.memcard-override { font-size: 11px; color: var(--dsw-alias-label-secondary, #9fb4d4); }
-.memcard-reset { font: inherit; font-size: 12px; color: var(--dsw-alias-label-secondary, #9fb4d4); cursor: pointer; background: 0 0; border: none; padding: 0; }
-.memcard-footer { display: flex; gap: 8px; align-items: center; padding-top: 10px; }
-.memcard-btn { font: inherit; font-size: 13px; border: 1px solid var(--dsw-alias-border-l2, #2f4466); background: var(--dsw-alias-bg-module-platform, #1c2a42); color: inherit; border-radius: 6px; padding: 4px 12px; cursor: pointer; }
-.memcard-btn:disabled { opacity: 0.5; cursor: default; }
-.memcard-failed { margin: 0; font-size: 12px; color: var(--dsw-alias-label-error, #e5534b); flex: 1; }
-.memcard-readonly { margin: 0 0 8px; font-size: 12px; color: var(--dsw-alias-label-tertiary, #6f87ad); }
+.memcard-override { font-size: 11px; color: var(--dsw-alias-label-secondary, #98a2b3); white-space: nowrap; }
+.memcard-badge { white-space: nowrap; background: var(--dsw-alias-bg-module-platform, rgba(128, 128, 128, 0.15)); color: var(--dsw-alias-label-secondary, #98a2b3); border-radius: 999px; padding: 1px 8px; font-size: 11px; }
+.memcard-reset { font: inherit; font-size: 12px; color: var(--dsw-alias-label-secondary, #98a2b3); cursor: pointer; background: 0 0; border: none; padding: 0; white-space: nowrap; }
+.memsec-footer { display: flex; gap: 8px; align-items: center; margin-top: 16px; }
+.memsec-spacer { flex: 1; }
+.memsec-dirty { font-size: 12px; color: var(--dsw-alias-label-secondary, #98a2b3); }
+.memsec-failed { font-size: 12px; color: var(--dsw-alias-label-error, #e5534b); }
+.memsec-btn { font: inherit; font-size: 13px; border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35)); background: transparent; color: inherit; border-radius: 6px; padding: 4px 14px; cursor: pointer; }
+.memsec-btn:disabled { opacity: 0.5; cursor: default; }
 `
 
       /** 单字段控件行（label + input/checkbox/select + override 徽标 + reset + hint/invalid）。 */
       function FieldRow(props) {
         const { t, spec, state, disabled, onEdit, onReset } = props
-        const label = t(spec.path.replace(/\./g, '_'))
+        const label = t(spec.key ?? spec.path)
         const reloadBadge = RELOAD_PATHS.has(spec.path) ? jsx('span', { className: 'memcard-badge', title: t('reloadHint') }, '⟳') : null
         const invalid = spec.kind === 'choice' ? t('invalidPolicy') : t('invalidNumber')
         const control = spec.kind === 'bool'
@@ -694,37 +711,37 @@ function escapeHtml(value) {
         const t = (key) => CARD_STRINGS[language][key] ?? key
         const groups = state.available
           ? FIELD_GROUPS.map((group) => jsx('div', { key: group.key },
-              jsx('div', { className: 'memcard-group' }, t(group.key)),
+              jsx('div', { className: 'memsec-group' }, t(group.key)),
               group.paths.map((path) => {
                 const spec = SPEC_BY_PATH.get(path)
+                // panel.enabled 即时生效：不走暂存，点击立即写盘并切换本页悬浮按钮。
+                const instant = spec.path === 'panel.enabled'
                 return jsx(FieldRow, {
                   key: path, t, spec, disabled: !state.writable,
                   state: state.fields[path],
-                  onEdit: (text) => props.edit(path, text),
+                  onEdit: instant ? (text) => props.applyPanel(text) : (text) => props.edit(path, text),
                   onReset: () => {
                     const baseValue = pathValue(props.base, path)
-                    props.edit(path, spec.kind === 'policies' ? formatPolicies(baseValue) : formatValue(baseValue))
+                    const text = spec.kind === 'policies' ? formatPolicies(baseValue) : formatValue(baseValue)
+                    if (instant) props.applyPanel(text)
+                    else props.edit(path, text)
                   },
                 })
               }),
             ))
           : null
         const blocked = !state.dirty || state.saving || state.invalid
-        return jsx('div', { className: 'memcard' },
-          jsx('div', { className: 'memcard-head' },
-            jsx('span', { className: 'memcard-title' }, t('title')),
-            jsx('span', { className: 'memcard-sub' }, t('description')),
-            state.dirty ? jsx('span', { className: 'memcard-badge' }, t('unsaved')) : null,
-          ),
-          jsx('div', { className: 'memcard-body' },
-            !state.available ? jsx('p', { className: 'memcard-readonly' }, t('readOnly')) : null,
-            !state.writable ? jsx('p', { className: 'memcard-readonly' }, t('readOnly')) : null,
-            groups,
-            jsx('div', { className: 'memcard-footer' },
-              state.failed ? jsx('p', { className: 'memcard-failed' }, t('saveFailed')) : null,
-              jsx('button', { type: 'button', className: 'memcard-btn', disabled: !state.dirty || state.saving, onClick: props.discard }, t('discard')),
-              jsx('button', { type: 'button', className: 'memcard-btn', disabled: blocked, onClick: props.save }, state.saving ? t('saving') : t('save')),
-            ),
+        return jsx('div', { className: 'memsec' },
+          jsx('h2', { className: 'memsec-title' }, t('title')),
+          jsx('p', { className: 'memsec-desc' }, t('description')),
+          !state.available || !state.writable ? jsx('p', { className: 'memsec-note' }, t('readOnly')) : null,
+          groups,
+          jsx('div', { className: 'memsec-footer' },
+            state.dirty ? jsx('span', { className: 'memsec-dirty' }, t('unsaved')) : null,
+            state.failed ? jsx('span', { className: 'memsec-failed' }, t('saveFailed')) : null,
+            jsx('span', { className: 'memsec-spacer' }),
+            jsx('button', { type: 'button', className: 'memsec-btn', disabled: !state.dirty || state.saving, onClick: props.discard }, t('discard')),
+            jsx('button', { type: 'button', className: 'memsec-btn', disabled: blocked, onClick: props.save }, state.saving ? t('saving') : t('save')),
           ),
         )
       }
@@ -750,6 +767,21 @@ function escapeHtml(value) {
             edit: (path, text) => this.form.stage(path, text),
             discard: () => this.form.discard(),
             save: () => { void this.form.save() },
+            applyPanel: (text) => { void this.applyPanelEnabled(text) },
+          }
+        }
+
+        /** panel.enabled 即时生效：立即写盘并切换本页悬浮按钮显隐，不进暂存。 */
+        async applyPanelEnabled(text) {
+          const snapshot = this.scope.getSnapshot()
+          if (snapshot.status !== 'ready' || !snapshot.writable) return
+          const next = text === 'true'
+          const current = snapshot.value !== null && typeof snapshot.value === 'object' ? snapshot.value.panel : undefined
+          try {
+            await this.scope.set('panel', { ...(typeof current === 'object' && current !== null ? current : {}), enabled: next })
+            setPanelButtonVisible(next)
+          } catch {
+            // 写入失败：静默放弃本次切换，控件由 scope 快照回滚渲染，无半状态。
           }
         }
       }

@@ -69,7 +69,7 @@ Todos los parámetros son campos Schemastery `Config` (modificables desde cordis
 | Key | Default | Meaning |
 |---|---|---|
 | `enabled` | `true` | Interruptor maestro; `false` elimina servicio, herramientas, instantánea, comando, panel y answerer (no editable desde la página de ajustes: un plugin deshabilitado no tiene entrada de ajustes) |
-| `panel.enabled` | `true` | Mostrar el botón flotante del panel web; `false` oculta la entrada 🧠 (la página de ajustes no se ve afectada) |
+| `panel.enabled` | `true` | Mostrar el botón flotante del panel web; `false` oculta la entrada 🧠 al instante desde la página de ajustes, sin recargar (la página de ajustes no se ve afectada) |
 | `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | Absoluto, o relativo a `$DSH_HOME` (en Windows cae a `~/.dsh`) |
 | `budgets.user.userGlobal` | `2000` | Presupuesto estricto de caracteres de la capa user-global de la pista user |
 | `budgets.user.workspace` | `2000` | Presupuesto estricto de caracteres de la capa workspace de la pista user |

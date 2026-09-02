@@ -70,7 +70,7 @@ All tunables are Schemastery `Config` fields (changeable from cordis.yml). Inval
 | Key | Default | Meaning |
 |---|---|---|
 | `enabled` | `true` | Master switch; `false` removes the service, tools, snapshot, command, panel, and answerer (not editable from the settings page — a disabled plugin has no settings entry) |
-| `panel.enabled` | `true` | Show the web panel's floating button; `false` hides the 🧠 entry (the settings page itself stays reachable) |
+| `panel.enabled` | `true` | Show the web panel's floating button; `false` hides the 🧠 entry immediately from the settings page, no reload needed (the settings page itself stays reachable) |
 | `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | Absolute, or relative to `$DSH_HOME` (falls back to `~/.dsh` on Windows) |
 | `budgets.user.userGlobal` | `2000` | Hard character budget for the user track's user-global layer |
 | `budgets.user.workspace` | `2000` | Hard character budget for the user track's workspace layer |
