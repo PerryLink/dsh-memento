@@ -5,12 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.4] - 2026-09-03
 
 ### Added
 
 - **Host settings panel integration** — when the DSH settings service is mounted, the plugin registers the `dsh-memento` settings namespace (every `Config` field except `enabled`, plus a new `panel.enabled`), and its browser half contributes a **top-level `dsh-memento` entry to the DSH settings sidebar** (via the public `settings.section` slot, like the built-in sections). Edits persist to the settings user layer (`settings.yaml`) with staged-draft save/discard/per-field reset semantics. Nearly everything applies live: write policies, language, budgets, limits, proposals, panel; `dbPath` / `auditRetentionDays` apply by reopening the store (old one closed safely); `retrieval.vector` swaps the retriever in place; only `snapshotOrder` needs a DSH reload (changes are recorded as a `settings-startup-fields` audit row). Without the settings service the plugin behaves exactly as composed.
 - **Hideable floating panel button** — new `panel.enabled` config (default `true`); `false` stops the web panel from rendering its 🧠 entry button (addresses upstream issue #7). The panel probes its own `/api/memento/entries` response at startup and falls back to showing the button when the probe fails.
+
+### Changed
+
+- Dev pins `@deepseek-ai/cordis-plugin-loader ^1.0.3` / `@deepseek-ai/cordis-plugin-include ^1.0.7` aligned with the `cordis 4.0.2` peer ranges.
 
 ## [0.5.3] - 2026-09-02
 
