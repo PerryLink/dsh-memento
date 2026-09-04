@@ -252,6 +252,9 @@ async function askApproval(approval, payload, write) {
  * Session.append 写入面仍只接受 surface intent 可选参（非 surface 类型
  * 保持两参调用形态）、仍无 writer 侧 ignorable 标记；读取端已有 ignorable
  * 信封容忍未知类型。故本门在 alpha.5 下保持关闭，行为不变。
+ * rc.1 / 0.1.3-alpha.1 复核（2026-09-04）：append 第三参仍为 surface-only
+ * SurfaceIntent、仍无 ignorable 写入通道，KNOWN 清单仍不含 memory/*——
+ * 结论不变，本门在这两条线上同样保持关闭。
  * @param {{append?: (type: string, data: object) => unknown} | null | undefined} session - Session。
  * @param {string} type - 事件类型。
  * @param {object} data - 载荷。

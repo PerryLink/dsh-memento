@@ -8,7 +8,8 @@
 //   （KNOWN_SESSION_EVENT_TYPES 不含 memory/*，Session.append 写入面也仍不接受
 //   ignorable 标记），运行时按已知集合自适应派发——未被 harness 收录时跳过
 //   append，审计由审批审计对 + 插件审计表承担；词汇与载荷形状在本文件定死，
-//   harness 收录后即自动启用。
+//   harness 收录后即自动启用。rc.1 / 0.1.3-alpha.1 复核（2026-09-04）：结论不变
+//   （append 第三参仍为 surface-only SurfaceIntent、无 ignorable 写入通道）。
 
 export type MemoryTrack = 'user' | 'agent'
 
