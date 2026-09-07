@@ -4,7 +4,7 @@
 // - Service Definition：ctx.memory（add/replace/remove/query/seed + budgets），
 //   写方法内部强制走审批门（waterfall 审批接缝），模型无论经哪个工具/插件
 //   间接调用服务都无法绕过（S3）。
-// - Provider：lib/store.mjs 本地 SQLite（node:sqlite，零依赖，WAL）。
+// - Service Provider：lib/store.mjs 本地 SQLite（node:sqlite，零依赖，WAL）。
 // - Consumer：memory 工具 + 冻结快照注入（systemPrompt 段，同步提供者）。
 //
 // 只消费公开服务：tools / systemPrompt / approval（inject 声明）。
