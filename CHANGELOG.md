@@ -1,9 +1,15 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.5.7] - 2026-09-07
+
+### Fixed
+
+- Complete the 0.5.6 peer-range alignment: `@deepseek-ai/dsh-settings` was still on the old `>=0.1.0-rc.1 <0.2.0` band (the same prerelease-tuple flaw that 0.5.6 fixed elsewhere), and `package-lock.json` still carried the stale `>=0.1.0-rc.8` ranges; package.json peers and the lockfile are now uniformly `>=0.1.2-rc.1 <0.2.0` (detected by the `dsh-plugin-doctor` R8 check); no behavior change.
 
 ## [0.5.6] - 2026-09-07
 
