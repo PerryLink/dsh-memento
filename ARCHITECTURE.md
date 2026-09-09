@@ -51,7 +51,7 @@ memory 工具(add)
   → store.insertEntry + audit 行（outcome 含 policy 来源）
   → 会话日志（已知事件类型）已有 approval/asked+decided 审计对
   → 下一会话首个 assemble：渲染冻结快照（带用量头）注入 systemPrompt 段
-     └ 同一文本也写入 audit(snapshot) 行 + request/header.system（S2 可重建）
+     └ 同一文本也写入 audit(snapshot) 行 + system/message（S2 可重建）
 ```
 
 ## 关键设计决策
