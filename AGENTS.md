@@ -30,7 +30,7 @@ package-lock.json    锁文件（CI 用，不进 npm 包）
 tsconfig.check.json  tsc --checkJs 类型检查门
 .github/workflows/   CI（三平台×双 Node）、每周 next-rc 兼容探针、v* 标签 npm 发布
 README.md            英文主介绍（GitHub 默认页；五语源文）
-README.{zh,es,pt,hi}.md   中/西/葡/印地语介绍（顶部互链，与英文同 commit 更新）
+README-{zh,es,pt,hi}.md   中/西/葡/印地语介绍（顶部互链，与英文同 commit 更新）
 ARCHITECTURE.md      三角色 seam 架构图与全部设计决策
 docs/protocol-v1.md(+.zh)       dsh-memory-protocol v1 规范（双语；docs/schemas/ 为规范性 JSON Schema）
 docs/adapters-guide.md(+.zh)    第三方插件接入指南（双语）
