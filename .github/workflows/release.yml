@@ -40,3 +40,36 @@ jobs:
         run: npm publish --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # npm publish alone left every release without a GitHub Release page (v0.5.11
+  # had to be created by hand after the fact). This job closes that gap and is
+  # idempotent, so re-running a tag is safe.
+  release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create the GitHub Release from the CHANGELOG
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            echo "release ${{ github.ref_name }} already exists; skipping"
+            exit 0
+          fi
+          VERSION="${GITHUB_REF_NAME#v}"
+          # A CHANGELOG missing this version's section must not fail the job:
+          # npm has already published by now, and a missing Release page is
+          # exactly the gap this job exists to close. Fall back to generated
+          # notes instead of going red.
+          node scripts/changelog-section.mjs "$VERSION" > release-notes.md || true
+          if [ -s release-notes.md ]; then
+            gh release create "${{ github.ref_name }}" \
+              --title "${{ github.ref_name }}" \
+              --notes-file release-notes.md
+          else
+            gh release create "${{ github.ref_name }}" --generate-notes
+          fi
