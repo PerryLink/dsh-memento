@@ -1744,10 +1744,14 @@ export function makeMemoryRecallTool(service, ctx, live) {
                   type: 'object',
                   additionalProperties: false,
                   properties: {
+                    // 必须与 publicEntry() 的返回字段逐一对齐：DSH 对工具输出做
+                    // additionalProperties: false 校验，多一个未声明字段即拒绝整次调用。
                     id: { type: 'string', required: true },
                     track: { type: 'string', required: true },
                     scope: { type: 'string', required: true },
                     text: { type: 'string', required: true },
+                    source: { type: 'string', required: true },
+                    tags: { type: 'array', items: { type: 'string' }, required: true },
                   },
                 },
               },
