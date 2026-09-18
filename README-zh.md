@@ -5,7 +5,7 @@
 
 **给 DeepSeek Harness 补上有界、分层、带审批门、可审计的跨会话记忆。**
 
-*一个类型安全的 `ctx.memory` 接缝、模型绕不过去的写入审批门，以及能从会话日志重建的审计链。*
+*一个类型安全的 `ctx.memory` 接缝、模型绕不过去的写入审批门，以及可重建的审计链——来自审批对加插件自有审计表，并把会话日志侧的缺口说出来。*
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Gitee](https://img.shields.io/badge/Gitee-mirror-c71d23?logo=gitee)](https://gitee.com/perrylink/dsh-memento)
@@ -27,7 +27,7 @@
 
 | Surface | Status |
 |---|---|
-| Harness | DeepSeek Harness `dsh-v0.1.5-rc.2`（2026-09-09 已适配）：会话信封保留 ignorable 字段但仅用于存量日志读取兼容——Session.append 仍无法盖章，门控行为不变。 2026-09-11 已对照 dsh-v0.1.5-rc.2 master checkout 核验（全部门禁链 + profile 安装冒烟）。 |
+| Harness | DeepSeek Harness `dsh-v0.1.6-alpha.2`（2026-09-18 复核）：仍无插件事件注册面——`KNOWN_SESSION_EVENT_TYPES` 不含 `memory/*`，且 `Session.append` 第三参只承载 surface 类型的 `SurfaceIntent`，故审计门保持自适应、行为不变（现在会在进程内告警一次，并在 `/memory audit` 输出里明示缺口）。peer 区间保留 `0.1.2-rc.1`、`0.1.5-alpha.1`、`0.1.6-0` 三条线。类型证据来自三个面：本机 checkout 的已构建类型、`node_modules` 里钉住的已发布线、以及 DOM 库下的浏览器半侧。 |
 | Node | `^22.19.0 || >=24.0.0` |
 | Platforms | Windows / macOS / Linux（纯 host；无原生代码、无网络） |
 | Model | 任意 |
@@ -39,6 +39,7 @@
 - **审批门不可绕过。** 每条写路径（`add` / `replace` / `remove` / `seed`）都被强制经过服务内部的审批 waterfall，而非工具层。`writePolicy: ask | auto | off` 是模型看不见的配置；`replace` / `remove` / `consolidate` 的审批载荷携带将被改动条目的全文，被拒的写同样落一条 `*-denied` 审计行。
 - **模型可见 ⟺ 已记录。** 注入的快照逐字进入 `system/message`；每次写都能从 `approval/asked` + `approval/decided` + 插件自有审计表重建。
 - **有界且诚实。** 每轨每层硬字符预算（默认 user 2000 / agent 4000）。写满返回结构化错误（用量 + 上限）——绝不截断、绝不自动压缩。
+- **审计缺口可见。** `/memory audit` 列出插件审计表，并在会话日志侧未落盘时附一行说明：本宿主不认识 `memory/*` 会话事件类型，而 append 未知类型会让该会话无法再加载，因此写入的审计由 `approval/asked` + `approval/decided` 与插件审计表承担。该提示随门自适应——宿主收录这些类型后自行消失。
 
 两条轨道 × 两个层级 × 按 agent 隔离：`user` 轨（关于用户的事实）与 `agent` 轨（环境事实与约定），各自再分为 `user-global` 与 `workspace` 层，并按 `agentPreset` 隔离。快照在会话首次组装提示时冻结一次，会话中途不再变化。
 
@@ -186,7 +187,7 @@ Claude Desktop（`claude_desktop_config.json`）配置示例：
 
 - **Permissions**：workshop 清单声明 `harness:tool`、`filesystem:read`、`filesystem:write`，以及 `network:none` / `subprocess:none` / `shell:none` / `python:none` / `credentials:none`。写审批走官方审批接缝。
 - **Data**：本地 SQLite 数据库（`0600`），零网络、零凭据。
-- **Session log**：审计完整性来自审批对（`approval/asked` + `approval/decided`）加插件自有审计表。
+- **Session log**：审计完整性来自审批对（`approval/asked` + `approval/decided`）加插件自有审计表；会话日志侧的缺口由 `/memory audit` 明示，宿主收录 `memory/*` 后自动消失。
 
 ## Security boundaries
 
@@ -219,10 +220,12 @@ Claude Desktop（`claude_desktop_config.json`）配置示例：
 
 ```sh
 npm install              # node ^22.19 || >=24
-npm test                 # node --test: 141 tests
+npm test                 # node --test: 187 tests
 npm run lint             # oxlint
 npm run test:conformance # dsh-memory-protocol v1 conformance suite
-npm run typecheck        # tsc --checkJs gate
+npm run typecheck        # 宿主面 × 本机 D:\deepseek-harness checkout（无 checkout 时打印「不可验证」并 exit 0）
+npm run typecheck:ci     # 宿主面 × node_modules 里钉住的已发布线
+npm run check:client     # 浏览器半侧（DOM 库）类型门
 npm run check:coverage   # line-coverage gate
 npm run check:readmes    # five-language README consistency gate
 npm run verify:self-contained # reject out-of-repo dependency specs

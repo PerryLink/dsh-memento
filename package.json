@@ -1,7 +1,7 @@
 {
   "name": "dsh-memento",
   "description": "Bounded, layered, approval-gated, auditable cross-session memory for DeepSeek Harness — a capability seam (ctx.memory service + local SQLite provider + memory tool + frozen snapshot injection), not another memory warehouse",
-  "version": "0.5.12",
+  "version": "0.5.13",
   "type": "module",
   "main": "./index.mjs",
   "types": "./types.d.ts",
@@ -54,6 +54,7 @@
     "url": "https://github.com/PerryLink/dsh-memento/issues"
   },
   "dsh": {
+    "manifestVersion": 1,
     "bundle": {
       "patch": "./cordis.patch.yml"
     },
@@ -90,7 +91,10 @@
       "credentials:none"
     ],
     "compatibility": {
-      "dshVersions": ["0.1.2-rc.1","0.1.5-rc.2"]
+      "dshVersions": [
+        "0.1.2-rc.1",
+        "0.1.5-rc.2"
+      ]
     },
     "capability": {
       "id": "memory",
@@ -107,9 +111,9 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
-    "@deepseek-ai/dsh-session": ">=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0",
-    "@deepseek-ai/dsh-settings": ">=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0",
-    "@deepseek-ai/dsh-tools": ">=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0",
+    "@deepseek-ai/dsh-session": ">=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0",
+    "@deepseek-ai/dsh-settings": ">=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0",
+    "@deepseek-ai/dsh-tools": ">=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0",
     "@deepseek-ai/schemastery": "^3.18.2"
   },
   "devDependencies": {
@@ -130,7 +134,9 @@
     "coverage": "node --test --experimental-test-coverage \"test/*.test.mjs\"",
     "lint": "oxlint",
     "check:coverage": "node scripts/check-coverage.mjs",
-    "typecheck": "tsc -p tsconfig.check.json",
+    "typecheck": "node scripts/typecheck-checkout.mjs",
+    "typecheck:ci": "tsc -p tsconfig.check.ci.json",
+    "check:client": "tsc -p tsconfig.check.client.json",
     "check:readmes": "node scripts/verify-readmes.mjs",
     "verify:self-contained": "node scripts/verify-self-contained.mjs",
     "verify:artifacts": "node scripts/verify-artifacts.mjs",
@@ -149,7 +155,8 @@
     "llm"
   ],
   "engines": {
-    "node": "^22.19.0 || >=24.0.0"
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0"
   },
   "publishConfig": {
     "access": "public"

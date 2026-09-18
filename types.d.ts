@@ -4,12 +4,14 @@
 // - `declare module '@deepseek-ai/cordis'`：ctx.memory 服务（F1，三角色 seam 的
 //   Service Definition 面）。
 // - `declare module '@deepseek-ai/dsh-session'`：memory/* 会话事件词汇（F7）。
-//   alpha.5 复核（2026-09-02）：harness 仍无插件事件注册面
-//   （KNOWN_SESSION_EVENT_TYPES 不含 memory/*，Session.append 写入面也仍不接受
-//   ignorable 标记），运行时按已知集合自适应派发——未被 harness 收录时跳过
-//   append，审计由审批审计对 + 插件审计表承担；词汇与载荷形状在本文件定死，
-//   harness 收录后即自动启用。rc.1 / 0.1.3-alpha.1 复核（2026-09-04）：结论不变
-//   （append 第三参仍为 surface-only SurfaceIntent、无 ignorable 写入通道）。
+//   口径（F3 裁定）：**词汇在、写入通道不在**——已知类型清单仍不含 memory/*，
+//   Session.append 的第三参只承载 surface 类型的 SurfaceIntent（非 surface 事件
+//   无法盖 ignorable 标记），因此本文件声明的词汇是"harness 收录后即自动启用"的
+//   契约面，不是当前会落盘的事实。运行时按已知集合自适应派发：未被收录时
+//   返回 'skipped-unknown-type' 并在进程内告警一次，审计由审批审计对
+//   （approval/asked + approval/decided）与插件审计表承担。
+//   已复核的线：0.1.5-rc.6（2026-09-02）、0.1.2-rc.1 / 0.1.3-alpha.1（2026-09-04）、
+//   0.1.6-alpha.2（2026-09-18）——四条结论一致，词汇与载荷形状在本文件定死。
 
 export type MemoryTrack = 'user' | 'agent'
 

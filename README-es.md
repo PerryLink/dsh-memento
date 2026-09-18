@@ -5,7 +5,7 @@
 
 **Memoria entre sesiones acotada, por capas, con puerta de aprobación y auditable para DeepSeek Harness.**
 
-*Una costura tipada `ctx.memory`, una puerta de aprobación de escritura que ninguna ruta del modelo puede eludir y pistas de auditoría reconstruibles desde el registro de sesión.*
+*Una costura tipada `ctx.memory`, una puerta de aprobación de escritura que ninguna ruta del modelo puede eludir y una auditoría reconstruible — desde el par de aprobación más la tabla de auditoría del plugin, con la brecha del registro de sesión dicha en voz alta.*
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Gitee](https://img.shields.io/badge/Gitee-mirror-c71d23?logo=gitee)](https://gitee.com/perrylink/dsh-memento)
@@ -27,7 +27,7 @@
 
 | Surface | Status |
 |---|---|
-| Harness | DeepSeek Harness `dsh-v0.1.5-rc.2` (adaptado el 2026-09-09): el sobre de sesión conserva su campo ignorable solo para compatibilidad de lectura de logs almacenados - Session.append aún no puede estamparlo, por lo que el comportamiento de la puerta no cambia. Verificado el 2026-09-11 contra el checkout master dsh-v0.1.5-rc.2 (cadena completa de puertas + humo de instalación de perfil). |
+| Harness | DeepSeek Harness `dsh-v0.1.6-alpha.2` (revisado el 2026-09-18): sigue sin haber superficie de registro de eventos para plugins — `KNOWN_SESSION_EVENT_TYPES` no incluye `memory/*` y el tercer argumento de `Session.append` solo lleva un `SurfaceIntent` para tipos de superficie, así que la puerta de auditoría sigue siendo adaptativa y se salta igual (ahora lo dice una vez por proceso y en `/memory audit`). El rango de peers conserva las líneas `0.1.2-rc.1`, `0.1.5-alpha.1` y `0.1.6-0`. La evidencia de tipos viene de tres caras: los tipos ya compilados del checkout local, la línea publicada fijada en `node_modules` y la mitad de navegador bajo una lib DOM. |
 | Node | `^22.19.0 || >=24.0.0` |
 | Platforms | Windows / macOS / Linux (solo host; sin código nativo, sin red) |
 | Model | Cualquiera |
@@ -39,6 +39,7 @@
 - **La puerta no se puede eludir.** Toda ruta de escritura (`add` / `replace` / `remove` / `seed`) se fuerza a través de la cascada de aprobación dentro del servicio, no en la capa de herramientas. `writePolicy: ask | auto | off` es configuración invisible para el modelo; `replace` / `remove` / `consolidate` llevan el texto completo de las entradas que cambian en el payload de aprobación, y una escritura denegada deja igualmente una fila de auditoría `*-denied`.
 - **Visible para el modelo ⟺ registrado.** La instantánea inyectada llega textualmente a `system/message`; cada escritura es reconstruible a partir de `approval/asked` + `approval/decided` + la propia tabla de auditoría del plugin.
 - **Acotada y honesta.** Presupuestos estrictos de caracteres por pista y por capa (por defecto usuario 2000 / agente 4000). Un almacén lleno falla con un error estructurado (uso + límite): nunca se trunca, nunca se compacta automáticamente.
+- **La brecha de auditoría es visible.** `/memory audit` lista la tabla de auditoría del plugin y añade una línea cuando el lado del registro de sesión no se escribe: este host no conoce los tipos de evento `memory/*`, y añadir tipos desconocidos dejaría la sesión ilegible, así que las escrituras se auditan con `approval/asked` + `approval/decided` y la tabla del plugin. La puerta es adaptativa: la línea desaparece sola cuando el host conoce esos tipos.
 
 Dos pistas × dos capas × clave por agente: una pista `user` (hechos sobre el usuario) y una pista `agent` (hechos de entorno y convenciones), cada una dividida en capas `user-global` y `workspace`, aisladas por `agentPreset`. La instantánea se congela una vez por sesión en el primer ensamblado del prompt y nunca cambia a mitad de sesión.
 
@@ -186,7 +187,7 @@ El nombre es **`dsh-memento`** (publicado en npm y GitHub). No `dsh-recall` (con
 
 - **Permissions**: el manifiesto de workshop declara `harness:tool`, `filesystem:read`, `filesystem:write` y `network:none` / `subprocess:none` / `shell:none` / `python:none` / `credentials:none`. La aprobación de escritura usa la costura oficial de aprobación.
 - **Data**: base de datos SQLite local (`0600`), cero red, cero credenciales.
-- **Session log**: la completitud de auditoría proviene del par de aprobación (`approval/asked` + `approval/decided`) más la tabla de auditoría del plugin.
+- **Session log**: la completitud de auditoría proviene del par de aprobación (`approval/asked` + `approval/decided`) más la tabla de auditoría del plugin; la brecha del lado del registro de sesión se declara en `/memory audit` y desaparece cuando el host registra `memory/*`.
 
 ## Security boundaries
 
@@ -219,10 +220,12 @@ Y las partes deliberadamente rechazadas: la auto-resumación oculta hacia estado
 
 ```sh
 npm install              # node ^22.19 || >=24
-npm test                 # node --test: 141 tests
+npm test                 # node --test: 187 pruebas
 npm run lint             # oxlint
 npm run test:conformance # dsh-memory-protocol v1 conformance suite
-npm run typecheck        # tsc --checkJs gate
+npm run typecheck        # cara host × checkout local D:\deepseek-harness (imprime «no verificable» y sale 0 sin checkout)
+npm run typecheck:ci     # cara host × línea publicada fijada en node_modules
+npm run check:client     # mitad de navegador (lib DOM)
 npm run check:coverage   # line-coverage gate
 npm run check:readmes    # five-language README consistency gate
 npm run verify:self-contained # reject out-of-repo dependency specs

@@ -10,7 +10,30 @@
     "noEmit": true,
     "noImplicitAny": true,
     "strict": false,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "paths": {
+      "@deepseek-ai/cordis": ["D:/deepseek-harness/vendor/cordis/lib/types/index.d.ts"],
+      "@deepseek-ai/cordis/*": ["D:/deepseek-harness/vendor/cordis/lib/types/*"],
+      "@deepseek-ai/cordis-plugin-include": ["D:/deepseek-harness/vendor/include/lib/types/index.d.ts"],
+      "@deepseek-ai/cordis-plugin-loader": ["D:/deepseek-harness/vendor/loader/lib/types/index.d.ts"],
+      "@deepseek-ai/schemastery": ["D:/deepseek-harness/vendor/schemastery/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-session": ["D:/deepseek-harness/packages/core/session/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-session/*": ["D:/deepseek-harness/packages/core/session/lib/types/*"],
+      "@deepseek-ai/dsh-tools": ["D:/deepseek-harness/packages/core/tools/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-settings": ["D:/deepseek-harness/packages/settings/settings/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-llm": ["D:/deepseek-harness/packages/llm/llm/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-scope": ["D:/deepseek-harness/packages/core/scope/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-agent": ["D:/deepseek-harness/packages/core/agent/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-util-values": ["D:/deepseek-harness/packages/util/values/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-brand": ["D:/deepseek-harness/packages/util/brand/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-invariants": ["D:/deepseek-harness/packages/runtime-diagnostics/invariants/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-user-approval": ["D:/deepseek-harness/packages/interaction/user-approval/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-session-projection": ["D:/deepseek-harness/packages/session/session-projection/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-commands": ["D:/deepseek-harness/packages/interaction/commands/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-storage-domain": ["D:/deepseek-harness/packages/storage/storage-domain/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-typert-protocol": ["D:/deepseek-harness/packages/typert/protocol/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-system-prompt": ["D:/deepseek-harness/packages/core/system-prompt/lib/types/index.d.ts"]
+    }
   },
-  "include": ["index.mjs", "lib/**/*.mjs", "scripts/**/*.mjs", "types.d.ts"]
+  "include": ["index.mjs", "lib/**/*.mjs", "scripts/**/*.mjs", "bin/**/*.mjs", "types.d.ts"]
 }

@@ -6,7 +6,7 @@
 
 **Bounded, layered, approval-gated, auditable cross-session memory for DeepSeek Harness.**
 
-*A typed `ctx.memory` seam, a write-approval gate no model path can bypass, and audit trails rebuilt from the session log.*
+*A typed `ctx.memory` seam, a write-approval gate no model path can bypass, and an audit trail you can rebuild — from the approval pair plus the plugin's own audit table, with the session-log gap named out loud.*
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![DSH plugin](https://img.shields.io/badge/dsh--plugin-✅-green)](https://github.com/topics/dsh-plugin)
@@ -27,7 +27,7 @@
 
 | Surface | Status |
 |---|---|
-| Harness | DeepSeek Harness `dsh-v0.1.5-rc.2` (adapted 2026-09-09): the session envelope keeps its ignorable field for stored-log read compatibility only - Session.append still cannot stamp it, so audit-gate behavior is unchanged. Verified 2026-09-11 against the dsh-v0.1.5-rc.2 master checkout (full gate chain + profile install smoke). |
+| Harness | DeepSeek Harness `dsh-v0.1.6-alpha.2` (re-checked 2026-09-18): still no plugin event-registration surface — `KNOWN_SESSION_EVENT_TYPES` does not carry `memory/*`, and `Session.append`'s third argument only carries a `SurfaceIntent` for surface-eligible types, so the audit gate stays adaptive and skips as before (it now says so once per process and in `/memory audit`). Peer range keeps the `0.1.2-rc.1`, `0.1.5-alpha.1` and `0.1.6-0` lines. Type evidence comes from three faces: the local checkout's built types, the pinned published line in `node_modules`, and the browser half under a DOM lib. |
 | Node | `^22.19.0 || >=24.0.0` |
 | Platforms | Windows / macOS / Linux (pure host; no native code, no network) |
 | Model | Any |
@@ -39,6 +39,7 @@
 - **The approval gate cannot be bypassed.** Every write path (`add` / `replace` / `remove` / `seed`) is forced through the approval waterfall inside the service, not in the tool layer. `writePolicy: ask | auto | off` is model-invisible configuration; `replace` / `remove` / `consolidate` carry the full text of the entries they change in the approval payload, and a denied write still lands a `*-denied` audit row.
 - **Model-visible ⟺ logged.** The injected snapshot lands verbatim in `system/message`; every write is reconstructable from `approval/asked` + `approval/decided` + the plugin's own audit table.
 - **Bounded and honest.** Hard per-track/per-layer character budgets (default user 2000 / agent 4000). A full store fails with a structured error (usage + limit) — never truncated, never auto-compacted.
+- **The audit gap is visible.** `/memory audit` lists the plugin audit table and appends one line when the session-log side is not written: this harness does not know the `memory/*` session event types, and appending unknown types would make the session unloadable, so writes are audited through `approval/asked` + `approval/decided` and the plugin's table instead. The gate is adaptive — the line disappears on its own once the host knows those types.
 
 Two tracks × two layers × per-agent key: a `user` track (facts about the user) and an `agent` track (environment facts and conventions), each split into `user-global` and `workspace` layers, isolated per `agentPreset`. The snapshot is frozen once per session at first prompt assembly and never changes mid-session.
 
@@ -186,7 +187,7 @@ The name is **`dsh-memento`** (published on npm and GitHub). Not `dsh-recall` (c
 
 - **Permissions**: declares `harness:tool`, `filesystem:read`, `filesystem:write`, and `network:none` / `subprocess:none` / `shell:none` / `python:none` / `credentials:none` in its workshop manifest. Write approval rides the official approval seam.
 - **Data**: local SQLite database (`0600`), zero network, zero credentials.
-- **Session log**: audit completeness comes from the approval pair (`approval/asked` + `approval/decided`) plus the plugin's own audit table.
+- **Session log**: audit completeness comes from the approval pair (`approval/asked` + `approval/decided`) plus the plugin's own audit table; the session-log side of that gap is declared in `/memory audit` and disappears once the host registers `memory/*`.
 
 ## Security boundaries
 
@@ -219,10 +220,12 @@ And the parts deliberately refused: hidden auto-summarization into model-private
 
 ```sh
 npm install              # node ^22.19 || >=24
-npm test                 # node --test: 141 tests
+npm test                 # node --test: 187 tests
 npm run lint             # oxlint
 npm run test:conformance # dsh-memory-protocol v1 conformance suite
-npm run typecheck        # tsc --checkJs gate
+npm run typecheck        # host face vs a local D:\deepseek-harness checkout (prints "not verifiable" and exits 0 without one)
+npm run typecheck:ci     # host face vs the pinned published line in node_modules
+npm run check:client     # browser half (DOM lib) type gate
 npm run check:coverage   # line-coverage gate
 npm run check:readmes    # five-language README consistency gate
 npm run verify:self-contained # reject out-of-repo dependency specs

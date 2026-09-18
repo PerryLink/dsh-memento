@@ -23,7 +23,12 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run lint
+      # 三把类型尺子，缺任一把都不算类型面有证据：
+      # checkout 面（有宿主 checkout 才量；runner 上没有 ⇒ 打印"不可验证"并 exit 0）；
+      # 已发布线（node_modules，恒量）；客户端面（DOM，恒量）。
       - run: npm run typecheck
+      - run: npm run typecheck:ci
+      - run: npm run check:client
       - run: npm run check:coverage
       - run: npm run check:readmes
       - run: npm run verify:self-contained

@@ -756,3 +756,97 @@ test('memory/recalled：query 带 session 时按已知类型自适应派发（�
   await tool.execute({ action: 'query', text: '召回' }, makeExec({ agent: makeAgent(session) }))
   assert.equal(session.events.filter((event) => event.type === 'memory/recalled').length, 2)
 })
+
+test('写路径审计门三态：未收录跳过并恰好告警一次；收录后落盘；无会话不报错', async (t) => {
+  const mounted = mount({ writePolicy: 'auto' })
+  t.after(() => teardown(mounted))
+  const service = mounted.mock.services.get('memory')
+  const session = makeSession({ id: 's-added-gate' })
+  const agent = makeAgent(session)
+
+  const wasKnown = KNOWN_SESSION_EVENT_TYPES.has('memory/added')
+  t.after(() => {
+    if (wasKnown) KNOWN_SESSION_EVENT_TYPES.add('memory/added')
+    else KNOWN_SESSION_EVENT_TYPES.delete('memory/added')
+  })
+
+  const warnings = []
+  const originalWarn = console.warn
+  console.warn = (...args) => { warnings.push(args.join(' ')) }
+  try {
+    // 态一 skipped-unknown-type：未收录 memory/added 时不落会话日志
+    KNOWN_SESSION_EVENT_TYPES.delete('memory/added')
+    await service.add({ track: 'user', scope: 'workspace', text: '缺口甲' }, { agent })
+    const warnsAfterFirstSkip = warnings.length
+    assert.equal(session.events.some((event) => event.type === 'memory/added'), false, '未收录不落会话日志')
+    await service.add({ track: 'user', scope: 'workspace', text: '缺口乙' }, { agent })
+    await service.add({ track: 'user', scope: 'workspace', text: '缺口丙' }, { agent })
+    assert.equal(
+      warnings.length,
+      warnsAfterFirstSkip,
+      '跳过告警恰好一次：后续跳过不再重复刷屏（进程级一次性）',
+    )
+
+    // 态二 appended：宿主收录后同路径真落盘，载荷带 entry 与 sessionId
+    KNOWN_SESSION_EVENT_TYPES.add('memory/added')
+    await service.add({ track: 'user', scope: 'workspace', text: '收录后写入' }, { agent })
+    const appended = session.events.filter((event) => event.type === 'memory/added')
+    assert.equal(appended.length, 1)
+    assert.equal(appended[0].data.sessionId, 's-added-gate')
+    assert.equal(appended[0].data.entry.text, '收录后写入')
+    assert.equal(typeof appended[0].data.entry.id, 'string')
+  } finally {
+    console.warn = originalWarn
+  }
+
+  // 态三 no-session：无会话（headless/命令外调用）不抛错，读路径照常
+  const hits = service.query({ text: '收录后写入' }, { sessionId: 's-no-session', session: null })
+  assert.equal(hits.total, 1)
+  assert.equal(session.events.filter((event) => event.type === 'memory/recalled').length, 0)
+})
+
+/**
+ * 按 DSH 的 additionalProperties:false 语义，收集值里未被 schema 声明的字段路径。
+ * DSH 对工具输出做严格校验：多一个未声明字段，整次工具调用即被拒绝。
+ * @param {unknown} value - 工具实际返回值。
+ * @param {object} schema - 工具 output.schema。
+ * @param {string} [path] - 当前路径（错误信息用）。
+ * @param {string[]} [out] - 累积结果。
+ * @returns {string[]} 未声明字段的路径列表。
+ */
+function undeclaredPaths(value, schema, path = 'value', out = []) {
+  if (value === null || typeof value !== 'object' || schema === undefined) return out
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => undeclaredPaths(item, schema.items, `${path}[${index}]`, out))
+    return out
+  }
+  for (const [key, item] of Object.entries(value)) {
+    const sub = schema.properties?.[key]
+    if (sub === undefined) {
+      out.push(`${path}.${key}`)
+      continue
+    }
+    undeclaredPaths(item, sub, `${path}.${key}`, out)
+  }
+  return out
+}
+
+test('工具输出契约：memory_recall 召回条目时返回字段必须全部在 output schema 中声明', async (t) => {
+  const mounted = mount({ writePolicy: 'auto' })
+  t.after(() => teardown(mounted))
+  const session = makeSession({ id: 's-recall-contract' })
+  const exec = makeExec({ agent: makeAgent(session) })
+  const memoryTool = mounted.mock.tools.find((candidate) => candidate.name === 'memory')
+  await memoryTool.execute(
+    { action: 'add', track: 'user', scope: 'workspace', text: '合成条目：召回输出契约验证', tags: ['fixture'] },
+    exec,
+  )
+  const recallTool = mounted.mock.tools.find((candidate) => candidate.name === 'memory_recall')
+  const value = await recallTool.execute({ query: '合成条目' }, exec)
+  assert.ok(value.memory.entries.length > 0, '合成条目必须被召回，否则本测试失去意义')
+  assert.deepEqual(
+    undeclaredPaths(value, recallTool.output.schema),
+    [],
+    '未声明的输出字段会让 DSH 拒绝整次工具调用（additionalProperties: false）',
+  )
+})

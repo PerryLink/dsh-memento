@@ -2,7 +2,8 @@
 //
 // 只实现 dsh-memento 用到的面：on/effect/inject/provide/get/tools.register/
 // systemPrompt.section/waterfall/approval。语义对齐真 Cordis 的关键点：
-// - effect 回调返回清理函数，卸载时逆序执行；
+// - effect 回调返回清理函数，卸载时逆序执行；ctx.effect 返回的是可调用的 disposer
+//   （真 Cordis 的 Disposable 就是函数），重复调用是 no-op；
 // - provide 的 disposer 与 effect 一样随卸载生效（近似 fiber 自动回收）；
 // - inject 在依赖服务齐备时立即回调，否则登记、provide 齐备时补回调；
 // - waterfall 的 next() 续链、prepend 排序。
@@ -38,8 +39,16 @@ export function createMockCtx(opts = {}) {
       } catch (error) {
         cleanup = () => { throw error }
       }
-      if (typeof cleanup === 'function') cleanups.push(cleanup)
-      return { dispose() {} }
+      // 真 Cordis 的 ctx.effect 返回可调用的 disposer，且重复调用是 no-op；
+      // 自持 disposer 的插件（运行期拆旧装新）依赖这一形态。
+      let disposed = false
+      const dispose = () => {
+        if (disposed) return
+        disposed = true
+        if (typeof cleanup === 'function') cleanup()
+      }
+      cleanups.push(dispose)
+      return dispose
     },
     inject(deps, callback) {
       const attempt = () => {

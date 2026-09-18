@@ -5,7 +5,7 @@
 
 **Memória entre sessões limitada, em camadas, com porta de aprovação e auditável para o DeepSeek Harness.**
 
-*Uma costura tipada `ctx.memory`, uma porta de aprovação de escrita que nenhum caminho do modelo pode contornar e trilhas de auditoria reconstruíveis a partir do log de sessão.*
+*Uma costura tipada `ctx.memory`, uma porta de aprovação de escrita que nenhum caminho do modelo pode contornar e uma auditoria reconstruível — do par de aprovação mais a tabela de auditoria do plugin, com a lacuna do log de sessão dita em voz alta.*
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Gitee](https://img.shields.io/badge/Gitee-mirror-c71d23?logo=gitee)](https://gitee.com/perrylink/dsh-memento)
@@ -27,7 +27,7 @@
 
 | Surface | Status |
 |---|---|
-| Harness | DeepSeek Harness `dsh-v0.1.5-rc.2` (adaptado em 2026-09-09): o envelope de sessão mantém seu campo ignorable apenas para compatibilidade de leitura de logs armazenados - o Session.append ainda não consegue estampá-lo, então o comportamento da porta não muda. Verificado em 2026-09-11 contra o checkout master dsh-v0.1.5-rc.2 (cadeia completa de portas + smoke de instalação de perfil). |
+| Harness | DeepSeek Harness `dsh-v0.1.6-alpha.2` (revisado em 2026-09-18): ainda não há superfície de registro de eventos para plugins — `KNOWN_SESSION_EVENT_TYPES` não inclui `memory/*` e o terceiro argumento de `Session.append` só carrega um `SurfaceIntent` para tipos de superfície, então a porta de auditoria continua adaptativa e pula como antes (agora diz isso uma vez por processo e em `/memory audit`). O intervalo de peers mantém as linhas `0.1.2-rc.1`, `0.1.5-alpha.1` e `0.1.6-0`. A evidência de tipos vem de três faces: os tipos já compilados do checkout local, a linha publicada fixada em `node_modules` e a metade de navegador sob uma lib DOM. |
 | Node | `^22.19.0 || >=24.0.0` |
 | Platforms | Windows / macOS / Linux (somente host; sem código nativo, sem rede) |
 | Model | Qualquer |
@@ -39,6 +39,7 @@ O `dsh-memento` é uma costura de capacidade, não outro armazém: um serviço t
 - **A porta não pode ser contornada.** Todo caminho de escrita (`add` / `replace` / `remove` / `seed`) passa pela cascata de aprovação dentro do serviço, não na camada de ferramentas. `writePolicy: ask | auto | off` é configuração invisível para o modelo; `replace` / `remove` / `consolidate` carregam o texto completo das entradas que alteram no payload de aprovação, e uma escrita negada ainda gera uma linha de auditoria `*-denied`.
 - **Visível para o modelo ⟺ registrado.** O snapshot injetado chega textualmente a `system/message`; toda escrita é reconstruível a partir de `approval/asked` + `approval/decided` + a própria tabela de auditoria do plugin.
 - **Limitado e honesto.** Orçamentos rígidos de caracteres por trilha e por camada (padrão usuário 2000 / agente 4000). Um armazém cheio falha com erro estruturado (uso + limite) — nunca trunca, nunca compacta automaticamente.
+- **A lacuna de auditoria é visível.** `/memory audit` lista a tabela de auditoria do plugin e acrescenta uma linha quando o lado do log de sessão não é escrito: este host não conhece os tipos de evento `memory/*`, e acrescentar tipos desconhecidos deixaria a sessão ilegível, então as escritas são auditadas por `approval/asked` + `approval/decided` e pela tabela do plugin. A porta é adaptativa: a linha desaparece sozinha quando o host conhece esses tipos.
 
 Duas trilhas × duas camadas × chave por agente: uma trilha `user` (fatos sobre o usuário) e uma trilha `agent` (fatos de ambiente e convenções), cada uma dividida em camadas `user-global` e `workspace`, isoladas por `agentPreset`. O snapshot é congelado uma vez por sessão na primeira montagem do prompt e nunca muda no meio da sessão.
 
@@ -186,7 +187,7 @@ O `dsh-memento` é o ensaio comunitário do protocolo de memória DSH — uma fo
 
 - **Permissions**: o manifesto de workshop declara `harness:tool`, `filesystem:read`, `filesystem:write` e `network:none` / `subprocess:none` / `shell:none` / `python:none` / `credentials:none`. A aprovação de escrita usa a costura oficial de aprovação.
 - **Data**: banco de dados SQLite local (`0600`), zero rede, zero credenciais.
-- **Session log**: a completude da auditoria vem do par de aprovação (`approval/asked` + `approval/decided`) mais a tabela de auditoria do plugin.
+- **Session log**: a completude da auditoria vem do par de aprovação (`approval/asked` + `approval/decided`) mais a tabela de auditoria do plugin; a lacuna do lado do log de sessão é declarada em `/memory audit` e desaparece quando o host registra `memory/*`.
 
 ## Security boundaries
 
@@ -219,10 +220,12 @@ E as partes deliberadamente recusadas: a auto-resumização oculta em estado pri
 
 ```sh
 npm install              # node ^22.19 || >=24
-npm test                 # node --test: 141 tests
+npm test                 # node --test: 187 testes
 npm run lint             # oxlint
 npm run test:conformance # dsh-memory-protocol v1 conformance suite
-npm run typecheck        # tsc --checkJs gate
+npm run typecheck        # face host × checkout local D:\deepseek-harness (imprime «não verificável» e sai 0 sem checkout)
+npm run typecheck:ci     # face host × linha publicada fixada em node_modules
+npm run check:client     # metade de navegador (lib DOM)
 npm run check:coverage   # line-coverage gate
 npm run check:readmes    # five-language README consistency gate
 npm run verify:self-contained # reject out-of-repo dependency specs
