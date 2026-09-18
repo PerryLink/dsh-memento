@@ -131,6 +131,7 @@
     "lint": "oxlint",
     "check:coverage": "node scripts/check-coverage.mjs",
     "typecheck": "tsc -p tsconfig.check.json",
+    "typecheck:ci": "tsc -p tsconfig.check.ci.json",
     "check:readmes": "node scripts/verify-readmes.mjs",
     "verify:self-contained": "node scripts/verify-self-contained.mjs",
     "verify:artifacts": "node scripts/verify-artifacts.mjs",
