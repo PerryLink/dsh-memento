@@ -5,7 +5,7 @@
 
 **DeepSeek Harness के लिए परिबद्ध, स्तरित, अनुमोदन-द्वारी, लेखा-परीक्षण-योग्य क्रॉस-सेशन मेमोरी।**
 
-*एक टाइप्ड `ctx.memory` सीम, एक लेखन-अनुमोदन द्वार जिसे मॉडल का कोई मार्ग नहीं टाल सकता, और सत्र लॉग से पुनर्निर्माण-योग्य ऑडिट ट्रेल।*
+*एक टाइप्ड `ctx.memory` सीम, एक राइट-अनुमोदन द्वार जिसे मॉडल का कोई रास्ता बायपास नहीं कर सकता, और एक पुनर्निर्मेय ऑडिट — अनुमोदन जोड़ी और प्लगइन की अपनी ऑडिट तालिका से, सेशन लॉग की कमी को खुलकर बताते हुए।*
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Gitee](https://img.shields.io/badge/Gitee-mirror-c71d23?logo=gitee)](https://gitee.com/perrylink/dsh-memento)
@@ -27,7 +27,7 @@
 
 | Surface | Status |
 |---|---|
-| Harness | DeepSeek Harness `dsh-v0.1.5-rc.2` (2026-09-09 को अनुकूलित): सत्र लिफ़ाफ़ा अपना ignorable फ़ील्ड केवल संग्रहीत-लॉग पठन संगतता के लिए रखता है - Session.append अभी भी इसे स्टैम्प नहीं कर सकता, इसलिए गेट व्यवहार अपरिवर्तित है। dsh-v0.1.5-rc.2 master checkout के विरुद्ध 2026-09-11 को सत्यापित (पूर्ण गेट शृंखला + प्रोफ़ाइल इंस्टॉल स्मोक)। |
+| Harness | DeepSeek Harness `dsh-v0.1.6-alpha.2` (2026-09-18 को पुनः जाँचा): प्लगइन इवेंट पंजीकरण सतह अब भी नहीं है — `KNOWN_SESSION_EVENT_TYPES` में `memory/*` नहीं है, और `Session.append` का तीसरा तर्क केवल सरफ़ेस-योग्य प्रकारों के लिए `SurfaceIntent` ले जाता है, इसलिए ऑडिट द्वार अनुकूली रहता है और पहले जैसे छोड़ देता है (अब यह प्रति प्रोसेस एक बार और `/memory audit` में बताता है)। peer रेंज `0.1.2-rc.1`, `0.1.5-alpha.1` और `0.1.6-0` पंक्तियाँ बनाए रखती है। टाइप प्रमाण तीन फ़ेस से आता है: स्थानीय checkout के बने टाइप, `node_modules` में पिन की गई प्रकाशित लाइन, और DOM लाइब्रेरी के अंतर्गत ब्राउज़र आधा। |
 | Node | `^22.19.0 || >=24.0.0` |
 | Platforms | Windows / macOS / Linux (केवल host; कोई नेटिव कोड नहीं, कोई नेटवर्क नहीं) |
 | Model | कोई भी |
@@ -38,7 +38,8 @@
 
 - **अनुमोदन द्वार को टाला नहीं जा सकता।** हर लेखन पथ (`add` / `replace` / `remove` / `seed`) सेवा के भीतर अनुमोदन वॉटरफ़ॉल से होकर गुज़रता है, टूल परत से नहीं। `writePolicy: ask | auto | off` मॉडल के लिए अदृश्य विन्यास है; `replace` / `remove` / `consolidate` अनुमोदन पेलोड में बदली जाने वाली प्रविष्टियों का पूरा पाठ ले जाते हैं, और अस्वीकृत लेखन भी एक `*-denied` ऑडिट पंक्ति छोड़ता है।
 - **मॉडल-दृश्य ⟺ लॉग किया गया।** इंजेक्ट किया गया स्नैपशॉट `system/message` में शब्दशः पहुँचता है; हर लेखन `approval/asked` + `approval/decided` + प्लगइन की अपनी ऑडिट तालिका से पुनर्निर्माण-योग्य है।
-- **परिबद्ध और ईमानदार।** प्रति-ट्रैक/प्रति-परत कठोर अक्षर बजट (डिफ़ॉल्ट user 2000 / agent 4000)। भरा हुआ भंडार संरचित त्रुटि से विफल होता है (उपयोग + सीमा) — कभी काटा नहीं, कभी स्वतः संकुचित नहीं।
+- **सीमित और ईमानदार।** प्रति ट्रैक/परत कड़े कैरेक्टर बजट (डिफ़ॉल्ट user 2000 / agent 4000)। भरा हुआ स्टोर संरचित त्रुटि देता है (उपयोग + सीमा) — कभी काटता नहीं, कभी स्वतः संकुचित नहीं करता।
+- **ऑडिट की कमी दिखती है।** `/memory audit` प्लगइन की ऑडिट तालिका दिखाता है और जब सेशन लॉग वाला पक्ष नहीं लिखा जाता तो एक पंक्ति जोड़ता है: यह होस्ट `memory/*` सेशन इवेंट प्रकार नहीं जानता, और अज्ञात प्रकार जोड़ने से वह सेशन दोबारा लोड ही नहीं होगा, इसलिए लेख `approval/asked` + `approval/decided` और प्लगइन की तालिका से ऑडिट होते हैं। द्वार अनुकूली है — होस्ट इन प्रकारों को जानते ही यह पंक्ति स्वयं हट जाती है।
 
 दो ट्रैक × दो परतें × प्रति-एजेंट कुंजी: एक `user` ट्रैक (उपयोगकर्ता के बारे में तथ्य) और एक `agent` ट्रैक (पर्यावरण तथ्य और परंपराएँ), प्रत्येक `user-global` और `workspace` परतों में बँटा, `agentPreset` के अनुसार पृथक। स्नैपशॉट पहले प्रॉम्प्ट संयोजन पर प्रति-सत्र एक बार फ़्रीज़ होता है और सत्र के बीच कभी नहीं बदलता।
 
@@ -186,7 +187,7 @@ Claude Desktop (`claude_desktop_config.json`) उदाहरण:
 
 - **Permissions**: workshop मैनिफ़ेस्ट `harness:tool`, `filesystem:read`, `filesystem:write` और `network:none` / `subprocess:none` / `shell:none` / `python:none` / `credentials:none` घोषित करता है। लेखन अनुमोदन आधिकारिक अनुमोदन सीम पर चलता है।
 - **Data**: स्थानीय SQLite डेटाबेस (`0600`), शून्य नेटवर्क, शून्य क्रेडेंशियल।
-- **Session log**: ऑडिट पूर्णता अनुमोदन जोड़ी (`approval/asked` + `approval/decided`) और प्लगइन की अपनी ऑडिट तालिका से आती है।
+- **Session log**: ऑडिट पूर्णता अनुमोदन जोड़ी (`approval/asked` + `approval/decided`) और प्लगइन की अपनी ऑडिट तालिका से आती है; सेशन लॉग वाली कमी `/memory audit` में घोषित होती है और होस्ट के `memory/*` दर्ज करते ही हट जाती है।
 
 ## Security boundaries
 
@@ -219,10 +220,12 @@ Claude Desktop (`claude_desktop_config.json`) उदाहरण:
 
 ```sh
 npm install              # node ^22.19 || >=24
-npm test                 # node --test: 141 tests
+npm test                 # node --test: 187 टेस्ट
 npm run lint             # oxlint
 npm run test:conformance # dsh-memory-protocol v1 conformance suite
-npm run typecheck        # tsc --checkJs gate
+npm run typecheck        # होस्ट फ़ेस × स्थानीय D:\deepseek-harness checkout (checkout न हो तो «सत्यापन असंभव» छापकर exit 0)
+npm run typecheck:ci     # होस्ट फ़ेस × node_modules में पिन की गई प्रकाशित लाइन
+npm run check:client     # ब्राउज़र आधा (DOM लाइब्रेरी) टाइप गेट
 npm run check:coverage   # line-coverage gate
 npm run check:readmes    # five-language README consistency gate
 npm run verify:self-contained # reject out-of-repo dependency specs

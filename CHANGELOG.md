@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- The host checkout's type face is now a real second ruler instead of a duplicate command. `tsconfig.check.json` resolves every `@deepseek-ai/*` import through `paths` into the built `lib/types` of a local `D:\deepseek-harness` checkout (currently `dsh-v0.1.6-alpha.2`), while `tsconfig.check.ci.json` keeps resolving the pinned published line from `node_modules`. Measured counterexamples on this machine: a neutral type error fails both rulers (1/1), an alpha.2-only member (`SessionMessageProjection`) passes the checkout ruler and fails the published one (0/1), and a structural session passed into a class-typed approval seam does the opposite (1/0). `npm run typecheck` runs it through `scripts/typecheck-checkout.mjs`, which prints "not verifiable" and exits 0 when the checkout is absent (CI runners), so the runner never gets a permanently red step.
+- `client/client.js` is now inside a type gate of its own: `tsconfig.check.client.json` (DOM lib) plus a new `check:client` script, both wired into `ci.yml` alongside the other two rulers. The browser half previously had no type evidence at all (a same-named `client/client.d.ts` subpath anchor made TypeScript skip the runtime file); 66 `checkJs` findings were resolved with JSDoc annotations only.
+
+### Changed
+
+- The session audit gate reports itself in three states (`'appended' | 'skipped-unknown-type' | 'no-session'`) and warns exactly once per process on the first skip. `/memory audit` now appends a line naming the gap: the session-log side of the audit is not written, because the harness does not know the `memory/*` session event types and appending them would make the session unloadable. The notice disappears on its own once the host knows `memory/added`. The gate stays adaptive; appending is never changed to a bare call.
+- `retrieval.vector` hot swaps are transactional: the new retriever is built before the old one is unregistered, so a failure can no longer leave `vector` configured with nothing registered. A failed swap leaves an `settings-swap-failed` audit row, reverts the field to the value that actually took effect, and is retried on the next change of that value. The self-held retriever disposer is also cleared when the fiber unloads, so a late settings callback cannot call a stale disposer twice.
+
+### Docs
+
+- `types.d.ts` states the session-event contract as "vocabulary present, write channel absent" and lists the four host lines the gate was re-checked against (0.1.5-rc.6, 0.1.2-rc.1, 0.1.3-alpha.1, 0.1.6-alpha.2).
+
 ## [0.5.12] - 2026-09-12
 
 ### Changed
