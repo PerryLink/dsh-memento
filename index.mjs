@@ -55,6 +55,7 @@ import { RetrievalProviderRegistry, SubstringRetriever, VectorRetriever, detectV
  * @typedef {{track: string, scope: string, used: number, limit: number}} MemoryUsage
  * @typedef {{id: string, kind: string, track: string, scope: string, workspaceKey: string, agentKey: string, text: string, source: string, sessionId: string | null, status: string, createdAt: number, decidedAt: number | null}} MemoryProposal
  * @typedef {{user: {userGlobal: number, workspace: number}, agent: {userGlobal: number, workspace: number}}} BudgetsConfig
+ * @typedef {import('@deepseek-ai/dsh-user-approval').ApprovalOutcome} ApprovalOutcome - 审批 seam 的裁决结果（字面量联合）。
  * @typedef {object} StoreHandle - ctx.memory 依赖的 Provider 面。
  * @property {(filter?: {track?: string, scope?: string, text?: string, limit?: number}) => MemoryQueryResult} queryEntries
  * @property {() => MemoryEntry[]} listEntries
@@ -1027,13 +1028,19 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
   // 审批 answerer：认领本插件的记忆写请求并按粒度策略裁决（writePolicies 精确键 >
   // track/scope > 全局 writePolicy；prepend 保证 auto/off 的确定性先于 UI answerer；
   // 会话级 never 策略在审批服务内部先裁决，任何 answerer 都无法绕过）。
-  ctx.on('approval/request', async function answerer(req, next) {
+  ctx.on('approval/request', /**
+    * seam 的 next() 返回带字面量的 ApprovalOutcome，而 lib/gate.mjs（零 DSH 依赖）
+    * 只能声明 string——在 seam 边界收口一次，不用 as any 蒙类型门。
+    * @param {unknown} req - 审批请求（认领判定见 isMemoryWriteRequest）。
+    * @param {() => Promise<ApprovalOutcome>} next - waterfall 续链。
+    * @returns {Promise<ApprovalOutcome>} 本次裁决结果。
+    */ async function answerer(req, next) {
     if (!isMemoryWriteRequest(req)) return next()
     const parsed = parseWriteReason(/** @type {string} */ (/** @type {{reason: string}} */ (req).reason))
     const effective = parsed === null
       ? live.writePolicy
       : resolveWritePolicy(live.writePolicies, live.writePolicy, parsed.track, parsed.scope, parsed.source)
-    return applyWritePolicy(effective, req, next)
+    return /** @type {ApprovalOutcome} */ (await applyWritePolicy(effective, req, next))
   }, { prepend: true })
 
   ctx.tools.register(/** @type {import('@deepseek-ai/dsh-tools').ToolDefinition} */ (makeMemoryTool(service, resolved.language)))
@@ -1203,24 +1210,24 @@ function handleSessionEvent(store, session, event, proposals, summaries) {
  * 由本函数按公开 API 预检（与审批服务同语义）。
  * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文。
  * @param {{agent?: {session?: MemorySessionLike | null} | null}} write - {agent}。
- * @returns {(payload: WritePayload) => Promise<string>} gate 函数。
+ * @returns {(payload: WritePayload) => Promise<ApprovalOutcome>} gate 函数。
  */
 function makeCommandGate(ctx, write) {
   return async (payload) => {
     const approval = ctx.approval
     const session = write.agent?.session
     const sessionPolicy = typeof approval?.overrideOf === 'function' && session !== undefined
-      ? approval.overrideOf(session)
+      // 审批 seam 声明的是具体 Session 类（alpha.2 起成员更全），而插件只需要
+      // header/policy 这一小块：结构面在这一处收口，收口点唯一且就地说明。
+      ? approval.overrideOf(/** @type {any} */ (session))
       : undefined
     const effective = sessionPolicy ?? approval?.config?.policy ?? 'ask'
     if (effective === 'never') {
       return 'rejected' // 会话级 never 不可绕过（与审批服务同语义的预检）
     }
-    return ctx.waterfall('approval/request', {
-      agent: write.agent,
-      toolName: TOOL_NAME,
-      reason: buildWriteReason(payload),
-    }, async () => 'unavailable')
+    // 同上：请求载荷里的 agent/session 是插件的结构窄面，seam 要具体类。
+    const request = /** @type {any} */ ({ agent: write.agent, toolName: TOOL_NAME, reason: buildWriteReason(payload) })
+    return /** @type {ApprovalOutcome} */ (await ctx.waterfall('approval/request', request, async () => 'unavailable'))
   }
 }
 

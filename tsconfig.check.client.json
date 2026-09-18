@@ -3,15 +3,14 @@
     "target": "ES2023",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2023"],
+    "lib": ["ES2023", "DOM"],
     "types": ["node"],
     "allowJs": true,
     "checkJs": true,
     "noEmit": true,
     "noImplicitAny": true,
     "strict": false,
-    "skipLibCheck": true,
-    "paths": {}
+    "skipLibCheck": true
   },
-  "include": ["index.mjs", "lib/**/*.mjs", "scripts/**/*.mjs", "bin/**/*.mjs", "types.d.ts"]
+  "files": ["client/client.js", "client/client.d.ts", "client/globals.d.ts"]
 }

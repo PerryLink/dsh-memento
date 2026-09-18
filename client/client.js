@@ -18,6 +18,12 @@
   if (typeof window === 'undefined' || !window.__ModuleLoader__ || !window.__ModuleLoader__.load) return
   window.__ModuleLoader__.load({
     id: 'dsh-memento',
+    /**
+     * 物化回调。require 是宿主模块系统（react 等平台内置模块）——本仓包里没有
+     * 这些模块的类型面，故按不透明函数面声明，返回值交给消费点自行收窄。
+     * @param {(id: string) => any} require - 宿主模块解析函数。
+     * @returns {{name: string, inject: string[], apply: (ctx: any) => void}} 客户端插件定义。
+     */
     factory: function (require) {
       const react = require('react')
       /** createElement 简写（宿主平台内置 react，无需构建期 JSX 编译）。 */
@@ -26,9 +32,14 @@
 const PANEL_ID = 'dsh-memento-panel'
 
 /** 本页已渲染的悬浮入口按钮引用（设置页 panel.enabled 开关即时切换用）。 */
+/** @type {HTMLElement | null} */
 let panelOpenButton = null
 
-/** 悬浮窗开关的即时生效面：切显隐；开启时按钮缺失（上次探测为关）则重建。 */
+/**
+ * 悬浮窗开关的即时生效面：切显隐；开启时按钮缺失（上次探测为关）则重建。
+ * @param {boolean} visible - 目标可见性。
+ * @returns {void}
+ */
 function setPanelButtonVisible(visible) {
   if (panelOpenButton === null) panelOpenButton = document.getElementById('mem-open')
   if (panelOpenButton !== null) {
@@ -38,7 +49,27 @@ function setPanelButtonVisible(visible) {
   }
 }
 
+/**
+ * 面板文案模板。
+ * @typedef {object} PanelStrings
+ * @property {string} open
+ * @property {string} title
+ * @property {string} refresh
+ * @property {string} close
+ * @property {string} filter
+ * @property {string} empty
+ * @property {(shown: number, total: number) => string} truncated
+ * @property {(n: number) => string} groupCount
+ * @property {string} budgets
+ * @property {string} audit
+ * @property {string} loading
+ * @property {string} auditEmpty
+ * @property {string} proposals
+ * @property {string} proposalsEmpty
+ * @property {(message: string) => string} loadFailed
+ */
 /** 面板文案（en 源文 / zh 译文；语言来自 /api/memento/entries 响应的 language 字段，缺省 en）。 */
+/** @type {Record<string, PanelStrings>} */
 const STRINGS = {
   en: {
     open: '🧠 Memory',
@@ -77,6 +108,46 @@ const STRINGS = {
 }
 
 /**
+ * 面板数据行。只声明面板真正消费的字段：服务端返回更宽的条目行，
+ * 面板只读展示 track/scope/text 并经预算表读 used/limit。
+ * @typedef {object} PanelEntryRow
+ * @property {string} id
+ * @property {string} track
+ * @property {string} scope
+ * @property {string} text
+ * @property {string} [workspaceKey]
+ * @property {string} [agentKey]
+ * @property {number} [createdAt]
+ * @property {number} [recallCount]
+ */
+/**
+ * 预算用量行（/api/memento/entries 的 budgets[]）。
+ * @typedef {object} PanelBudgetRow
+ * @property {string} track
+ * @property {string} scope
+ * @property {number} used
+ * @property {number} limit
+ */
+/**
+ * 审计行（/api/memento/audit 的 rows[]）。
+ * @typedef {object} PanelAuditRow
+ * @property {number} ts
+ * @property {string} action
+ * @property {string} [track]
+ * @property {string} [scope]
+ * @property {string} [outcome]
+ * @property {string} [source]
+ */
+/**
+ * 待审批提案（/api/memento/proposals 的 proposals[]）。
+ * @typedef {object} PanelProposalRow
+ * @property {string} id
+ * @property {string} track
+ * @property {string} scope
+ * @property {string} text
+ * @property {number} createdAt
+ */
+/**
  * 启动探测：panel.enabled=false 时入口按钮不渲染（设置面板可随时改回）；
  * 探测失败按开启处理，行为与未引入开关前的版本一致。
  * @returns {Promise<{enabled: boolean, language: string}>}。
@@ -102,6 +173,11 @@ async function bootPanel() {
   installPanel(state)
 }
 
+/**
+ * 挂载面板（入口按钮 + 抽屉）。
+ * @param {{enabled: boolean, language: string}} state - 启动探测结果。
+ * @returns {void}
+ */
 function installPanel(state) {
   if (document.getElementById(PANEL_ID)) return
   let S = STRINGS[state.language] ?? STRINGS.en
@@ -155,13 +231,17 @@ function installPanel(state) {
   document.head.appendChild(style)
 
   const body = document.getElementById('mem-body')
-  const filter = document.getElementById('mem-filter')
+  const filter = /** @type {HTMLInputElement} */ (document.getElementById('mem-filter'))
   const titleLabel = document.getElementById('mem-title')
   const refreshBtn = document.getElementById('mem-refresh')
   const closeBtn = document.getElementById('mem-close')
-  const filterInput = document.getElementById('mem-filter')
+  const filterInput = /** @type {HTMLInputElement} */ (document.getElementById('mem-filter'))
 
-  /** 按服务端 language 切换文案并刷新静态标签（语言随配置，运行期不变）。 */
+  /**
+   * 按服务端 language 切换文案并刷新静态标签（语言随配置，运行期不变）。
+   * @param {string} language - 服务端 language 字段。
+   * @returns {void}
+   */
   const applyLanguage = (language) => {
     S = STRINGS[language] ?? STRINGS.en
     openBtn.textContent = S.open
@@ -172,6 +252,7 @@ function installPanel(state) {
     filterInput.placeholder = S.filter
   }
 
+  /** @type {PanelEntryRow[]} */
   let entries = []
   let lastFilter = ''
   let lastTotal = 0
@@ -203,6 +284,11 @@ function installPanel(state) {
     body.innerHTML = html
   }
 
+  /**
+   * 渲染预算条与两个异步槽位骨架。
+   * @param {PanelBudgetRow[]} budgets - 预算用量行。
+   * @returns {void}
+   */
   const renderBudget = (budgets) => {
     if (!Array.isArray(budgets) || budgets.length === 0) return
     let html = `<div class="mem-group">${S.budgets}</div>`
@@ -217,6 +303,11 @@ function installPanel(state) {
     body.insertAdjacentHTML('beforeend', html)
   }
 
+  /**
+   * 渲染审计槽位。
+   * @param {PanelAuditRow[]} rows - 审计行。
+   * @returns {void}
+   */
   const renderAudit = (rows) => {
     const slot = document.getElementById('mem-audit-slot')
     if (slot === null) return
@@ -228,6 +319,11 @@ function installPanel(state) {
       `<div class="mem-audit">${new Date(row.ts).toLocaleString()} ${escapeHtml(row.action)}${row.track ? ` ${escapeHtml(row.track)}/${escapeHtml(row.scope)}` : ''} · ${escapeHtml(row.outcome ?? '')} · ${escapeHtml(row.source ?? '')}</div>`).join('')
   }
 
+  /**
+   * 渲染待审批提案槽位。
+   * @param {PanelProposalRow[]} proposals - 待审批提案。
+   * @returns {void}
+   */
   const renderProposals = (proposals) => {
     const slot = document.getElementById('mem-proposal-slot')
     if (slot === null) return
@@ -276,12 +372,18 @@ function installPanel(state) {
   })
 }
 
+/**
+ * HTML 转义（面板所有插值文本都经此，避免记忆内容当标记注入）。
+ * @param {unknown} value - 待转义值（非字符串先 String()）。
+ * @returns {string} 转义后的文本。
+ */
 function escapeHtml(value) {
   return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
 }
 
 // ── 宿主设置页（settings.section 一级项，id = dsh-memento）──────────────
       /** 卡片文案（en 源文 / zh 译文；语言跟随 namespace value.language，保存后即时切换）。 */
+      /** @type {Record<string, Record<string, string>>} */
       const CARD_STRINGS = {
         en: {
           title: 'dsh-memento memory',
@@ -392,9 +494,14 @@ function escapeHtml(value) {
       /** 顶层字段名（保存按顶层聚合：scope.set(topField, 合并值)，不依赖点路径写入面）。 */
       const POLICIES = ['ask', 'auto', 'off']
 
-      /** 简版快照 store（useSyncExternalStore 形状：{getSnapshot, subscribe}+set）。 */
+      /**
+       * 简版快照 store（useSyncExternalStore 形状：{getSnapshot, subscribe}+set）。
+       * @param {Record<string, any>} initial - 顶层设置值。
+       * @returns {{getSnapshot: () => Record<string, any>, subscribe: (fn: () => void) => () => void, set: (next: Record<string, any>) => void}} store。
+       */
       function createSnapshotStore(initial) {
         let snapshot = initial
+        /** @type {Set<() => void>} */
         const listeners = new Set()
         return {
           getSnapshot() { return snapshot },
@@ -403,7 +510,12 @@ function escapeHtml(value) {
         }
       }
 
-      /** 读点路径（'a.b' → obj?.a?.b）。 */
+      /**
+       * 读点路径（'a.b' → obj?.a?.b）。
+       * @param {any} obj - 起点对象。
+       * @param {string} path - 点路径。
+       * @returns {any} 路径值（缺失为 undefined）。
+       */
       function pathValue(obj, path) {
         let cursor = obj
         for (const key of path.split('.')) {
@@ -413,7 +525,12 @@ function escapeHtml(value) {
         return cursor
       }
 
-      /** 判定子字段是否被用户层覆盖（user 层子路径 hasOwn）。 */
+      /**
+       * 判定子字段是否被用户层覆盖（user 层子路径 hasOwn）。
+       * @param {any} user - 设置用户层。
+       * @param {string} path - 点路径。
+       * @returns {boolean} 用户层是否显式写了该子字段。
+       */
       function pathStored(user, path) {
         const keys = path.split('.')
         const last = keys.pop()
@@ -425,7 +542,12 @@ function escapeHtml(value) {
         return cursor !== null && typeof cursor === 'object' && Object.hasOwn(cursor, last)
       }
 
-      /** 深合并（草稿子树 → 当前顶层值；数组与标量直接替换）。 */
+      /**
+       * 深合并（草稿子树 → 当前顶层值；数组与标量直接替换）。
+       * @param {any} base - 当前值。
+       * @param {any} patch - 草稿子树。
+       * @returns {any} 合并结果。
+       */
       function deepMerge(base, patch) {
         if (patch === null || typeof patch !== 'object' || Array.isArray(patch)) return patch
         const out = { ...(base !== null && typeof base === 'object' && !Array.isArray(base) ? base : {}) }
@@ -463,7 +585,13 @@ function escapeHtml(value) {
       const SPEC_BY_PATH = new Map(FIELD_SPECS.map((spec) => [spec.path, spec]))
       const RELOAD_PATHS = new Set(['snapshotOrder'])
 
-      /** 草稿文本 → 顶层字段写入计划；无法解析的草稿返回 undefined（阻塞保存）。 */
+      /**
+       * 草稿文本 → 顶层字段写入计划；无法解析的草稿返回 undefined（阻塞保存）。
+       * @param {{path: string, kind: string, key: string, choices?: string[]}} spec - 子字段规格。
+       * @param {string} text - 控件里的草稿文本。
+       * @param {any} currentValue - 当前快照值（text 类字段用于回退判定）。
+       * @returns {{ok: true, value: any} | {ok: false}} 解析结果。
+       */
       function parseDraftText(spec, text, currentValue) {
         if (spec.kind === 'bool') {
           if (text === 'true') return { ok: true, value: true }
@@ -479,6 +607,7 @@ function escapeHtml(value) {
           return trimmed !== '' && Number.isFinite(parsed) && Number.isInteger(parsed) ? { ok: true, value: parsed } : { ok: false }
         }
         if (spec.kind === 'policies') {
+          /** @type {Record<string, string>} */
           const next = {}
           for (const rawLine of text.split('\n')) {
             const line = rawLine.trim()
@@ -497,14 +626,22 @@ function escapeHtml(value) {
         return { ok: true, value: text }
       }
 
-      /** 子字段格式化（快照值 → 控件文本）。 */
+      /**
+       * 子字段格式化（快照值 → 控件文本）。
+       * @param {any} value - 快照值。
+       * @returns {string} 控件文本。
+       */
       function formatValue(value) {
         if (value === undefined || value === null) return ''
         if (typeof value === 'boolean') return value ? 'true' : 'false'
         return String(value)
       }
 
-      /** policies 顶层对象的控件文本（每行 key=policy）。 */
+      /**
+       * policies 顶层对象的控件文本（每行 key=policy）。
+       * @param {any} value - policies 顶层对象。
+       * @returns {string} 多行文本。
+       */
       function formatPolicies(value) {
         if (value === null || typeof value !== 'object') return ''
         return Object.entries(value).map(([key, policy]) => `${key}=${policy}`).join('\n')
@@ -515,6 +652,10 @@ function escapeHtml(value) {
        * 顶层聚合：同顶层字段的多个子字段草稿一次 scope.set(top, 合并值)。
        */
       class CardForm {
+        /**
+         * @param {any} scope - 宿主 settingsScope 句柄。
+         * @param {(tops: Map<string, object>) => void} onLanded - 落盘成功回调（panel 显隐同步用）。
+         */
         constructor(scope, onLanded) {
           this.scope = scope
           /** @type {((tops: Map<string, object>) => void) | undefined} 落盘成功回调（panel 显隐同步用）。 */
@@ -527,12 +668,23 @@ function escapeHtml(value) {
           scope.subscribe(() => this.publish())
         }
 
+        /**
+         * 绑定读取投影。
+         * @param {() => Record<string, any>} project - 快照投影（每次读当前 scope）。
+         * @returns {{getSnapshot: () => Record<string, any>, subscribe: (fn: () => void) => () => void, set: (next: Record<string, any>) => void}} store。
+         */
         bind(project) {
           const store = createSnapshotStore(project())
           this.listeners.add(() => store.set(project()))
           return store
         }
 
+        /**
+         * 暂存一个子字段草稿。
+         * @param {string} path - 子字段点路径。
+         * @param {string} text - 控件文本。
+         * @returns {void}
+         */
         stage(path, text) {
           this.staged.set(path, text)
           this.failed = false
@@ -562,7 +714,18 @@ function escapeHtml(value) {
             const base = tops.get(top) ?? (snapshot.value !== null && typeof snapshot.value === 'object' ? snapshot.value[top] : undefined)
             const merged = keys.length === 1
               ? parsed.value
-              : deepMerge(base, (() => { /** @type {Record<string, unknown>} */ const out = {}; let cursor = out; for (let i = 1; i < keys.length - 1; i++) { cursor[keys[i]] = {}; cursor = cursor[keys[i]] } cursor[keys[keys.length - 1]] = parsed.value; return out })())
+              : deepMerge(base, (() => {
+                  /** @type {Record<string, any>} */
+                  const out = {}
+                  /** @type {Record<string, any>} */
+                  let cursor = out
+                  for (let i = 1; i < keys.length - 1; i++) {
+                    cursor[keys[i]] = {}
+                    cursor = cursor[keys[i]]
+                  }
+                  cursor[keys[keys.length - 1]] = parsed.value
+                  return out
+                })())
             tops.set(top, merged)
           }
           if (!valid || this.staged.size === 0) { this.publish(); return }
@@ -584,6 +747,11 @@ function escapeHtml(value) {
           this.publish()
         }
 
+        /**
+         * 单个子字段的控件状态（草稿或快照文本 / 是否被用户层覆盖 / 草稿是否非法）。
+         * @param {string} path - 子字段点路径。
+         * @returns {{text: string, overridden: boolean, invalid: boolean}} 控件状态。
+         */
         fieldState(path) {
           const spec = SPEC_BY_PATH.get(path)
           const snapshot = this.scope.getSnapshot()
@@ -664,7 +832,11 @@ function escapeHtml(value) {
 .memsec-btn:disabled { opacity: 0.5; cursor: default; }
 `
 
-      /** 单字段控件行（label + input/checkbox/select + override 徽标 + reset + hint/invalid）。 */
+      /**
+       * 单字段控件行（label + input/checkbox/select + override 徽标 + reset + hint/invalid）。
+       * @param {{t: (key: string) => string, spec: {path: string, kind: string, key: string, choices?: string[]}, state: {text: string, invalid: boolean, overridden: boolean}, disabled: boolean, onEdit: (text: string) => void, onReset: () => void}} props - 组件属性。
+       * @returns {unknown} react 元素。
+       */
       function FieldRow(props) {
         const { t, spec, state, disabled, onEdit, onReset } = props
         const label = t(spec.key ?? spec.path)
@@ -674,25 +846,25 @@ function escapeHtml(value) {
           ? jsx('input', {
               type: 'checkbox', disabled,
               checked: state.text === 'true',
-              onChange: (event) => onEdit(event.target.checked ? 'true' : 'false'),
+              onChange: (/** @type {{target: {checked: boolean}}} */ event) => onEdit(event.target.checked ? 'true' : 'false'),
             })
           : spec.kind === 'choice'
             ? jsx('select', {
                 className: 'memcard-input', disabled, value: state.text,
-                onChange: (event) => onEdit(event.target.value),
+                onChange: (/** @type {{target: {value: string}}} */ event) => onEdit(event.target.value),
               }, spec.choices.map((choice) => jsx('option', { key: choice, value: choice }, choice)))
             : spec.kind === 'policies'
               ? jsx('textarea', {
                   className: 'memcard-input memcard-textarea', disabled,
                   value: state.text, 'aria-invalid': state.invalid,
-                  onChange: (event) => onEdit(event.target.value),
+                  onChange: (/** @type {{target: {value: string}}} */ event) => onEdit(event.target.value),
                 })
               : jsx('input', {
                   type: spec.kind === 'number' ? 'text' : 'text',
                   inputMode: spec.kind === 'number' ? 'numeric' : undefined,
                   className: 'memcard-input', disabled,
                   value: state.text, 'aria-invalid': state.invalid,
-                  onChange: (event) => onEdit(event.target.value),
+                  onChange: (/** @type {{target: {value: string}}} */ event) => onEdit(event.target.value),
                 })
         return jsx('div', { className: 'memcard-field' },
           jsx('div', { className: 'memcard-row' },
@@ -707,10 +879,16 @@ function escapeHtml(value) {
         )
       }
 
-      /** 设置页组件（settings.section 渲染入口；hooks share: mementoCard → useMementoCard）。 */
+      /**
+       * 设置页组件（settings.section 渲染入口；hooks share: mementoCard → useMementoCard）。
+       * @param {{useMementoCard: (select: (snapshot: any) => any) => any, discard: () => void, save: () => void, edit: (path: string, text: string) => void, base: any}} props - 宿主注入的组件属性。
+       * @returns {unknown} react 元素。
+       */
       function MementoSection(props) {
         const state = props.useMementoCard((snapshot) => snapshot)
         const language = state.language === 'zh' ? 'zh' : 'en'
+        /** 文案取值（缺键回退键名）；语言取「所选」语言。 */
+        /** @type {(key: string) => string} */
         const t = (key) => CARD_STRINGS[language][key] ?? key
         const blocked = !state.dirty || state.saving || state.invalid
         return jsx('div', { className: 'memsec' },
@@ -732,7 +910,7 @@ function escapeHtml(value) {
                   return jsx(FieldRow, {
                     key: path, t, spec, disabled: !state.writable,
                     state: state.fields[path],
-                    onEdit: (text) => props.edit(path, text),
+                    onEdit: (/** @type {string} */ text) => props.edit(path, text),
                     onReset: () => {
                       const baseValue = pathValue(props.base, path)
                       props.edit(path, spec.kind === 'policies' ? formatPolicies(baseValue) : formatValue(baseValue))
@@ -746,6 +924,7 @@ function escapeHtml(value) {
 
       /** 控制器：scope → 暂存表单 → 设置页快照。保存落盘后同步本页悬浮按钮显隐。 */
       class MementoCardController {
+        /** @param {any} scope - 宿主 settingsScope 句柄（namespace = dsh-memento）。 */
         constructor(scope) {
           this.scope = scope
           this.form = new CardForm(scope, (tops) => {
@@ -767,6 +946,7 @@ function escapeHtml(value) {
         inject() {
           return {
             hooks: { mementoCard: this.store },
+            /** @param {string} path - 子字段点路径。 @param {string} text - 草稿文本。 @returns {void} */
             edit: (path, text) => this.form.stage(path, text),
             discard: () => this.form.discard(),
             save: () => { void this.form.save() },
@@ -774,6 +954,11 @@ function escapeHtml(value) {
         }
       }
 
+      /**
+       * 客户端插件挂载：面板 + 设置页一级项。
+       * @param {any} ctx - 宿主客户端上下文（slots/settingsScope）。
+       * @returns {void}
+       */
       function apply(ctx) {
         void bootPanel()
         if (!styleInstalled && typeof document !== 'undefined') {
