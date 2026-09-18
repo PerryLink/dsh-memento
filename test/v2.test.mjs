@@ -16,6 +16,7 @@ import {
   DEFAULT_BUDGETS,
 } from '../index.mjs'
 import { createMockCtx, makeSession, makeAgent, makeExec } from './helpers/mock-ctx.mjs'
+import { KNOWN_SESSION_EVENT_TYPES } from '@deepseek-ai/dsh-session'
 
 /** 经 mock 事件总线裁决的审批服务（同 V1 集成测试）。 */
 function makeBusApproval(ctx) {
@@ -84,6 +85,37 @@ test('F10：/memory 命令注册；list/query/budgets/audit 直接读', async (t
   assert.ok(budgets.text.includes('agent/workspace'))
   const audit = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'audit' })
   assert.ok(audit.text.includes('add'))
+})
+
+test('F10：/memory audit 在会话日志侧缺口存在时明示缺口；宿主收录后自适应消失', async (t) => {
+  const mounted = mount()
+  t.after(() => teardown(mounted))
+  const { mock } = mounted
+  const service = mock.services.get('memory')
+  const invocation = { agent: makeAgent(makeSession({ id: 's-gap' })), signal: new AbortController().signal }
+
+  // 空账本 + 缺口关闭：空审计也要说清「会话日志侧没落盘」，不能让用户以为审计只有这一份
+  const wasKnown = KNOWN_SESSION_EVENT_TYPES.has('memory/added')
+  t.after(() => {
+    if (wasKnown) KNOWN_SESSION_EVENT_TYPES.add('memory/added')
+    else KNOWN_SESSION_EVENT_TYPES.delete('memory/added')
+  })
+  KNOWN_SESSION_EVENT_TYPES.delete('memory/added')
+  const empty = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'audit' })
+  assert.equal(empty.kind, 'success')
+  assert.ok(empty.text.includes('审计为空。'))
+  assert.ok(empty.text.includes('会话日志侧当前未落盘'), '空账本也要明示会话日志侧缺口')
+
+  // 有行时缺口提示同样附在尾部，且不影响行本身
+  await service.add({ track: 'agent', scope: 'workspace', text: '缺口提示验证' }, { agent: makeAgent(makeSession({ id: 's-gap' })) })
+  const withRows = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'audit' })
+  assert.ok(withRows.text.includes('最近审计（1 条）'))
+  assert.ok(withRows.text.includes('会话日志侧当前未落盘'))
+
+  // 宿主收录 memory/added（门开启）：append 会真落盘，缺口提示必须消失
+  KNOWN_SESSION_EVENT_TYPES.add('memory/added')
+  const open = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'audit' })
+  assert.equal(open.text.includes('会话日志侧当前未落盘'), false, '门开启后不得再报缺口')
 })
 
 test('F10：命令 add/remove 走 turn 外审批门（同一 waterfall + writePolicy）', async (t) => {

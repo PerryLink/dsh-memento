@@ -242,26 +242,50 @@ async function askApproval(approval, payload, write) {
   }
 }
 
+/** 审计门跳过的一次性告警是否已发出（进程级）。 */
+let auditSkipWarned = false
+
 /**
- * 自适应会话事件派发：只有 harness 已知该事件类型才 append。
- * rc.6 无插件事件注册面（KNOWN_SESSION_EVENT_TYPES 不含 memory/*，且
- * Session.append 无法标记 ignorable）：append 未注册类型会让该会话下次加载
- * 被持久化层拒绝。因此默认跳过，审计由审批审计对 + 审计表承担；未来 harness
- * 收录 memory/* 进已知集合后自动开启。
- * alpha.5 复核（2026-09-02）：KNOWN_SESSION_EVENT_TYPES 仍不含 memory/*，
- * Session.append 写入面仍只接受 surface intent 可选参（非 surface 类型
- * 保持两参调用形态）、仍无 writer 侧 ignorable 标记；读取端已有 ignorable
- * 信封容忍未知类型。故本门在 alpha.5 下保持关闭，行为不变。
- * rc.1 / 0.1.3-alpha.1 复核（2026-09-04）：append 第三参仍为 surface-only
- * SurfaceIntent、仍无 ignorable 写入通道，KNOWN 清单仍不含 memory/*——
- * 结论不变，本门在这两条线上同样保持关闭。
+ * 会话审计门：把「是否 append」变成显式三态并让跳过可见。
+ *
+ * 已发布线上 `KNOWN_SESSION_EVENT_TYPES` 不含 `memory/*`（rc.6 起各线复核结论一致：
+ * alpha.5 2026-09-02、rc.1 / 0.1.3-alpha.1 2026-09-04、0.1.6-alpha.2 2026-09-18），
+ * 且 `Session.append` 的第三参只承载 surface 类型的 `SurfaceIntent`——非 surface
+ * 事件无法盖 `ignorable`，裸 append 会让该会话下次加载被持久化层拒绝（见 AGENTS.md
+ * 「会话事件的 alpha.5 约束」）。门保持自适应：未来宿主收录 `memory/*` 后自动开启；
+ * 未收录时返回 `'skipped-unknown-type'` 并**恰好告警一次**，审计链由审批 seam
+ * （approval/asked + approval/decided）与插件审计表承担。
  * @param {{append?: (type: string, data: object) => unknown} | null | undefined} session - Session。
  * @param {string} type - 事件类型。
  * @param {object} data - 载荷。
+ * @returns {'appended' | 'skipped-unknown-type' | 'no-session'} 三态结果。
  */
 function maybeAppendSessionEvent(session, type, data) {
-  if (session === undefined || session === null) return
-  if (KNOWN_SESSION_EVENT_TYPES.has(type)) session.append(type, data)
+  if (session === undefined || session === null) return 'no-session'
+  // 逐类型判定：宿主可能只收录了部分 memory/* 词汇，不能用一个开关代替。
+  if (!KNOWN_SESSION_EVENT_TYPES.has(type)) {
+    if (!auditSkipWarned) {
+      auditSkipWarned = true
+      console.warn(
+        'dsh-memento: 宿主未收录 memory/* 会话事件（KNOWN_SESSION_EVENT_TYPES 不含该词汇，'
+        + '且 Session.append 无法为非 surface 类型盖 ignorable 标记），审计事件不落盘；'
+        + '审计链由审批 seam（approval/asked + approval/decided）与插件审计表承担。',
+      )
+    }
+    return 'skipped-unknown-type'
+  }
+  session.append(type, data)
+  return 'appended'
+}
+
+/**
+ * 写路径的会话审计门是否开启——宿主已知 `memory/added` 才算开启。
+ * `/memory audit` 用它决定是否附上「会话日志侧审计缺口」提示（缺口必须可见）；
+ * 派发端 `maybeAppendSessionEvent` 仍逐类型判定，二者读同一份已知集合。
+ * @returns {boolean} true = 写路径的 append 会真的落盘。
+ */
+function sessionAuditGateOpen() {
+  return KNOWN_SESSION_EVENT_TYPES.has(SESSION_EVENTS.added)
 }
 
 /**
@@ -1185,6 +1209,7 @@ function makeCommandGate(ctx, write) {
  * @property {(id: string) => string} proposalDismissed
  * @property {string} auditEmpty
  * @property {(n: number) => string} audit
+ * @property {string} auditGapNotice
  * @property {string} addNeedsText
  * @property {(track: string, scope: string, text: string, used: number, limit: number) => string} added
  * @property {string} removeNeedsSubstring
@@ -1233,6 +1258,7 @@ const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} 
     proposalDismissed: (id) => `Proposal ${id} dismissed.`,
     auditEmpty: 'Audit is empty.',
     audit: (n) => `Recent audit (${n} rows):`,
+    auditGapNotice: 'Note: the session-log side of the audit is NOT currently written — this harness does not know the memory/* session event types, so appending them would make the session unloadable. The audit chain here (approval seam + this ledger) is complete; the session log alone cannot rebuild memory writes.',
     addNeedsText: 'add needs text: /memory add [--track=user|agent] [--scope=user-global|workspace] <text>',
     added: (track, scope, text, used, limit) => `Added (${track}/${scope}): ${text}\nLayer usage: ${used}/${limit}`,
     removeNeedsSubstring: 'remove needs a unique substring: /memory remove [--track=user|agent] [--scope=user-global|workspace] <substring>',
@@ -1280,6 +1306,7 @@ const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} 
     proposalDismissed: (id) => `已驳回提案 ${id}。`,
     auditEmpty: '审计为空。',
     audit: (n) => `最近审计（${n} 条）：`,
+    auditGapNotice: '注意：审计的会话日志侧当前未落盘——本宿主不认识 memory/* 会话事件类型，强行 append 会让该会话无法再加载。此处的审计链（审批 seam + 本账本）是完整的；仅凭会话日志无法重建记忆写入。',
     addNeedsText: 'add 需要文本：/memory add [--track=user|agent] [--scope=user-global|workspace] <文本>',
     added: (track, scope, text, used, limit) => `已添加（${track}/${scope}）：${text}\n该层用量：${used}/${limit}`,
     removeNeedsSubstring: 'remove 需要一个唯一子串：/memory remove [--track=user|agent] [--scope=user-global|workspace] <唯一子串>',
@@ -1434,8 +1461,10 @@ async function runMemoryCommand(ctx, service, invocation) {
     }
     case 'audit': {
       const rows = service.store.auditList(service.commandAuditLimit)
-      if (rows.length === 0) return { kind: 'success', text: text.auditEmpty }
-      return { kind: 'success', text: `${text.audit(rows.length)}\n${rows.map((/** @type {{ts: number, action: string, track?: string | null, scope?: string | null, outcome?: string | null, source?: string | null}} */ row) => `- ${new Date(row.ts).toISOString()} ${row.action}${row.track ? ` ${row.track}/${row.scope}` : ''} ${row.outcome ?? ''} (${row.source ?? ''})`.trim()).join('\n')}` }
+      // 会话日志侧缺口必须可见：门关闭时把原因与替代审计链一并说清。
+      const gap = sessionAuditGateOpen() ? '' : `\n${text.auditGapNotice}`
+      if (rows.length === 0) return { kind: 'success', text: `${text.auditEmpty}${gap}` }
+      return { kind: 'success', text: `${text.audit(rows.length)}\n${rows.map((/** @type {{ts: number, action: string, track?: string | null, scope?: string | null, outcome?: string | null, source?: string | null}} */ row) => `- ${new Date(row.ts).toISOString()} ${row.action}${row.track ? ` ${row.track}/${row.scope}` : ''} ${row.outcome ?? ''} (${row.source ?? ''})`.trim()).join('\n')}${gap}` }
     }
     case 'adapters': {
       const registry = adapterRegistryOf(ctx)
