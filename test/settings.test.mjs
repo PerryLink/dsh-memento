@@ -219,3 +219,77 @@ test('工具执行面不受 settings 缺失影响（回归）', async () => {
     mounted.teardown()
   }
 })
+
+test('G-9 关→开两次：贡献恰一份、订阅不重复、服务与检索器注册零残留、重装后仍可用', async () => {
+  /** 一次「开」的完整断言（含 vector 检索器这条自持 disposer 的路径）。 */
+  const activateAndAssert = async (round) => {
+    const mounted = mount({ composed: { retrieval: { vector: true } } })
+    const { mock, fake, routes } = mounted
+    const registry = mock.ctx.get('memoryRetrieval')
+    // ① 贡献恰一份（工具/快照段/面板路由/命令各自只有一份）
+    assert.equal(mock.tools.length, 2, `第 ${round} 轮：memory + memory_recall 各一份`)
+    assert.equal(mock.sections.length, 1, `第 ${round} 轮：快照段恰一份`)
+    assert.equal(routes.length, 3, `第 ${round} 轮：面板只读路由恰三条`)
+    // ② 订阅不重复（三个挂载期监听器各一条）
+    assert.equal(mock.listeners.get('approval/request').length, 1, `第 ${round} 轮：审批 answerer 恰一条`)
+    assert.equal(mock.listeners.get('session/event').length, 1, `第 ${round} 轮：会话事件监听恰一条`)
+    // ③ 设置命名空间只注册一次
+    assert.equal(fake.installs.length, 1, `第 ${round} 轮：dsh-memento 命名空间只注册一次`)
+    assert.equal(fake.installs[0].ns, 'dsh-memento')
+    // ④ 检索器注册面（含 vector：自持 disposer 的注册）齐全
+    assert.deepEqual(registry.list().map((provider) => provider.id), ['substring', 'vector'], `第 ${round} 轮：两个检索器都在`)
+    // ⑤ 重装后功能仍可用：写入 + 读回
+    const service = mock.ctx.get('memory')
+    await service.add({ track: 'user', scope: 'workspace', text: `第 ${round} 轮写入` }, { agent: makeAgent() })
+    assert.equal(service.query({ text: `第 ${round} 轮写入` }).total, 1)
+    // 关：卸载后服务、订阅目标与检索器注册全部下线（vector 不残留）
+    mounted.teardown()
+    assert.equal(mock.services.size, 0, `第 ${round} 轮卸载后：服务句柄零残留`)
+    assert.deepEqual(registry.list(), [], `第 ${round} 轮卸载后：检索器注册零残留（含 vector）`)
+  }
+  await activateAndAssert(1)
+  await activateAndAssert(2)
+})
+
+test('retrieval.vector 热切换：登记失败响亮留痕且不留半状态，恢复后重新启用', () => {
+  const mounted = mount({ composed: { retrieval: { vector: true } } })
+  try {
+    const { mock, fake } = mounted
+    const registry = mock.ctx.get('memoryRetrieval')
+    const service = mock.ctx.get('memory')
+    assert.deepEqual(registry.list().map((provider) => provider.id), ['substring', 'vector'])
+
+    // 先关（成功），再开但让登记抛 INACTIVE_EFFECT 形态的错：不得留下半状态
+    fake.publish({ retrieval: { vector: false } })
+    assert.deepEqual(registry.list().map((provider) => provider.id), ['substring'])
+    const originalEffect = mock.ctx.effect
+    let failNext = true
+    mock.ctx.effect = (callback, label) => {
+      if (failNext) {
+        failNext = false
+        throw new Error('INACTIVE_EFFECT (fiber disposed)')
+      }
+      return originalEffect(callback, label)
+    }
+    try {
+      fake.publish({ retrieval: { vector: true } })
+    } finally {
+      mock.ctx.effect = originalEffect
+    }
+    // 失败可见（审计留痕）+ 无半状态（没有 vector 注册，也没有坏掉的注册）
+    const failure = service.store.auditList(10).find((row) => row.action === 'settings-swap-failed')
+    assert.ok(failure, '登记失败必须响亮留痕')
+    assert.equal(failure.outcome, 'error')
+    assert.match(failure.text, /^retrieval\.vector: INACTIVE_EFFECT/)
+    assert.deepEqual(registry.list().map((provider) => provider.id), ['substring'], '失败后不残留半注册')
+    // 失败不影响其余热字段与既有功能
+    fake.publish({ language: 'en' })
+    assert.equal(service.language, 'en')
+    assert.equal(service.query({ text: '任意' }).total, 0)
+    // 恢复：同一次热切换重试必须成功（插件没有被失败卡死）
+    fake.publish({ retrieval: { vector: true } })
+    assert.deepEqual(registry.list().map((provider) => provider.id), ['substring', 'vector'])
+  } finally {
+    mounted.teardown()
+  }
+})

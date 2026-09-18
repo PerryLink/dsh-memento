@@ -829,6 +829,12 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
   /** 当前 vector 检索器的注册 disposer（null = 未注册）。 */
   /** @type {(() => void) | null} */
   let vectorDisposer = null
+  /** 热切换失败的 retrieval.vector 上一次生效值（null = 无失败待回退）。 */
+  /** @type {boolean | null} */
+  let rejectedVector = null
+  // 自持 disposer 的收尾序列：fiber 卸载时 vector 注册本身随 effect 树回收，本地引用
+  // 必须同时清空——否则 HMR 重装或晚到的 settings 回调会二次调用已失效的 disposer。
+  ctx.effect(() => () => { vectorDisposer = null }, 'dsh-memento.retrieval.vector.ref')
   /** 当前解析值来源（settings 接线后指向 namespace scope）。 */
   /** @type {() => MemoryRuntimeValues} */
   let source = () => resolved
@@ -878,20 +884,40 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
         applied.push('dbPath/auditRetentionDays')
       }
       if (next.retrieval.vector !== live.retrieval.vector) {
-        // retrieval.vector：拆旧检索器，按新值重装（探测不到 embedding 时降级 null）。
-        if (vectorDisposer !== null) {
-          vectorDisposer()
-          vectorDisposer = null
-        }
-        live.retriever = null
-        if (next.retrieval.vector === true) {
-          const retriever = buildVectorRetriever(embeddings)
-          if (retriever !== null) {
-            vectorDisposer = ctx.effect(() => retrievers.register(retriever), 'dsh-memento.retrieval.vector')
-            live.retriever = retriever
+        // retrieval.vector 热切换：先建新（可能抛），再拆旧，最后登记。旧写法先拆后建，
+        // 建新抛错后配置说 vector、实际一个检索器都没注册（半状态）。登记失败只可能发生在
+        // 由关变开这一侧（旧检索器此时必然是 null），因此不需要回滚分支：失败即响亮留痕，
+        // 检索面按既有语义降级回 substring。
+        try {
+          const nextRetriever = next.retrieval.vector === true ? buildVectorRetriever(embeddings) : null
+          if (vectorDisposer !== null) {
+            vectorDisposer()
+            vectorDisposer = null
+          }
+          if (nextRetriever === null) {
+            live.retriever = null
+          } else {
+            vectorDisposer = ctx.effect(() => retrievers.register(nextRetriever), 'dsh-memento.retrieval.vector')
+            live.retriever = nextRetriever
+          }
+          applied.push('retrieval.vector')
+        } catch (error) {
+          // 热切换失败响亮留痕，并把该字段回退到上一次真正生效的值——live 绝不报告
+          // 没生效的配置，同值重试才算一次真变更（否则失败后无路可退）。
+          rejectedVector = live.retrieval.vector
+          if (service !== undefined) {
+            service.store.auditAppend({
+              action: 'settings-swap-failed',
+              track: null,
+              scope: null,
+              entryId: null,
+              text: `retrieval.vector: ${error instanceof Error ? error.message : String(error)}`,
+              outcome: 'error',
+              source: DEFAULT_SOURCE,
+              sessionId: null,
+            })
           }
         }
-        applied.push('retrieval.vector')
       }
       if (next.snapshotOrder !== live.snapshotOrder) {
         // snapshotOrder：systemPrompt section 注册期固定，无法热重挂——响亮留痕。
@@ -899,6 +925,12 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
       }
     }
     Object.assign(live, next)
+    if (rejectedVector !== null) {
+      // 上一次 vector 热切换失败：把该字段退回上一次生效值（live 不报告未生效的配置），
+      // 检索面按既有语义维持旧模式（降级回 substring）。
+      live.retrieval = { vector: rejectedVector }
+      rejectedVector = null
+    }
     if (service !== undefined) {
       service.budgetsConfig = next.budgets
       service.writePolicy = normalizeWritePolicy(next.writePolicy)
@@ -945,7 +977,6 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
     const providerInstall = /** @type {(owner: object, ns: string, schema: object, entry: object, hooks: SettingsInstallHooks) => void} */ (settingsService.installSection)
     providerInstall.call(settingsService, ctx, SETTINGS_NAMESPACE, SettingsSchema, resolved, hooks)
   })
-  booted = true
   let store = openMemoryStore(resolveDbPath(resolved.dbPath), { retentionDays: resolved.auditRetentionDays })
   service = new MemoryService({
     store,
@@ -1067,6 +1098,10 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
   ctx.on('session/event', (session, event) => {
     handleSessionEvent(store, session, event, live.proposals, summaries)
   })
+
+  // 「服务与存储已就绪」标记放在全部注册之后：激活中途抛错时 booted 必须仍为 false，
+  // 否则 settings 回调会按就绪状态去改一个并不存在的 service/store（假就绪）。
+  booted = true
 }
 
 /**
