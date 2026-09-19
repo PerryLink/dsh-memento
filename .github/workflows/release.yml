@@ -1,7 +1,7 @@
 name: release
 
 # 打 v* 标签即发布 npm：先全量门禁（测试/类型/覆盖率/五语 README），再 npm publish。
-# 需要仓库 secret：NPM_TOKEN（npm 自动化 token，类型 Automation 或 Publish）。
+# 发布走 npm trusted publishing（OIDC，依赖上面的 `id-token: write`）：不再需要 NPM_TOKEN secret。
 # 幂等：标签版本已在 npm 上时跳过 publish——重推旧标签/补标签不会红。
 on:
   push:
@@ -18,8 +18,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org/
           cache: npm
+          # 不加 registry-url：它会写 //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}，
+          # secret 退役后那行就成了空 Bearer，注册表对 PUT 回 404，npm 便不会走 OIDC 交换。
       - run: npm ci
       - run: npm test
       - run: npm run typecheck
@@ -36,10 +37,20 @@ jobs:
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
+      # trusted publishing 需要 npm >= 11.5.1，同时把认证面打印出来，失败时能自证原因。
+      - name: Upgrade npm and show what the publish will authenticate with
+        run: |
+          npm install -g npm@^11.5.1
+          echo "npm: $(npm --version)"
+          echo "registry: $(npm config get registry)"
+          if [ -f .npmrc ]; then echo "--- workspace .npmrc ---"; cat .npmrc; else echo "no workspace .npmrc"; fi
+          if [ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then echo "OIDC request TOKEN: present"; else echo "OIDC request TOKEN: MISSING"; fi
+
+      # npm 的 OIDC 失败只写在 verbose 日志里，不开这级就只能看到无原因的 ENEEDAUTH。
       - if: steps.published.outputs.skip != 'true'
         run: npm publish --provenance
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_LOGLEVEL: verbose
 
   # npm publish alone left every release without a GitHub Release page (v0.5.11
   # had to be created by hand after the fact). This job closes that gap and is
