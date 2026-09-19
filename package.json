@@ -139,6 +139,7 @@
     "check:client": "tsc -p tsconfig.check.client.json",
     "check:readmes": "node scripts/verify-readmes.mjs",
     "verify:self-contained": "node scripts/verify-self-contained.mjs",
+    "check:lockfile": "node scripts/check-lockfile-drift.mjs",
     "verify:artifacts": "node scripts/verify-artifacts.mjs",
     "test:conformance": "node test/protocol-conformance/run.mjs"
   },
