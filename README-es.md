@@ -17,6 +17,7 @@
 [![Version](https://img.shields.io/github/v/tag/PerryLink/dsh-memento?label=version)](https://github.com/PerryLink/dsh-memento/releases)
 [![npm version](https://img.shields.io/npm/v/dsh-memento)](https://www.npmjs.com/package/dsh-memento)
 [![npm downloads](https://img.shields.io/npm/dm/dsh-memento)](https://www.npmjs.com/package/dsh-memento)
+[![dshfind](https://dshfind.com/api/badge/PerryLink/dsh-memento?metric=downloads&lang=es)](https://dshfind.com/es/plugins/PerryLink/dsh-memento?ref=badge)
 
 [English](README.md) · [简体中文](README-zh.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
 
