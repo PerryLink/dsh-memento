@@ -9,9 +9,11 @@
 // /api/memento/* JSON 路由（只走公开 API）。写与审批在 DSH 内置审批 UI 完成，
 // 面板不产生任何模型可见内容、不做任何审批决策。
 // 面板文案随 Config.language（en/zh）切换，语言来自 entries 路由响应。
-// 设置页经 ctx.settingsScope 读/写用户层（settings.yaml），暂存—保存语义
-// 与宿主内置卡片一致；factory 的 require 由宿主模块系统提供（react 为平台
-// 内置模块）。
+// 设置页按宿主线取设置句柄：0.1.7-alpha 起是 ctx.configForms.get(entryId)
+// （namespace = profile entry id），旧线是 ctx.settingsScope.bind({namespace})；
+// 两者都不写进 inject（另一条线的服务在对面宿主上永不到场，会把 fiber 永久挂起，
+// 面板一起消失），缺席时卡片降级为只读。暂存—保存语义与宿主内置卡片一致；
+// factory 的 require 由宿主模块系统提供（react 为平台内置模块）。
 
 ;(function () {
   'use strict'
@@ -382,6 +384,63 @@ function escapeHtml(value) {
 }
 
 // ── 宿主设置页（settings.section 一级项，id = dsh-memento）──────────────
+
+      /**
+       * 设置 namespace 的两个名字（与 index.mjs 的 SETTINGS_ENTRY_ID /
+       * SETTINGS_NAMESPACE 同值）。
+       *
+       * 字面量在这里重写一遍而不是从 index.mjs 取：客户端打包面不允许跨插件取
+       * value（宿主客户端构建的纯度门），宿主半的测试直接读 cordis.patch.yml
+       * 断言 entry id，两侧由那一处断言钉住。
+       */
+      const SETTINGS_ENTRY_ID = 'memento'
+      const LEGACY_SETTINGS_NAMESPACE = 'dsh-memento'
+
+      /**
+       * 设置句柄缺席时的只读替身：卡片照旧显示，只是显示为只读（与旧线
+       * 「namespace 未注册」时的形态一致）。
+       * @type {{getSnapshot: () => any, subscribe: (fn: () => void) => () => void, set: (field: string, value: unknown) => Promise<boolean>}}
+       */
+      const UNAVAILABLE_SCOPE = {
+        getSnapshot: () => ({ status: 'unavailable', value: undefined, base: undefined, user: undefined, writable: false }),
+        subscribe: () => () => {},
+        set: async () => false,
+      }
+
+      /**
+       * 取宿主服务（先走 ctx.get，缺席回退属性面）。
+       * @param {any} ctx - 客户端上下文。
+       * @param {string} name - 服务名。
+       * @returns {any} 服务面或 undefined。
+       */
+      function serviceOf(ctx, name) {
+        if (typeof ctx.get === 'function') return ctx.get(name)
+        return ctx[name]
+      }
+
+      /**
+       * 解析设置句柄。两条宿主线各自只有一个在场：
+       * - 0.1.7-alpha 起：`ctx.configForms.get(entryId)`（ConfigForm：
+       *   `{getSnapshot, subscribe, set, unset, mutate}`，namespace = profile entry id）；
+       * - 旧线（0.1.2-rc.1 / 0.1.5-alpha.1 / 0.1.6-0）：`ctx.settingsScope.bind({namespace})`。
+       *
+       * 两者都**不写进 inject**：对面那条线的服务在另一侧宿主上永不到场，写进去会让
+       * fiber 永久 PENDING——整个客户端插件（含只读面板）都不会挂载。缺席即降级为只读。
+       * @param {any} ctx - 客户端上下文。
+       * @returns {any} 设置句柄。
+       */
+      function resolveSettingsScope(ctx) {
+        const configForms = serviceOf(ctx, 'configForms')
+        if (configForms !== undefined && configForms !== null && typeof configForms.get === 'function') {
+          return configForms.get(SETTINGS_ENTRY_ID)
+        }
+        const settingsScope = serviceOf(ctx, 'settingsScope')
+        if (settingsScope !== undefined && settingsScope !== null && typeof settingsScope.bind === 'function') {
+          return settingsScope.bind({ namespace: LEGACY_SETTINGS_NAMESPACE })
+        }
+        return UNAVAILABLE_SCOPE
+      }
+
       /** 卡片文案（en 源文 / zh 译文；语言跟随 namespace value.language，保存后即时切换）。 */
       /** @type {Record<string, Record<string, string>>} */
       const CARD_STRINGS = {
@@ -650,10 +709,15 @@ function escapeHtml(value) {
       /**
        * 暂存表单（学宿主 CardForm：staged → save 才写；revision 栅防并发覆盖）。
        * 顶层聚合：同顶层字段的多个子字段草稿一次 scope.set(top, 合并值)。
+       *
+       * 两条宿主线的句柄形状在本类用到的那一面上一致（`getSnapshot` 返回
+       * `{status, value, user, base, writable}`、`subscribe`、`set(field, value)`）：
+       * 旧线是 settingsScope，0.1.7 线是 ConfigForm。`set` 走**路径寻址写入**
+       * （顶层聚合值按顶层字段整体写），因此不会像整体替换那样静默删掉已存字段。
        */
       class CardForm {
         /**
-         * @param {any} scope - 宿主 settingsScope 句柄。
+         * @param {any} scope - 宿主设置句柄（settingsScope 或 ConfigForm）。
          * @param {(tops: Map<string, object>) => void} onLanded - 落盘成功回调（panel 显隐同步用）。
          */
         constructor(scope, onLanded) {
@@ -922,9 +986,9 @@ function escapeHtml(value) {
         )
       }
 
-      /** 控制器：scope → 暂存表单 → 设置页快照。保存落盘后同步本页悬浮按钮显隐。 */
+      /** 控制器：设置句柄 → 暂存表单 → 设置页快照。保存落盘后同步本页悬浮按钮显隐。 */
       class MementoCardController {
-        /** @param {any} scope - 宿主 settingsScope 句柄（namespace = dsh-memento）。 */
+        /** @param {any} scope - 宿主设置句柄（0.1.7 线 = ConfigForm(entryId)；旧线 = settingsScope）。 */
         constructor(scope) {
           this.scope = scope
           this.form = new CardForm(scope, (tops) => {
@@ -956,7 +1020,10 @@ function escapeHtml(value) {
 
       /**
        * 客户端插件挂载：面板 + 设置页一级项。
-       * @param {any} ctx - 宿主客户端上下文（slots/settingsScope）。
+       *
+       * 设置页**恒注册**（不按 namespace 是否在场门控）：在线为可编辑卡片，离线为只读
+       * 卡片——与旧线 namespace 未注册时的形态一致，卡片不会整块消失。
+       * @param {any} ctx - 宿主客户端上下文（slots + configForms 或 settingsScope）。
        * @returns {void}
        */
       function apply(ctx) {
@@ -968,7 +1035,7 @@ function escapeHtml(value) {
           tag.textContent = CARD_CSS
           document.head.appendChild(tag)
         }
-        const controller = new MementoCardController(ctx.settingsScope.bind({ namespace: 'dsh-memento' }))
+        const controller = new MementoCardController(resolveSettingsScope(ctx))
         ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register({
           name: 'settings.section',
           id: 'dsh-memento',
@@ -980,7 +1047,9 @@ function escapeHtml(value) {
 
       return {
         name: 'memento-client',
-        inject: ['slots', 'settingsScope'],
+        // 只要 slots：设置句柄两条线各只有一个在场，写进 inject 会让对面宿主的 fiber
+        // 永久 PENDING（面板也挂不上）。解析走 resolveSettingsScope 的可选读取。
+        inject: ['slots'],
         apply,
       }
     },
