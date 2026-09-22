@@ -35,6 +35,26 @@ const configPath = resolve(configArgument)
 const configRequire = createRequire(resolve(import.meta.dirname, '../package.json'))
 
 const ctx = new Context()
+
+// cordis 的 logger 默认**只缓冲**（最小 composition 不装 console exporter），而
+// Loader 1.0.4 起把「entry 导入失败 / config 解析失败」经 `ctx.logger.error` 报出
+// 后**返回**——不再 reject `loader.await()`。没有 sink 时这种失败是静默 no-op：
+// 行只是没挂上，负例断言于是看到自己的兜底错误而不是真实原因。把每条记录镜像到
+// stderr；`levels.default` 放行全部等级（Loader 这些失败走 error）。
+ctx.logger.exporter({
+  colors: false,
+  levels: { default: 3 },
+  export: (message) => {
+    const text = message.args
+      .map((arg) => {
+        if (arg instanceof Error) return arg.stack ?? arg.message
+        return typeof arg === 'string' ? arg : JSON.stringify(arg)
+      })
+      .join(' ')
+    process.stderr.write(`[${message.type}] ${message.name}: ${text}\n`)
+  },
+})
+
 try {
   ctx.baseUrl = `${pathToFileURL(dirname(configPath)).href}/`
   await ctx.plugin(Loader)
