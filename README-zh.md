@@ -28,7 +28,7 @@
 
 | Surface | Status |
 |---|---|
-| Harness | DeepSeek Harness `dsh-v0.1.6-alpha.2`（2026-09-18 复核）：仍无插件事件注册面——`KNOWN_SESSION_EVENT_TYPES` 不含 `memory/*`，且 `Session.append` 第三参只承载 surface 类型的 `SurfaceIntent`，故审计门保持自适应、行为不变（现在会在进程内告警一次，并在 `/memory audit` 输出里明示缺口）。peer 区间保留 `0.1.2-rc.1`、`0.1.5-alpha.1`、`0.1.6-0` 三条线。类型证据来自三个面：本机 checkout 的已构建类型、`node_modules` 里钉住的已发布线、以及 DOM 库下的浏览器半侧。 |
+| Harness | DeepSeek Harness `dsh-v0.1.7-alpha.1`（2026-09-22 适配）：`0.1.7` 线把整条设置注册面（`installSettingsSection` / `SettingsProvider.installSection` / `SettingsNamespace` / `SettingsScope`）换成 live config 表单——表单的 namespace 就是 profile entry id（`memento`），可编辑字段就是标了 `.volatile()` 的那些，被接受的编辑**提交进运行中的插件**而不是重挂它。浏览器半经 `ctx.configForms.get(entryId)` 读同一份表单（`ctx.settingsScope` 服务已删）。两侧都保留了 `installSection` / `settingsScope` 分支，peer 区间仍声明支持 `0.1.2-rc.1`、`0.1.5-alpha.1`、`0.1.6-0` 三条线；新增的 `>=0.1.7-0 <0.2.0` 这一段是修 bug——旧范围按 semver 预发布规则把目标宿主本身排除在外。仍无插件事件注册面——`KNOWN_SESSION_EVENT_TYPES` 不含 `memory/*`，且 `Session.append` 第三参只承载 surface 类型的 `SurfaceIntent`，故审计门保持自适应、行为不变（会在进程内告警一次，并在 `/memory audit` 输出里明示缺口）。类型证据来自三个面：本机 checkout 的已构建类型、`node_modules` 里钉住的已发布线、以及 DOM 库下的浏览器半侧。 |
 | Node | `^22.19.0 || >=24.0.0` |
 | Platforms | Windows / macOS / Linux（纯 host；无原生代码、无网络） |
 | Model | 任意 |
@@ -68,7 +68,7 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 
 所有可调项均为 Schemastery `Config` 字段（可在 cordis.yml 中修改）。非法值在加载期响亮失败。在 `memento` 行下覆盖。
 
-**设置面板。** DSH 设置服务挂载时，下表除 `enabled` 外的全部字段可在 DSH 设置侧栏的插件一级项 **`dsh-memento`**（与通用设置、插件等并列）中编辑；修改写入设置用户层（`settings.yaml`），无需改文件。几乎全部即时生效（写策略、语言、预算、各上限、提案、面板；`dbPath` / `auditRetentionDays` 经重开 store 生效；`retrieval.vector` 经重装检索器生效）——只有 `snapshotOrder` 需要 DSH 重载。设置服务缺失时一切回退组合配置，与从前完全一致。悬浮窗按钮可在同一页面隐藏（`panel.enabled`）。
+**设置面板。** `0.1.7` 线上插件自己的 `Config` **就是**它的设置页：表单的 namespace 是 profile entry id（`memento`，即本 bundle 那一行的 `id:`），可编辑字段恰好是插件标了 `.volatile()` 的那些（下表除 `enabled` 外的每个键），被接受的编辑合并进 profile 的插件行并提交进运行中的插件——无需改文件、无需重启。几乎全部即时生效（写策略、语言、预算、各上限、提案、面板；`dbPath` / `auditRetentionDays` 经重开 store 生效；`retrieval.vector` 经重装检索器生效）；插件在加载期注册的面（`snapshotOrder`、工具描述文案）在重载后跟随，页面为这些字段标了记号。数值下限同时写在 schema 里，越界编辑在**写入路径**即被拒绝，不会留下一个用不了的配置。旧线（`0.1.2-rc.1`、`0.1.5-alpha.1`、`0.1.6-0`）上同一张卡片编辑 `dsh-memento` 设置 namespace，行为与从前一致；设置服务完全缺失时一切回退组合配置。悬浮窗按钮可在同一页面隐藏（`panel.enabled`）。
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -106,7 +106,7 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 | `memory_recall` | tool | 有界的记忆匹配 + 近期会话历史匹配 |
 | `/memory` | command | `list` · `query` · `add` · `remove` · `consolidate` · `proposals` · `budgets` · `audit` · `export` · `import <path>` · `adapters` |
 | web panel | client drawer | 只读：浏览条目、搜索、预算条、审计尾部；悬浮入口按钮可隐藏（`panel.enabled`） |
-| settings section | DSH 设置侧栏 → `dsh-memento` | 免改文件编辑除 `enabled` 外的全部配置字段；即时/重载生效时机在页面内标注 |
+| settings section | DSH 设置侧栏 → `dsh-memento` | 免改文件编辑除 `enabled` 外的全部配置字段（`0.1.7` 线上 namespace = `memento` profile entry，之前是 `dsh-memento` 设置 namespace）；即时/重载生效时机在页面内标注 |
 
 ## MCP server
 

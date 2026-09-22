@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **适配 DeepSeek Harness `dsh-v0.1.7-alpha.1`（设置契约反转）**。`0.1.7` 线删掉了整条 settings 注册面（`installSettingsSection` / `SettingsProvider.installSection` / `SettingsNamespace` / `SettingsScope`，`@deepseek-ai/dsh-settings-file` 整包消失，`dsh-settings` 现在只有 `SettingsForms`），并删掉了客户端的 `ctx.settingsScope` 服务。两半各自迁移：
+  - **宿主半**：插件自己的 `Config` 就是设置面——表单 namespace = profile entry id（`cordis.patch.yml` 的 `id: memento`，新导出 `SETTINGS_ENTRY_ID`），可编辑字段 = 标了 `.volatile()` 的字段。可编辑面**逐字段对齐旧线**（`SHARED_CONFIG_FIELDS` + `panel`；`enabled` 保持普通字段，旧线同样不在面板里）；`panel.enabled` 因此第一次成为 `Config` 字段——新契约下它没有别的可写去处。`apply` 改为 `ctx.effect(() => settings.configure({ auto: false }, ctx.fiber))`（自带设置页 ⇒ 不生成重复表单），值来源改为懒读 volatile 引用，启动期字段的副作用在 `loader/volatile-update` 上对账。
+  - **浏览器半**：`ctx.settingsScope.bind({ namespace })` 换成 `ctx.configForms.get(entryId)`；`inject` 从 `['slots', 'settingsScope']` 收成 `['slots']`——两条线的服务各只有一个在场，任一个写进 `inject` 都会让对面宿主的 fiber 永久 PENDING（不只设置卡片，只读浮层面板也一起消失）。旧线仍走 `settingsScope` 分支，两者都不在场时卡片降级为只读而不是抛错。
+- **行为变更**：volatile 字段经设置面编辑**不再重挂 fiber**（这是新契约的全部意义），因此注册期固定的面——工具描述文案、快照段注入顺序——改为重载后跟随；命令/快照/面板的热字段即时生效不变。数值下限（正整数 / 非负整数）搬进 schema：越界编辑在**持久化前**被宿主拒绝，而不是等到下次加载才把插件打成非法配置。跨字段规则（`writePolicies` 键文法、`budgets` 形状）在 schemastery 3.18.3 里无法表达（没有 `.check()`），仍是加载期/运行期的响亮拒绝——被拒的实时编辑留 `settings-rejected` 审计行。
+
+### Added
+
+- `.volatile()` 的能力探测（`liveField`）：`.volatile()` 是 schemastery 3.18.3 起的**运行期**方法，而 schema 在模块求值期构建，裸调用会让 peer 范围仍声明支持的 `0.1.2-rc.1` / `0.1.5-alpha.1` / `0.1.6-0` 线在 mount 时硬崩。旧宿主上字段保持普通值，设置面走保留下来的 `installSection` 形状分派，行为与迁移前一致。
+- `test/client.test.mjs`：用 `node:vm` 提供宿主注入环境（`window.__ModuleLoader__` + 平台 `react` + 最小 DOM），驱动浏览器半并断言 `inject` 只有 `slots`、两条设置线各自解析到正确句柄/namespace、缺席时降级只读、保存经 `ConfigForm.set(field, value)` 的调用形状。
+- `scripts/loader-runner.mjs` 装一条 stderr log exporter：cordis 的 logger 默认只**缓冲**，而 Loader 1.0.4 起把「entry 导入失败 / config 解析失败」经 `ctx.logger.error` 报出后**返回**（不再 reject `loader.await()`），没有 sink 时 composition 的两个负例退化成「静默没挂上」。
+
+### Development
+
+- devDependencies 改钉 `0.1.7-alpha.1`（= 验证过的宿主 tag；`0.1.5-rc.3` 经实测否决——它仍是旧 settings 契约且其 schemastery 没有 `volatile()`），`@deepseek-ai/cordis` 到 `^4.0.3`、`@deepseek-ai/schemastery` 到 `^3.18.3`、`@deepseek-ai/cordis-plugin-loader` 到 `^1.0.4`（第一个声明 `loader/volatile-update` 的发布）、`@deepseek-ai/cordis-plugin-include` 到 `^1.0.8`（与宿主 vendor 副本同版）。`pnpm-workspace.yaml` 用**裸包名** overrides 钉住 cordis 4.0.3 / cosmokit 1.8.4 / schemastery 3.18.3 三条下限：名义范围虽覆盖，但已钉旧 patch 的 lockfile 会继续解析到旧版。
+- 每个 `@deepseek-ai/dsh-*` peer 范围追加 `|| >=0.1.7-0 <0.2.0`（只加宽）。这一段本身是修 bug：旧范围因 semver 的预发布规则**把目标宿主 0.1.7-alpha.1 排除在外**。`engines.dsh`、`dshWorkshop.compatibility.dshVersions` 与 Compat workflow 同步。
+- `test/helpers/mock-ctx.mjs` 的 `inject` 回调改为交付**子 Context**（真 cordis：`inject` = `ctx.plugin({ inject, apply })`，回调拿到子 fiber 的 Context，既有服务属性面也有 `get`/`effect`/`on`），并在服务替换时先卸载旧子 fiber 再重跑回调——`configure` 的重复保护、策略的释放与重注册都靠这一条才量得到。
+
 ## [0.5.14] - 2026-09-19
 
 ### Added

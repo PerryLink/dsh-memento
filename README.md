@@ -29,7 +29,7 @@
 
 | Surface | Status |
 |---|---|
-| Harness | DeepSeek Harness `dsh-v0.1.6-alpha.2` (re-checked 2026-09-18): still no plugin event-registration surface — `KNOWN_SESSION_EVENT_TYPES` does not carry `memory/*`, and `Session.append`'s third argument only carries a `SurfaceIntent` for surface-eligible types, so the audit gate stays adaptive and skips as before (it now says so once per process and in `/memory audit`). Peer range keeps the `0.1.2-rc.1`, `0.1.5-alpha.1` and `0.1.6-0` lines. Type evidence comes from three faces: the local checkout's built types, the pinned published line in `node_modules`, and the browser half under a DOM lib. |
+| Harness | DeepSeek Harness `dsh-v0.1.7-alpha.1` (adapted 2026-09-22): the `0.1.7` line replaced the whole settings registration surface (`installSettingsSection` / `SettingsProvider.installSection` / `SettingsNamespace` / `SettingsScope`) with live Config forms, so both halves follow the new contract — a form's namespace is the profile entry id (`memento`), its editable fields are the `.volatile()` ones, and an accepted edit is committed into the running plugin instead of remounting it. The browser half reads that form through `ctx.configForms.get(entryId)` (the `ctx.settingsScope` service is gone). Both halves keep their `installSection` / `settingsScope` branches for the `0.1.2-rc.1`, `0.1.5-alpha.1` and `0.1.6-0` lines the peer range still advertises, and the new `>=0.1.7-0 <0.2.0` clause is what makes the target host itself installable (the old range excluded it by semver's prerelease rule). Still no plugin event-registration surface — `KNOWN_SESSION_EVENT_TYPES` does not carry `memory/*`, and `Session.append`'s third argument only carries a `SurfaceIntent` for surface-eligible types, so the audit gate stays adaptive and skips as before (it says so once per process and in `/memory audit`). Type evidence comes from three faces: the local checkout's built types, the pinned published line in `node_modules`, and the browser half under a DOM lib. |
 | Node | `^22.19.0 || >=24.0.0` |
 | Platforms | Windows / macOS / Linux (pure host; no native code, no network) |
 | Model | Any |
@@ -69,7 +69,7 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 
 All tunables are Schemastery `Config` fields (changeable from cordis.yml). Invalid values fail loudly at load. Override under the `memento` row.
 
-**Settings panel.** When the DSH settings service is mounted, every field below (except `enabled`) is editable from the plugin's own **`dsh-memento` entry in the DSH settings sidebar** (a top-level section, like General or Plugins); edits land in the settings user layer (`settings.yaml`) and need no file editing. Nearly everything applies live (write policies, language, budgets, limits, proposals, panel, `dbPath` / `auditRetentionDays` via a store reopen, `retrieval.vector` via a retriever swap) — only `snapshotOrder` needs a DSH reload. Without the settings service everything falls back to the composed cordis config, exactly as before. The floating panel button can be hidden from the same page (`panel.enabled`).
+**Settings panel.** On the `0.1.7` line the plugin's own `Config` **is** its settings page: the form's namespace is the profile entry id (`memento` — the `id:` of this bundle's row), the editable fields are exactly the ones the plugin declares `.volatile()` (every key below except `enabled`), and an accepted edit is merged into the profile's plugin row and committed into the running plugin — no file editing, no restart. Nearly everything applies live (write policies, language, budgets, limits, proposals, panel, `dbPath` / `auditRetentionDays` via a store reopen, `retrieval.vector` via a retriever swap); what a plugin registers at load time (`snapshotOrder`, tool descriptions) is re-read on reload, and the page marks those fields. Numeric bounds are declared in the schema as well, so an out-of-range edit is refused at write time instead of leaving an unusable config behind. On the older lines (`0.1.2-rc.1`, `0.1.5-alpha.1`, `0.1.6-0`) the same card edits the `dsh-memento` settings namespace exactly as before; with no settings service at all, everything falls back to the composed cordis config. The floating panel button can be hidden from the same page (`panel.enabled`).
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -107,7 +107,7 @@ All tunables are Schemastery `Config` fields (changeable from cordis.yml). Inval
 | `memory_recall` | tool | Bounded memory matches plus recent session-history matches |
 | `/memory` | command | `list` · `query` · `add` · `remove` · `consolidate` · `proposals` · `budgets` · `audit` · `export` · `import <path>` · `adapters` |
 | web panel | client drawer | Read-only: browse entries, search, budget bars, audit tail; the floating entry button can be hidden (`panel.enabled`) |
-| settings section | DSH settings sidebar → `dsh-memento` | Edit every config field (except `enabled`) without touching files; live vs reload-required timing is marked on the page |
+| settings section | DSH settings sidebar → `dsh-memento` | Edit every config field except `enabled` without touching files (namespace = the `memento` profile entry on the `0.1.7` line, the `dsh-memento` settings namespace before it); live vs reload-required timing is marked on the page |
 
 ## MCP server
 
