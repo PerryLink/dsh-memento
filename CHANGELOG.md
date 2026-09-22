@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.15] - 2026-09-22
+
 ### Changed
 
 - **适配 DeepSeek Harness `dsh-v0.1.7-alpha.1`（设置契约反转）**。`0.1.7` 线删掉了整条 settings 注册面（`installSettingsSection` / `SettingsProvider.installSection` / `SettingsNamespace` / `SettingsScope`，`@deepseek-ai/dsh-settings-file` 整包消失，`dsh-settings` 现在只有 `SettingsForms`），并删掉了客户端的 `ctx.settingsScope` 服务。两半各自迁移：
