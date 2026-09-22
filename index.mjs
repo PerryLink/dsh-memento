@@ -74,6 +74,8 @@ import { RetrievalProviderRegistry, SubstringRetriever, VectorRetriever, detectV
  * @property {(id: string, status: string) => object} proposalDecide
  * @property {() => void} close
  * @typedef {{request: (req: object) => Promise<string>, overrideOf?: (session: unknown) => string | undefined, config?: {policy?: string}}} ApprovalLike
+ * @typedef {object} SettingsServiceLike - 0.1.7-alpha 起 `ctx.settings`（SettingsForms）里本插件用到的面。
+ * @property {(presentation: {auto?: boolean}, owner: unknown) => () => void} configure - 声明本实例的呈现策略（本插件自带设置页 ⇒ auto:false），返回 disposer。
  * @typedef {object} ServiceDeps
  * @property {StoreHandle} store
  * @property {BudgetsConfig} budgets
@@ -137,10 +139,40 @@ export const DEFAULT_BUDGETS = Object.freeze({
 export const DEFAULT_SNAPSHOT_ORDER = -50
 
 /**
- * 插件配置（Schemastery）。Config 是 cordis 组合面（含 enabled 整体开关）；
- * SettingsSchema 是宿主设置面板的用户面（dsh-memento namespace，无 enabled——
- * false 时插件整体卸载、namespace 随之消失，从设置页开不回来）。两者共享同一组
- * 字段 schema（SHARED_CONFIG_FIELDS），面板改的是 settings.yaml 用户层。
+ * 给一个字段 schema 打开「实时引用」（宿主支持 `.volatile()` 时）。
+ *
+ * `.volatile()` 是 schemastery **3.18.3 起**的运行期方法，而本 schema 在模块
+ * 求值期构建：裸调用会让 peer 范围仍声明支持的 0.1.2-rc.1 / 0.1.5-alpha.1 /
+ * 0.1.6-0 线在 import 阶段硬崩。探测取用——旧 schemastery 上字段保持普通值，
+ * apply 拿到普通 config，设置面走旧线（见 apply 里的形状分派），行为与迁移前一致。
+ * @param {object} schema - 字段 schema（Schemastery Schema 实例）。
+ * @returns {object} 同一个 schema（宿主支持时已标 volatile）。
+ */
+function liveField(schema) {
+  const builder = /** @type {{volatile?: () => object}} */ (/** @type {unknown} */ (schema))
+  return typeof builder.volatile === 'function' ? builder.volatile() : schema
+}
+
+/**
+ * 插件配置（Schemastery）。Config 是 cordis 组合面（含 enabled 整体开关）。
+ *
+ * 0.1.7-alpha 起设置面反转：**插件自己的 Config 就是它的设置面**——表单的
+ * namespace 是 profile entry id（`cordis.patch.yml` 那行的 id，即
+ * {@link SETTINGS_ENTRY_ID}），可编辑字段恰好是标了 `.volatile()` 的字段，编辑由
+ * Loader 直接提交进 apply 收到的实时引用（volatile-only 提交不重挂 fiber，只发
+ * `loader/volatile-update`）。因此可编辑面**逐字段对齐旧线**：
+ * - SHARED_CONFIG_FIELDS 的每个字段与 `panel` 标 volatile——它们本来就是旧面板的
+ *   用户面；
+ * - `enabled` 保持普通字段：它是组合面开关，旧线同样不在面板里（false 时插件整体
+ *   卸载，从面板开不回来）；
+ * - 嵌套对象（budgets / recall / retrieval / proposals / panel）整对象标 volatile：
+ *   schemastery 拒绝 volatile 套 volatile，只支持固定对象路径。
+ *
+ * 数值下限（正整数 / 非负整数）同时写进 schema：设置编辑器在**持久化前**用本
+ * schema 解析合并后的 config，越界编辑在写入路径即被拒绝，而不是等到下一次加载
+ * 才把插件打成非法配置。跨字段规则（writePolicies 的键文法、budgets 形状）在
+ * schemastery 3.18.3 里无法表达（没有 `.check()`），仍由 {@link validateMemoryConfig}
+ * 在加载期与运行期响亮拒绝。
  * @typedef {object} Config
  * @property {boolean} [enabled] 整体开关；false 时工具/注入/服务/审批 answerer 全部消失。
  * @property {string} [dbPath] 记忆库路径；空 = $DSH_HOME/dsh-memento/memory.db（变更时重开 store，即时生效）。
@@ -164,57 +196,80 @@ export const DEFAULT_SNAPSHOT_ORDER = -50
  * @property {{enabled?: boolean}} [panel] Web 面板悬浮窗（热生效；false 时面板入口按钮消失，仅记忆面板，设置卡片不受影响）。
  */
 const SHARED_CONFIG_FIELDS = {
-  dbPath: Schema.string().default(''),
-  budgets: Schema.object({
+  dbPath: liveField(Schema.string().default('')),
+  budgets: liveField(Schema.object({
     user: Schema.object({
-      userGlobal: Schema.number().default(DEFAULT_BUDGETS.user.userGlobal),
-      workspace: Schema.number().default(DEFAULT_BUDGETS.user.workspace),
+      userGlobal: Schema.number().step(1).min(1).default(DEFAULT_BUDGETS.user.userGlobal),
+      workspace: Schema.number().step(1).min(1).default(DEFAULT_BUDGETS.user.workspace),
     }),
     agent: Schema.object({
-      userGlobal: Schema.number().default(DEFAULT_BUDGETS.agent.userGlobal),
-      workspace: Schema.number().default(DEFAULT_BUDGETS.agent.workspace),
+      userGlobal: Schema.number().step(1).min(1).default(DEFAULT_BUDGETS.agent.userGlobal),
+      workspace: Schema.number().step(1).min(1).default(DEFAULT_BUDGETS.agent.workspace),
     }),
-  }),
-  writePolicy: Schema.union(['ask', 'auto', 'off']).default('ask'),
-  writePolicies: Schema.dict(Schema.union(['ask', 'auto', 'off'])).default({}),
-  language: Schema.union(['en', 'zh']).default('en'),
-  snapshotOrder: Schema.number().default(DEFAULT_SNAPSHOT_ORDER),
-  maxEntriesPerQuery: Schema.number().default(20),
-  commandListLimit: Schema.number().default(50),
-  commandAuditLimit: Schema.number().default(10),
-  recall: Schema.object({
-    historyLimitDefault: Schema.number().default(8),
-    snippetCap: Schema.number().default(5),
-    snippetChars: Schema.number().default(300),
-    windowDays: Schema.number().default(30),
-  }),
-  retrieval: Schema.object({
+  })),
+  writePolicy: liveField(Schema.union(['ask', 'auto', 'off']).default('ask')),
+  writePolicies: liveField(Schema.dict(Schema.union(['ask', 'auto', 'off'])).default({})),
+  language: liveField(Schema.union(['en', 'zh']).default('en')),
+  snapshotOrder: liveField(Schema.number().default(DEFAULT_SNAPSHOT_ORDER)),
+  maxEntriesPerQuery: liveField(Schema.number().step(1).min(1).default(20)),
+  commandListLimit: liveField(Schema.number().step(1).min(1).default(50)),
+  commandAuditLimit: liveField(Schema.number().step(1).min(1).default(10)),
+  recall: liveField(Schema.object({
+    historyLimitDefault: Schema.number().step(1).min(1).default(8),
+    snippetCap: Schema.number().step(1).min(1).default(5),
+    snippetChars: Schema.number().step(1).min(1).default(300),
+    windowDays: Schema.number().step(1).min(1).default(30),
+  })),
+  retrieval: liveField(Schema.object({
     vector: Schema.boolean().default(false),
-  }),
-  panelEntriesLimit: Schema.number().default(200),
-  panelAuditLimit: Schema.number().default(20),
-  auditRetentionDays: Schema.number().default(0),
-  proposals: Schema.object({
+  })),
+  panelEntriesLimit: liveField(Schema.number().step(1).min(1).default(200)),
+  panelAuditLimit: liveField(Schema.number().step(1).min(1).default(20)),
+  auditRetentionDays: liveField(Schema.number().step(1).min(0).default(0)),
+  proposals: liveField(Schema.object({
     enabled: Schema.boolean().default(true),
-    maxChars: Schema.number().default(2000),
-    maxPending: Schema.number().default(8),
-  }),
+    maxChars: Schema.number().step(1).min(1).default(2000),
+    maxPending: Schema.number().step(1).min(1).default(8),
+  })),
+}
+
+/**
+ * 悬浮窗开关的字段 schema：`Config` 与旧线 `SettingsSchema` 共用同一形状。
+ *
+ * 旧线上 `panel.enabled` 只存在于设置 namespace（组合面没有这个键）；0.1.7-alpha
+ * 起设置面就是 Config 本身，所以它必须作为 volatile Config 字段存在——否则卡片上
+ * 的悬浮窗开关没有任何可写去处（「只对本来就是用户可配置的字段标 volatile」）。
+ * @returns {object} panel 字段 schema。
+ */
+function panelField() {
+  return Schema.object({
+    enabled: Schema.boolean().default(true),
+  })
 }
 
 export const Config = Schema.object({
   enabled: Schema.boolean().default(true),
   ...SHARED_CONFIG_FIELDS,
+  panel: liveField(panelField()),
 })
 
-/** 宿主设置弹窗一级项（client 端 settings.section 注册以本 namespace 为 id/页面来源）。 */
+/**
+ * 本插件的 profile entry id（= 宿主设置表单的 namespace）。
+ *
+ * 0.1.7-alpha 起 namespace 由**组合**决定而不是插件：表单按 profile entry id
+ * 取值，插件无从另选名字。本常量因此必须与 `cordis.patch.yml` 的 `id:` 一致
+ * （test/settings.test.mjs 直接读那个文件断言），浏览器半也用同一个字面量
+ * （client 打包面不跨插件取 value，见 client/client.js 的注释）。
+ */
+export const SETTINGS_ENTRY_ID = 'memento'
+
+/** 旧线设置 namespace（0.1.2-rc.1 / 0.1.5-alpha.1 / 0.1.6-0 的 installSection 面）。 */
 export const SETTINGS_NAMESPACE = 'dsh-memento'
 
-/** 设置面板用户面 schema：共享字段 + 悬浮窗开关；无 enabled（见 Config typedef）。 */
+/** 旧线设置面板用户面 schema：共享字段 + 悬浮窗开关；无 enabled（见 Config typedef）。 */
 export const SettingsSchema = Schema.object({
   ...SHARED_CONFIG_FIELDS,
-  panel: Schema.object({
-    enabled: Schema.boolean().default(true),
-  }),
+  panel: panelField(),
 })
 
 /**
@@ -807,21 +862,55 @@ function validateMemoryConfig(values) {
 }
 
 /**
+ * 读取 Loader 交付的实时 config 的普通值。
+ *
+ * 0.1.7-alpha 线上每个 volatile 字段是一个**实时引用**（`{get()}`）：Loader 把
+ * 表单编辑直接提交进这些引用（volatile-only 提交不重挂 fiber），所以每次读都必须
+ * 重新解引用——把 config 在 apply 开头冻成一份快照会让此后每一次热编辑都不可见。
+ * 旧线（无 `.volatile()`）拿到的是普通对象，原样返回。
+ * @param {PluginConfig} config - apply 收到的 config（实时引用或普通值）。
+ * @returns {PluginConfig} 普通值 config。
+ */
+function plainLiveConfig(config) {
+  const record = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (config))
+  // 只按一个已知的 volatile 字段判定形态：字段集合是本文件自己声明的。
+  const anchor = /** @type {{get?: unknown} | undefined} */ (record.language)
+  if (typeof anchor?.get !== 'function') return config
+  /** @type {Record<string, unknown>} */
+  const plain = {}
+  for (const [key, value] of Object.entries(record)) {
+    plain[key] = typeof (/** @type {{get?: unknown}} */ (value))?.get === 'function'
+      ? /** @type {{get: () => unknown}} */ (value).get()
+      : value
+  }
+  return /** @type {PluginConfig} */ (plain)
+}
+
+/**
  * 插件挂载。enabled:false 时不注册任何东西（工具/注入/服务/审批 answerer
  * 整体消失，不留半残状态）；库损坏/迁移失败/非法配置在加载期响亮抛错（S5）。
- * settings 服务可用时注册 dsh-memento namespace：启动早于首会话的常态下，
- * 启动期字段（dbPath/snapshotOrder/auditRetentionDays/retrieval.vector）在
- * store 打开前就吃到用户层；热字段（writePolicy(s)/language/budgets/proposals/
- * 各 limit/panel）随 onChange 即时生效。服务缺失（headless）时行为与组合配置
- * 完全一致。
+ *
+ * 设置面按宿主线形状分派（三条线各自都是官方接口，不自造机制）：
+ * - **0.1.7-alpha 起**：注册面消失，namespace = profile entry id，可编辑面 = Config
+ *   里标 volatile 的字段。插件只剩一件事——声明「本实例自带设置页」(`auto:false`)，
+ *   免得宿主再生成一份重复表单（本插件在 `settings.section` 有自定义卡片）。
+ *   形态探测而非版本号：`settings.configure` 在更老的线上不存在。
+ * - **0.1.2-rc.1 / 0.1.5-alpha.1 / 0.1.6-0**：`installSection` 是那些宿主上唯一的
+ *   注册面，保留原样（模块级 `installSettingsSection` 与类方法 `installSection`
+ *   两条发布线的形状分派）。
+ *
+ * 启动期字段（dbPath/snapshotOrder/auditRetentionDays/retrieval.vector）在 store
+ * 打开前就吃到用户层；热字段（writePolicy(s)/language/budgets/proposals/各 limit/
+ * panel）随变更即时生效。任何设置服务都不在场（headless）时行为与组合配置一致。
  * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文。
  * @param {object} config - 插件配置（cordis loader 已套 schema 默认值）。
  */
 export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
-  const resolved = resolveComposed(config)
+  const readLive = () => resolveComposed(plainLiveConfig(config))
+  const resolved = readLive()
   if (resolved.enabled === false) return
   validateMemoryConfig(resolved)
-  // 运行期可变值容器：settings onChange 维护；服务缺失时保持组合值。
+  // 运行期可变值容器：设置变更维护；服务缺失时保持组合值。
   /** @type {MemoryRuntimeValues} */
   const live = { ...resolved, retriever: null }
   /** @type {MemoryService | undefined} */
@@ -836,9 +925,15 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
   // 自持 disposer 的收尾序列：fiber 卸载时 vector 注册本身随 effect 树回收，本地引用
   // 必须同时清空——否则 HMR 重装或晚到的 settings 回调会二次调用已失效的 disposer。
   ctx.effect(() => () => { vectorDisposer = null }, 'dsh-memento.retrieval.vector.ref')
-  /** 当前解析值来源（settings 接线后指向 namespace scope）。 */
-  /** @type {() => MemoryRuntimeValues} */
-  let source = () => resolved
+  /**
+   * 当前解析值来源。
+   *
+   * 0.1.7-alpha 线**恒为实时读**：Loader 把表单编辑提交进 Config 的 volatile 引用，
+   * 每次读都重新解引用即可看见（懒读是热生效的全部机制，冻成快照会静默失效）。
+   * 旧线在 installSection 接线后改指向 namespace scope（组合层 + 用户层）。
+   * @type {() => MemoryRuntimeValues}
+   */
+  let source = readLive
   const onChange = () => {
     const next = source()
     try {
@@ -954,11 +1049,27 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
       })
     }
   }
+
+  // volatile-only 提交不重挂 fiber：Loader 把新值提交进 Config 的实时引用并发本事件
+  // （`@deepseek-ai/cordis-plugin-loader` 只作类型面引用，import type 运行期擦除）。
+  // 启动期字段的副作用（重开 store / 换检索器 / 留痕）只能在这里对账——见 onChange。
+  ctx.on('loader/volatile-update', onChange)
+
   ctx.inject(['settings'], (sctx) => {
-    // 官方安装 API 的双发布线取用。dsh-settings 有两条发布线：宿主内置副本
-    // （0.1.1-rc.1 形状，npm 未发布该形状）导出模块级 installSettingsSection；
-    // npm 发布线（alpha.3/alpha.4）把同能力放在 SettingsProvider 类方法
-    // installSection。两条线各自都是官方接口，这里只做形状分派，不自造机制。
+    const settings = /** @type {SettingsServiceLike | undefined} */ (sctx.get('settings'))
+    // 0.1.7-alpha 线：注册面不存在，namespace = profile entry id，插件只剩「本实例
+    // 自带设置页」这一条策略（auto:false = 不要生成表单，设置面在 settings.section
+    // 的自定义卡片上）。策略必须挂在 effect 上持有 disposer：configure 对同一 fiber
+    // 重复调用会抛（服务被替换/回调重跑都会撞），disposer 先跑才谈得上重注册。
+    if (typeof settings?.configure === 'function') {
+      sctx.effect(() => /** @type {SettingsServiceLike} */ (settings).configure({ auto: false }, ctx.fiber), 'dsh-memento: settings presentation')
+      return
+    }
+    // 旧线（0.1.2-rc.1 / 0.1.5-alpha.1 / 0.1.6-0）：installSection 是那些宿主上唯一的
+    // 设置注册面。官方安装 API 的双发布线取用：宿主内置副本（0.1.1-rc.1 形状，npm 未
+    // 发布该形状）导出模块级 installSettingsSection；npm 发布线（alpha.3/alpha.4）把同
+    // 能力放在 SettingsProvider 类方法 installSection。两条线各自都是官方接口，这里只做
+    // 形状分派，不自造机制。
     /** @typedef {{setSource: (fn: () => MemoryRuntimeValues) => void, onChange: () => void, validate: (value: object) => void}} SettingsInstallHooks */
     /** @type {SettingsInstallHooks} */
     const hooks = {
@@ -973,9 +1084,10 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
       moduleInstall(sctx, SETTINGS_NAMESPACE, SettingsSchema, resolved, hooks)
       return
     }
-    const settingsService = /** @type {Record<string, unknown>} */ (/** @type {{settings: unknown}} */ (/** @type {unknown} */ (sctx)).settings)
+    const settingsService = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (settings))
     // 方法须以 settingsService 为 receiver 调用（属性链调用），脱钩会丢 this。
-    const providerInstall = /** @type {(owner: object, ns: string, schema: object, entry: object, hooks: SettingsInstallHooks) => void} */ (settingsService.installSection)
+    const providerInstall = /** @type {null | ((owner: object, ns: string, schema: object, entry: object, hooks: SettingsInstallHooks) => void)} */ (settingsService.installSection ?? null)
+    if (providerInstall === null) return
     providerInstall.call(settingsService, ctx, SETTINGS_NAMESPACE, SettingsSchema, resolved, hooks)
   })
   let store = openMemoryStore(resolveDbPath(resolved.dbPath), { retentionDays: resolved.auditRetentionDays })

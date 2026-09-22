@@ -62,8 +62,25 @@ function teardown(mounted) {
   rmSync(mounted.dir, { recursive: true, force: true })
 }
 
+/**
+ * schema 解析结果的普通值面。
+ *
+ * 0.1.7-alpha 起可编辑字段是 volatile 的：`Config(x)` 交出的对应字段是**实时引用**
+ * （`{get()}`），这正是 Loader 交给 `apply` 的形态。断言默认值/覆盖时经 `.get()` 读值。
+ * @param {object} input - 原始配置。
+ * @returns {Record<string, unknown>} 普通值 config。
+ */
+function parseConfig(input) {
+  /** @type {Record<string, {get: () => unknown}>} */
+  const parsed = /** @type {any} */ (Config(input))
+  return Object.fromEntries(Object.entries(parsed).map(([key, value]) => [
+    key,
+    typeof value?.get === 'function' ? value.get() : value,
+  ]))
+}
+
 test('Config schema：默认值齐备，覆盖生效（F4）', () => {
-  const normalized = Config({})
+  const normalized = parseConfig({})
   assert.equal(normalized.enabled, true)
   assert.equal(normalized.dbPath, '')
   assert.equal(normalized.writePolicy, 'ask')
@@ -71,13 +88,14 @@ test('Config schema：默认值齐备，覆盖生效（F4）', () => {
   assert.equal(normalized.snapshotOrder, -50)
   assert.equal(normalized.maxEntriesPerQuery, 20)
   assert.deepEqual(normalized.budgets, DEFAULT_BUDGETS)
-  const overridden = Config({ writePolicy: 'off', budgets: { user: { userGlobal: 100, workspace: 100 }, agent: { userGlobal: 100, workspace: 100 } } })
+  assert.deepEqual(normalized.panel, { enabled: true })
+  const overridden = parseConfig({ writePolicy: 'off', budgets: { user: { userGlobal: 100, workspace: 100 }, agent: { userGlobal: 100, workspace: 100 } } })
   assert.equal(overridden.writePolicy, 'off')
-  assert.equal(overridden.budgets.user.userGlobal, 100)
+  assert.equal(/** @type {any} */ (overridden.budgets).user.userGlobal, 100)
 })
 
 test('Config schema：language 仅 en/zh，非法值加载期响亮失败', () => {
-  assert.equal(Config({ language: 'zh' }).language, 'zh')
+  assert.equal(parseConfig({ language: 'zh' }).language, 'zh')
   assert.throws(() => Config({ language: 'fr' }), '非法 language 在 schema 层被拒绝')
 })
 

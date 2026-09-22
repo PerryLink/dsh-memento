@@ -6,6 +6,9 @@
 //   （真 Cordis 的 Disposable 就是函数），重复调用是 no-op；
 // - provide 的 disposer 与 effect 一样随卸载生效（近似 fiber 自动回收）；
 // - inject 在依赖服务齐备时立即回调，否则登记、provide 齐备时补回调；
+// - **inject 的回调拿到子 Context**（真 Cordis 里 inject = ctx.plugin({inject, apply})，
+//   apply 的 ctx 是子 fiber 的 Context：既有服务属性面，也有 get/effect/on）；服务被
+//   替换时旧子 fiber 先卸载、再重跑回调；
 // - waterfall 的 next() 续链、prepend 排序。
 
 /**
@@ -21,6 +24,8 @@ export function createMockCtx(opts = {}) {
   const cleanups = []
   /** @type {Array<() => boolean>} */
   const pendingInjects = []
+  /** @type {Array<{deps: string[], attempt: () => boolean}>} */
+  const activeInjects = []
   const approval = opts.approval ?? { request: async () => 'unavailable' }
 
   const ctx = {
@@ -51,22 +56,66 @@ export function createMockCtx(opts = {}) {
       return dispose
     },
     inject(deps, callback) {
+      // 真 Cordis：回调拿到子 fiber 的 Context（服务属性面 + get/effect/on 都在），
+      // 子 fiber 卸载时它自己的 effect 一并回收。
+      /** @type {{cleanups: Array<() => void>} | null} */
+      let child = null
+      const disposeChild = () => {
+        if (child === null) return
+        const held = child
+        child = null
+        for (const cleanup of held.cleanups.reverse()) cleanup()
+      }
       const attempt = () => {
         const faces = deps.map((name) => services.get(name))
         if (faces.some((face) => face === undefined)) return false
+        disposeChild()
+        const held = { cleanups: /** @type {Array<() => void>} */ ([]) }
         /** @type {Record<string, unknown>} */
-        const host = {}
-        deps.forEach((/** @type {string} */ name, /** @type {number} */ index) => { host[name] = faces[index] })
-        callback(host)
+        const face = {
+          get: (/** @type {string} */ name) => services.get(name),
+          on: (/** @type {string} */ name, /** @type {Function} */ fn, /** @type {object|boolean|undefined} */ options) => ctx.on(name, fn, options),
+          effect(/** @type {() => unknown} */ cb) {
+            let cleanup
+            try {
+              cleanup = cb()
+            } catch (error) {
+              cleanup = () => { throw error }
+            }
+            let disposed = false
+            const dispose = () => {
+              if (disposed) return
+              disposed = true
+              if (typeof cleanup === 'function') cleanup()
+            }
+            held.cleanups.push(dispose)
+            return dispose
+          },
+        }
+        deps.forEach((/** @type {string} */ name, /** @type {number} */ index) => { face[name] = faces[index] })
+        child = held
+        callback(face)
         return true
       }
-      if (!attempt()) pendingInjects.push(attempt)
+      const record = { deps, attempt }
+      if (!attempt()) pendingInjects.push(record)
+      else activeInjects.push(record)
+      // 插件 fiber 卸载时子 fiber 一并卸载（真 Cordis 的父子 fiber 关系）。
+      cleanups.push(disposeChild)
       return () => {}
     },
     provide(name, value) {
       services.set(name, value)
+      // 服务替换：依赖它的子 fiber 先卸载、回调再跑一遍（真 Cordis 的 inject 语义）。
+      // 先处理**已在场**的注入，再激活待定的——否则本次激活会被自己的替换循环二次触发。
+      for (const record of [...activeInjects]) {
+        if (record.deps.includes(name)) record.attempt()
+      }
       for (let index = pendingInjects.length - 1; index >= 0; index--) {
-        if (pendingInjects[index]()) pendingInjects.splice(index, 1)
+        if (pendingInjects[index].attempt()) {
+          activeInjects.push(pendingInjects[index])
+          pendingInjects.splice(index, 1)
+        }
       }
       const remove = () => { services.delete(name) }
       cleanups.push(remove)

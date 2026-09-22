@@ -5,10 +5,11 @@
 // contributions through the authoritative registries and executes one real
 // behavior. Config is applied by the Loader, so the expected outcome proves
 // the config in the file was honored. The `reload` scenario additionally
-// rewrites the cordis.yml twice (language en → zh → en) and drives the
-// include entry's refresh() — the same transaction the HMR watcher triggers —
-// asserting the panel routes unload with the fiber and re-register without a
-// duplicate route.
+// rewrites the cordis.yml and drives the include entry's refresh() — the same
+// transaction the HMR watcher triggers — asserting the two halves of the
+// 0.1.7-alpha config contract: a VOLATILE-only edit is committed into the
+// running fiber (same service instance, no route churn), while an ORDINARY
+// edit remounts it (contribution teardown, then a single clean re-registration).
 //
 // Usage: node scripts/loader-runner.mjs <cordis.yml> en|zh|reload
 // Exit 0 prints DSH_LOADER_RESULT <json>; any assertion or load failure exits
@@ -83,35 +84,70 @@ try {
     const webServer = /** @type {any} */ (ctx.get('webServer'))
     if (webServer === undefined) throw new Error('reload: the mock webServer row did not mount')
     /**
-     * Assert the seam (service + tools), the language knob, and the routes.
-     * @param {string} language - the expected tool-description language.
+     * 改写配置并跑一次 HMR 同一路径的 refresh()。
+     * @param {string} from - 被替换的原文。
+     * @param {string} to - 替换后的文本。
      */
-    const assertBase = (language) => {
-      if (ctx.get('memory') === undefined) throw new Error('reload: ctx.memory service is missing')
-      const tool = ctx.tools.get('memory')
-      if (tool === undefined) throw new Error('reload: memory tool is missing')
-      const languageOk = language === 'zh' ? tool.description.includes('读写') : tool.description.includes('bounded')
-      if (!languageOk) throw new Error(`reload: memory tool description does not reflect language=${language}`)
-      if (webServer.list().length !== 3) throw new Error(`reload: expected 3 routes, got ${webServer.list().length}`)
+    const editConfig = async (from, to) => {
+      writeFileSync(configPath, readFileSync(configPath, 'utf8').replace(from, to))
+      await include.refresh()
+      await ctx.loader.await()
+    }
+    /**
+     * 断言当前注册路由条数。
+     * @param {number} count - 期望条数。
+     * @param {string} where - 断言位置（错误信息用）。
+     */
+    const expectRoutes = (count, where) => {
+      if (webServer.list().length !== count) throw new Error(`reload/${where}: expected ${count} routes, got ${webServer.list().length}`)
+    }
+    /**
+     * 断言工具描述的文案语言（注册期固定的面）。
+     * @param {{description: string}} tool - tools 注册表里的 memory 工具。
+     * @param {string} language - 期望语言。
+     * @param {string} where - 断言位置（错误信息用）。
+     */
+    const expectLanguage = (tool, language, where) => {
+      const ok = language === 'zh' ? tool.description.includes('读写') : tool.description.includes('bounded')
+      if (!ok) throw new Error(`reload/${where}: memory tool description does not reflect language=${language}`)
     }
 
     // Phase 1: initial mount — seam live, English description, 3 routes.
-    assertBase('en')
+    const first = ctx.get('memory')
+    if (first === undefined) throw new Error('reload: ctx.memory service is missing')
+    expectRoutes(3, 'initial')
+    const firstTool = ctx.tools.get('memory')
+    expectLanguage(firstTool, 'en', 'initial')
+    const firstRoutes = webServer.list().slice()
 
-    // Phase 2: language:'zh' — the fiber restarts with the new config; the
-    // routes unload and re-register without a duplicate route.
-    writeFileSync(configPath, readFileSync(configPath, 'utf8').replace("language: 'en'", "language: 'zh'"))
-    await include.refresh()
-    await ctx.loader.await()
-    assertBase('zh')
+    // Phase 2: language:'zh' is a VOLATILE field — the Loader commits it into the
+    // running fiber's own reference and emits `loader/volatile-update`; the plugin
+    // is NOT remounted, so the service instance and the registered routes survive
+    // (`language` reaches commands/snapshot/panel live; registration-time surfaces
+    // such as the tool description follow on reload, which is the documented split).
+    await editConfig("language: 'en'", "language: 'zh'")
+    if (ctx.get('memory') !== first) throw new Error('reload/volatile: a volatile-only edit must not remount the fiber')
+    if (webServer.list().length !== 3 || webServer.list().some((/** @type {object} */ route, /** @type {number} */ index) => route !== firstRoutes[index])) {
+      throw new Error('reload/volatile: registered routes must survive a volatile-only edit')
+    }
+    if (first.language !== 'zh') throw new Error(`reload/volatile: hot field did not apply (language=${first.language})`)
+    expectLanguage(ctx.tools.get('memory'), 'en', 'volatile')
 
-    // Phase 3: back to 'en' — a second cycle must behave the same.
-    writeFileSync(configPath, readFileSync(configPath, 'utf8').replace("language: 'zh'", "language: 'en'"))
-    await include.refresh()
-    await ctx.loader.await()
-    assertBase('en')
+    // Phase 3: `enabled` is ORDINARY config — an edit to it remounts the fiber and
+    // every contribution unloads (no half-state, no duplicate route).
+    await editConfig('enabled: true', 'enabled: false')
+    if (ctx.get('memory') !== undefined) throw new Error('reload/ordinary: the memory service survived an ordinary remount')
+    expectRoutes(0, 'disabled')
 
-    process.stdout.write(`DSH_LOADER_RESULT ${JSON.stringify({ routes: webServer.list().length, cycled: true })}\n`)
+    // Phase 4: back on — a second cycle must behave the same, with exactly one
+    // registration of every contribution.
+    await editConfig('enabled: false', 'enabled: true')
+    const second = ctx.get('memory')
+    if (second === undefined || second === first) throw new Error('reload/ordinary: the memory service did not come back as a new instance')
+    expectRoutes(3, 'remounted')
+    expectLanguage(ctx.tools.get('memory'), 'zh', 'remounted')
+
+    process.stdout.write(`DSH_LOADER_RESULT ${JSON.stringify({ routes: webServer.list().length, cycled: true, volatileInPlace: ctx.get('memory') === second })}\n`)
   } else {
   // Authoritative registries carry the plugin's contributions.
   if (ctx.get('memory') === undefined) {

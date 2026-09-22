@@ -13,6 +13,18 @@
 //   已复核的线：0.1.5-rc.6（2026-09-02）、0.1.2-rc.1 / 0.1.3-alpha.1（2026-09-04）、
 //   0.1.6-alpha.2（2026-09-18）——四条结论一致，词汇与载荷形状在本文件定死。
 
+/**
+ * Loader 事件面：`loader/volatile-update`（volatile-only 提交，不重挂 fiber）。
+ *
+ * 类型面来自 devDependency `@deepseek-ai/cordis-plugin-loader`——Loader 由宿主组
+ * 装，本包只在**类型**上引用它（`import type` 运行期擦除），1.0.4 是第一个声明该
+ * 事件的发布；旧 Loader 永不发这个事件，本插件那时也没有需要对账的实时引用。
+ * 放在本文件是因为它是三把类型尺子都会加载的契约面（`scripts/loader-runner.mjs`
+ * 也 import 同一个包，所以删掉本行并不会让事件失去类型——实测；本行是「本包依赖
+ * Loader 事件面」这条依赖关系的声明处，不靠尺子里的巧合成立）。
+ */
+import type {} from '@deepseek-ai/cordis-plugin-loader'
+
 export type MemoryTrack = 'user' | 'agent'
 
 export type MemoryScope = 'user-global' | 'workspace'
