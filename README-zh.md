@@ -29,7 +29,7 @@
 
 | Surface | Status |
 |---|---|
-| Harness | DeepSeek Harness `dsh-v0.1.7-alpha.1`（2026-09-22 适配）：`0.1.7` 线把整条设置注册面（`installSettingsSection` / `SettingsProvider.installSection` / `SettingsNamespace` / `SettingsScope`）换成 live config 表单——表单的 namespace 就是 profile entry id（`memento`），可编辑字段就是标了 `.volatile()` 的那些，被接受的编辑**提交进运行中的插件**而不是重挂它。浏览器半经 `ctx.configForms.get(entryId)` 读同一份表单（`ctx.settingsScope` 服务已删）。两侧都保留了 `installSection` / `settingsScope` 分支，peer 区间仍声明支持 `0.1.2-rc.1`、`0.1.5-alpha.1`、`0.1.6-0` 三条线；新增的 `>=0.1.7-0 <0.2.0` 这一段是修 bug——旧范围按 semver 预发布规则把目标宿主本身排除在外。仍无插件事件注册面——`KNOWN_SESSION_EVENT_TYPES` 不含 `memory/*`，且 `Session.append` 第三参只承载 surface 类型的 `SurfaceIntent`，故审计门保持自适应、行为不变（会在进程内告警一次，并在 `/memory audit` 输出里明示缺口）。类型证据来自三个面：本机 checkout 的已构建类型、`node_modules` 里钉住的已发布线、以及 DOM 库下的浏览器半侧。 |
+| Harness | DeepSeek Harness `dsh-v0.1.7-alpha.2`（2026-09-22 适配）：`0.1.7` 线把整条设置注册面（`installSettingsSection` / `SettingsProvider.installSection` / `SettingsNamespace` / `SettingsScope`）换成 live config 表单——表单的 namespace 就是 profile entry id（`memento`），可编辑字段就是标了 `.volatile()` 的那些，被接受的编辑**提交进运行中的插件**而不是重挂它。浏览器半经 `ctx.configForms.get(entryId)` 读同一份表单（`ctx.settingsScope` 服务已删）。两侧都保留了 `installSection` / `settingsScope` 分支，peer 区间仍声明支持 `0.1.2-rc.1`、`0.1.5-alpha.1`、`0.1.6-0` 三条线；新增的 `>=0.1.7-0 <0.2.0` 这一段是修 bug——旧范围按 semver 预发布规则把目标宿主本身排除在外。仍无插件事件注册面——`KNOWN_SESSION_EVENT_TYPES` 不含 `memory/*`，且 `Session.append` 第三参只承载 surface 类型的 `SurfaceIntent`，故审计门保持自适应、行为不变（会在进程内告警一次，并在 `/memory audit` 输出里明示缺口）。类型证据来自三个面：本机 checkout 的已构建类型、`node_modules` 里钉住的已发布线、以及 DOM 库下的浏览器半侧。 |
 | Node | `^22.19.0 || >=24.0.0` |
 | Platforms | Windows / macOS / Linux（纯 host；无原生代码、无网络） |
 | Model | 任意 |
