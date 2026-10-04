@@ -3,7 +3,7 @@
 //
 // 两把尺子量的是**两个不同的类型宇宙**，这是它们存在的唯一理由：
 // - 本脚本（tsconfig.check.json）：`paths` 指向 D:\deepseek-harness 这颗 checkout 的
-//   已构建类型面（当前 checkout = dsh-v0.1.6-alpha.2）。量的是"宿主源码线的形状"。
+//   已构建类型面（当前 checkout = dsh-v0.2.1-alpha.1）。量的是"宿主源码线的形状"。
 // - `typecheck:ci`（tsconfig.check.ci.json）：无 `paths`，量 npm 已发布线
 //   （devDependencies 钉住的那版 node_modules）。量的是"用户实际装到的形状"。
 // 只有两把都跑，才能同时发现"对照源码写对了但发布线还没有"和"发布线有、源码线已删"。
