@@ -6,31 +6,31 @@
 # （`^4.0.2` / `^3.18.2`）虽覆盖这些版本，但已钉旧 patch 的 lockfile
 # 会继续解析到旧版，所以下限必须显式写死。
 overrides:
-  '@deepseek-ai/cordis': 4.0.3
-  '@deepseek-ai/cosmokit': 1.8.4
-  '@deepseek-ai/schemastery': 3.18.3
+  '@deepseek-ai/cordis': 4.0.5-alpha.1
+  '@deepseek-ai/cosmokit': 1.8.6-alpha.1
+  '@deepseek-ai/schemastery': 3.18.5-alpha.1
 
 minimumReleaseAgeExclude:
   - '@deepseek-ai/*'
-  - '@deepseek-ai/cordis@4.0.3 || 0.1.7-rc.2'
-  - '@deepseek-ai/cordis-plugin-loader@1.0.4 || 0.1.7-rc.2'
-  - '@deepseek-ai/cosmokit@1.8.4 || 0.1.7-rc.2'
-  - '@deepseek-ai/dsh-agent@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2'
-  - '@deepseek-ai/dsh-attachment@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2'
-  - '@deepseek-ai/dsh-brand@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2'
-  - '@deepseek-ai/dsh-code-runtime@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2'
-  - '@deepseek-ai/dsh-invariants@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2'
-  - '@deepseek-ai/dsh-llm@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2'
-  - '@deepseek-ai/dsh-scope@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2'
-  - '@deepseek-ai/dsh-session-projection@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2'
-  - '@deepseek-ai/dsh-session@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2'
-  - '@deepseek-ai/dsh-settings@0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2'
-  - '@deepseek-ai/dsh-system-prompt@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2'
-  - '@deepseek-ai/dsh-timeout@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2'
-  - '@deepseek-ai/dsh-tools@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2'
-  - '@deepseek-ai/dsh-typert-protocol@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2'
-  - '@deepseek-ai/dsh-user-approval@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2'
-  - '@deepseek-ai/dsh-util-crypto@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2'
-  - '@deepseek-ai/dsh-util-values@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2'
-  - '@deepseek-ai/schemastery@3.18.2 || 3.18.3 || 0.1.7-rc.2'
+  - '@deepseek-ai/cordis@4.0.3 || 0.1.7-rc.2 || 0.2.1-alpha.1'
+  - '@deepseek-ai/cordis-plugin-loader@1.0.4 || 0.1.7-rc.2 || 0.2.1-alpha.1'
+  - '@deepseek-ai/cosmokit@1.8.4 || 0.1.7-rc.2 || 0.2.1-alpha.1'
+  - '@deepseek-ai/dsh-agent@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2 || 0.2.1-alpha.1'
+  - '@deepseek-ai/dsh-attachment@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2 || 0.2.1-alpha.1'
+  - '@deepseek-ai/dsh-brand@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2 || 0.2.1-alpha.1'
+  - '@deepseek-ai/dsh-code-runtime@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2 || 0.2.1-alpha.1'
+  - '@deepseek-ai/dsh-invariants@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2 || 0.2.1-alpha.1'
+  - '@deepseek-ai/dsh-llm@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2 || 0.2.1-alpha.1'
+  - '@deepseek-ai/dsh-scope@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2 || 0.2.1-alpha.1'
+  - '@deepseek-ai/dsh-session-projection@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2 || 0.2.1-alpha.1'
+  - '@deepseek-ai/dsh-session@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2 || 0.2.1-alpha.1'
+  - '@deepseek-ai/dsh-settings@0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2 || 0.2.1-alpha.1'
+  - '@deepseek-ai/dsh-system-prompt@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2 || 0.2.1-alpha.1'
+  - '@deepseek-ai/dsh-timeout@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2 || 0.2.1-alpha.1'
+  - '@deepseek-ai/dsh-tools@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2 || 0.2.1-alpha.1'
+  - '@deepseek-ai/dsh-typert-protocol@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2 || 0.2.1-alpha.1'
+  - '@deepseek-ai/dsh-user-approval@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2 || 0.2.1-alpha.1'
+  - '@deepseek-ai/dsh-util-crypto@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2 || 0.2.1-alpha.1'
+  - '@deepseek-ai/dsh-util-values@0.1.2-alpha.2 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.7-alpha.2 || 0.1.7-rc.2 || 0.2.1-alpha.1'
+  - '@deepseek-ai/schemastery@3.18.2 || 3.18.3 || 0.1.7-rc.2 || 0.2.1-alpha.1'
 verifyDepsBeforeRun: false
