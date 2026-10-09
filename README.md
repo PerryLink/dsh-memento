@@ -36,6 +36,14 @@
 *English:* part of a 40+ plugin family for DeepSeek Harness. If it is useful, **a star helps the next person find it** — nothing is gated behind it.
 
 
+## What is dsh-memento?
+
+Bounded, layered, approval-gated, auditable cross-session memory for DeepSeek Harness.
+
+A typed `ctx.memory` seam, a write-approval gate no model path can bypass, and an audit trail you can rebuild — from the approval pair plus the plugin's own audit table, with the session-log gap named out loud.
+
+![Terminal demo of dsh-memento: dsh-memento — read-only stdio MCP server, tools/list over JSON-RPC](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo.png)
+
 ## Maintenance status: 🧊 FROZEN
 
 > **Frozen on 2026-10-05. No new features.** This package still works, and it is not retired — but it no longer receives feature work. Only a genuine breakage will be fixed.
@@ -58,6 +66,12 @@ Maintainers treat this capability as one where **better-adopted alternatives now
 👉 **For new work, prefer any of the above — but check the compatibility guard first.** Existing installs keep working unchanged; nothing is being removed.
 
 *Full evidence, including the host-version compatibility matrix: `dsh-plugin-supersession-review-20261005.md`.*
+
+## Comparison
+
+![Measured comparison chart for dsh-memento](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-evidence.png)
+
+measured 2026-10-05 · from the README's FROZEN maintenance table (npm weekly downloads)
 
 ## Compatibility
 
@@ -82,8 +96,12 @@ Two tracks × two layers × per-agent key: a `user` track (facts about the user)
 ## Quick start
 
 ```sh
+dsh plugin --profile web add github:PerryLink/dsh-memento
+```
+
+```sh
 # 1. install the bundle into your profile
-dsh plugin --profile web add "github:PerryLink/dsh-memento#main"
+dsh plugin --profile web add github:PerryLink/dsh-memento
 
 # or from npm (published releases)
 dsh plugin --profile web add dsh-memento

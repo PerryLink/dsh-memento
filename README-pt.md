@@ -34,6 +34,14 @@
 Este plugin faz parte da [família de plugins DSH](https://github.com/PerryLink) (mais de 40, todos Apache-2.0). Se for útil, **deixe uma estrela**: não desbloqueia nada, mas ajuda a próxima pessoa a encontrá-lo.
 
 *English:* part of a 40+ plugin family for DeepSeek Harness. If it is useful, **a star helps the next person find it** — nothing is gated behind it.
+## What is dsh-memento?
+
+Memória entre sessões limitada, em camadas, com porta de aprovação e auditável para o DeepSeek Harness.
+
+Uma costura tipada `ctx.memory`, uma porta de aprovação de escrita que nenhum caminho do modelo pode contornar e uma auditoria reconstruível — do par de aprovação mais a tabela de auditoria do plugin, com a lacuna do log de sessão dita em voz alta.
+
+![Demonstração de terminal do dsh-memento: dsh-memento — read-only stdio MCP server, tools/list over JSON-RPC](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo.png)
+
 ## Status de manutenção: 🧊 CONGELADO
 
 > **Congelado em 2026-10-05. Sem novos recursos.** Este pacote continua funcionando e **não foi aposentado**, mas não recebe mais trabalho de recursos; apenas uma falha real será corrigida.
@@ -50,6 +58,12 @@ Os mantenedores consideram que nesta capacidade **já existem alternativas com m
 👉 **Para trabalho novo, prefira qualquer uma das anteriores, mas verifique antes a barreira de compatibilidade.** As instalações existentes continuam funcionando sem alterações.
 
 *Evidência completa: `dsh-plugin-supersession-review-20261005.md`. Texto completo na seção **Maintenance status: 🧊 FROZEN** de [README.md](README.md).*
+
+## Comparison
+
+![Gráfico comparativo medido do dsh-memento](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-evidence.png)
+
+measured 2026-10-05 · from the README's FROZEN maintenance table (npm weekly downloads)
 
 ## Compatibility
 
@@ -74,8 +88,12 @@ Duas trilhas × duas camadas × chave por agente: uma trilha `user` (fatos sobre
 ## Quick start
 
 ```sh
+dsh plugin --profile web add github:PerryLink/dsh-memento
+```
+
+```sh
 # 1. install the bundle into your profile
-dsh plugin --profile web add "github:PerryLink/dsh-memento#main"
+dsh plugin --profile web add github:PerryLink/dsh-memento
 
 # or from npm (published releases)
 dsh plugin --profile web add dsh-memento

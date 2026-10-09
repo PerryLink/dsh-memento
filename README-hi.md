@@ -34,6 +34,14 @@
 यह प्लगइन [DSH प्लगइन परिवार](https://github.com/PerryLink) का हिस्सा है (40+ प्लगइन, सभी Apache-2.0)। अगर यह उपयोगी लगे, तो **एक स्टार दें** — इससे कोई सुविधा अनलॉक नहीं होती, पर अगला व्यक्ति इसे खोज में आसानी से पा लेता है।
 
 *English:* part of a 40+ plugin family for DeepSeek Harness. If it is useful, **a star helps the next person find it** — nothing is gated behind it.
+## What is dsh-memento?
+
+DeepSeek Harness के लिए परिबद्ध, स्तरित, अनुमोदन-द्वारी, लेखा-परीक्षण-योग्य क्रॉस-सेशन मेमोरी।
+
+एक टाइप्ड `ctx.memory` सीम, एक राइट-अनुमोदन द्वार जिसे मॉडल का कोई रास्ता बायपास नहीं कर सकता, और एक पुनर्निर्मेय ऑडिट — अनुमोदन जोड़ी और प्लगइन की अपनी ऑडिट तालिका से, सेशन लॉग की कमी को खुलकर बताते हुए।
+
+![dsh-memento का टर्मिनल डेमो: dsh-memento — read-only stdio MCP server, tools/list over JSON-RPC](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo.png)
+
 ## रखरखाव स्थिति: 🧊 फ़्रीज़
 
 > **2026-10-05 से फ़्रीज़। कोई नई सुविधा नहीं।** यह पैकेज अभी भी काम करता है और **सेवानिवृत्त नहीं है**, पर अब इसमें नई सुविधाओं का काम नहीं होगा; केवल वास्तविक खराबी ठीक की जाएगी।
@@ -50,6 +58,12 @@
 👉 **नए काम के लिए ऊपर दिए गए किसी भी विकल्प को प्राथमिकता दें — पर पहले संगतता गार्ड जाँच लें।** मौजूदा इंस्टॉल बिना किसी बदलाव के काम करते रहेंगे।
 
 *पूर्ण प्रमाण: `dsh-plugin-supersession-review-20261005.md`। पूरा पाठ [README.md](README.md) के **Maintenance status: 🧊 FROZEN** अनुभाग में।*
+
+## Comparison
+
+![dsh-memento का मापा गया तुलना चार्ट](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-evidence.png)
+
+measured 2026-10-05 · from the README's FROZEN maintenance table (npm weekly downloads)
 
 ## Compatibility
 
@@ -74,8 +88,12 @@
 ## Quick start
 
 ```sh
+dsh plugin --profile web add github:PerryLink/dsh-memento
+```
+
+```sh
 # 1. install the bundle into your profile
-dsh plugin --profile web add "github:PerryLink/dsh-memento#main"
+dsh plugin --profile web add github:PerryLink/dsh-memento
 
 # or from npm (published releases)
 dsh plugin --profile web add dsh-memento

@@ -34,6 +34,14 @@
 这个插件是 [DSH 插件家族](https://github.com/PerryLink)的一员（40+ 个，全部 Apache-2.0）。如果你在用，**给个 star** —— 它不会解锁任何功能，但会让下一个人在搜索里更容易找到它。
 
 *English:* part of a 40+ plugin family for DeepSeek Harness. If it is useful, **a star helps the next person find it** — nothing is gated behind it.
+## What is dsh-memento?
+
+给 DeepSeek Harness 补上有界、分层、带审批门、可审计的跨会话记忆。
+
+一个类型安全的 `ctx.memory` 接缝、模型绕不过去的写入审批门，以及可重建的审计链——来自审批对加插件自有审计表，并把会话日志侧的缺口说出来。
+
+![dsh-memento 终端演示：dsh-memento — read-only stdio MCP server, tools/list over JSON-RPC](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo.png)
+
 ## 维护状态：🧊 已冻结
 
 > **2026-10-05 起冻结，不再新增功能。** 本包仍可正常使用，**没有退役**——但不再投入功能开发，只有真实故障才会修复。
@@ -56,6 +64,12 @@
 👉 **新工作请优先使用上述任一替代品——但请先确认它是否被兼容性守卫放行。** 已安装的照常可用，没有任何东西被移除。
 
 *完整证据（含宿主版本兼容矩阵）见 `dsh-plugin-supersession-review-20261005.md`；英文版见 [README.md](README.md) 的 **Maintenance status: 🧊 FROZEN** 一节。*
+
+## Comparison
+
+![dsh-memento 的实测对比柱状图](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-evidence.png)
+
+measured 2026-10-05 · from the README's FROZEN maintenance table (npm weekly downloads)
 
 ## Compatibility
 
@@ -80,8 +94,12 @@
 ## Quick start
 
 ```sh
+dsh plugin --profile web add github:PerryLink/dsh-memento
+```
+
+```sh
 # 1. install the bundle into your profile
-dsh plugin --profile web add "github:PerryLink/dsh-memento#main"
+dsh plugin --profile web add github:PerryLink/dsh-memento
 
 # or from npm (published releases)
 dsh plugin --profile web add dsh-memento
