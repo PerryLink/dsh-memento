@@ -64,7 +64,7 @@
 
 **为什么替代品更强。** `@openviking/dsh-memory-plugin` 是 **volcengine（字节跳动）官方组织仓**发布的记忆与上下文 bundle，带自动召回与自动捕获。
 
-**兼容性提醒。** 它声明的 dsh peer 上限低于 0.2.0，因此在 0.2.1-alpha.1 宿主上会被 0.2.x 兼容性守卫**直接跳过**，除非你手动加豁免。
+**兼容性提醒。** 它声明的 dsh peer 上限低于 0.2.0，因此在 0.2.1-alpha.2 宿主上会被 0.2.x 兼容性守卫**直接跳过**，除非你手动加豁免。
 
 **本包仍然独有的能力。** 召回是**有界、分层、带审批门**的，且引用可从句会日志重建。
 
@@ -82,7 +82,7 @@ measured 2026-10-05 · the freeze-period comparison, kept as a dated record (npm
 
 | Surface | Status |
 |---|---|
-| Harness | DeepSeek Harness `dsh-v0.2.1-alpha.1`（2026-10-04 适配）：`0.1.7` 线把整条设置注册面（`installSettingsSection` / `SettingsProvider.installSection` / `SettingsNamespace` / `SettingsScope`）换成 live config 表单——表单的 namespace 就是 profile entry id（`memento`），可编辑字段就是标了 `.volatile()` 的那些，被接受的编辑**提交进运行中的插件**而不是重挂它。浏览器半经 `ctx.configForms.get(entryId)` 读同一份表单（`ctx.settingsScope` 服务已删）。两侧都保留了 `installSection` / `settingsScope` 分支，peer 区间仍声明支持 `0.1.2-rc.1`、`0.1.5-alpha.1`、`0.1.6-0` 三条线；新增的 `>=0.1.7-0 <0.2.0` 这一段是修 bug——旧范围按 semver 预发布规则把目标宿主本身排除在外。仍无插件事件注册面——`KNOWN_SESSION_EVENT_TYPES` 不含 `memory/*`，且 `Session.append` 第三参只承载 surface 类型的 `SurfaceIntent`，故审计门保持自适应、行为不变（会在进程内告警一次，并在 `/memory audit` 输出里明示缺口）。类型证据来自三个面：本机 checkout 的已构建类型、`node_modules` 里钉住的已发布线、以及 DOM 库下的浏览器半侧。 |
+| Harness | DeepSeek Harness `dsh-v0.2.1-alpha.2`（2026-10-12 适配；`0.2.1-alpha.1` 自 2026-10-04 起）：`0.1.7` 线把整条设置注册面（`installSettingsSection` / `SettingsProvider.installSection` / `SettingsNamespace` / `SettingsScope`）换成 live config 表单——表单的 namespace 就是 profile entry id（`memento`），可编辑字段就是标了 `.volatile()` 的那些，被接受的编辑**提交进运行中的插件**而不是重挂它。浏览器半经 `ctx.configForms.get(entryId)` 读同一份表单（`ctx.settingsScope` 服务已删）。两侧都保留了 `installSection` / `settingsScope` 分支，peer 区间仍声明支持 `0.1.2-rc.1`、`0.1.5-alpha.1`、`0.1.6-0` 三条线；新增的 `>=0.1.7-0 <0.2.0` 这一段是修 bug——旧范围按 semver 预发布规则把目标宿主本身排除在外。仍无插件事件注册面——`KNOWN_SESSION_EVENT_TYPES` 不含 `memory/*`，且 `Session.append` 第三参只承载 surface 类型的 `SurfaceIntent`，故审计门保持自适应、行为不变（会在进程内告警一次，并在 `/memory audit` 输出里明示缺口）。类型证据来自三个面：本机 checkout 的已构建类型、`node_modules` 里钉住的已发布线、以及 DOM 库下的浏览器半侧。**已按 `0.2.1-alpha.2` 复核：** 本插件触及的全部宿主面在两个 tag 之间**逐字节相同**（`packages/settings/settings/src/**`、`packages/client/ui-settings/src/**`、`packages/client/ui-slots/src/**`、`packages/client/modules/src/**`、`packages/interaction/user-approval/**`、`vendor/loader/src/**`、`vendor/schemastery/src/**`、`packages/boot/app-boot/src/config-schema/**`），会话格式仍是 v4、没有 v4→v5 迁移，`KNOWN_SESSION_EVENT_TYPES` 只增了一个官方类型——故审计门继续关闭、**代码零改动**。真正变动的是钉住的 dev/test 线（`0.2.1-alpha.2`，以及 `pnpm-workspace.yaml` 里对应的 release-age 白名单）与兼容基线；`npm test`（201 例，含真实 Loader 组合套件）、`typecheck:ci`、覆盖率、制品、一致性套件与五语门在 alpha.2 上全绿。alpha.2 确实新增了 `plugin:<name>/*` 命名空间的 `appendPluginRecord` 写入器，但宿主自己的 `packages/core/session/README.md` 禁止仓外插件调用，且强制的 `plugin:` 前缀无法表达 `memory/*`，故本包不采用。 |
 | Node | `^22.19.0 || >=24.0.0` |
 | Platforms | Windows / macOS / Linux（纯 host；无原生代码、无网络） |
 | Model | 任意 |

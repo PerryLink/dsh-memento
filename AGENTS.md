@@ -84,7 +84,7 @@ npm run test:conformance  # 协议一致性套件（黄金参考；第三方 Pro
 
 ## 会话事件的 alpha.5 约束（必读）
 
-本插件在 `types.d.ts` 声明了 `memory/added|updated|removed|recalled|snapshot` 的 SessionEventMap 合并，但**运行时默认不向会话日志 append 这些事件**：截至 0.1.2-rc.1 harness 仍无插件事件注册面（`KNOWN_SESSION_EVENT_TYPES` 不含 memory/*，且 `Session.append` 写入面不接受 `ignorable` 标记），append 未注册类型会让该会话下次加载被持久化层拒绝。审计链由审批 seam 的 `approval/asked + approval/decided`（已知事件类型）与插件审计表承担；未来 harness 收录 memory/* 后自适应开启。**不要"顺手"取消这个自适应门。**
+本插件在 `types.d.ts` 声明了 `memory/added|updated|removed|recalled|snapshot` 的 SessionEventMap 合并，但**运行时默认不向会话日志 append 这些事件**：截至 **0.2.1-alpha.2** harness 仍无**通用**插件事件注册面（`KNOWN_SESSION_EVENT_TYPES` 不含 memory/*，且 `Session.append` 写入面不接受 `ignorable` 标记），append 未注册类型会让该会话下次加载被持久化层拒绝。⚠️ alpha.2 新增了 `appendPluginRecord(session, 'plugin:<name>/*', data)` 这一**命名空间受限的写入器**（自动盖 `ignorable`），但宿主 `packages/core/session/README.md` 明文要求**仓外插件不得调用**，且强制的 `plugin:` 前缀无法表达 `memory/*` 词汇 ⇒ **本插件不采用，自适应门继续关闭**（已复核，见 CHANGELOG 0.5.25）。审计链由审批 seam 的 `approval/asked + approval/decided`（已知事件类型）与插件审计表承担；未来 harness 放开通用注册面或收录 memory/* 后自适应开启。**不要"顺手"取消这个自适应门。**
 
 ## 设置面的 alpha.7 契约（必读）
 

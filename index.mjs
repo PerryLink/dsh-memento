@@ -325,7 +325,9 @@ function maybeAppendSessionEvent(session, type, data) {
       console.warn(
         'dsh-memento: 宿主未收录 memory/* 会话事件（KNOWN_SESSION_EVENT_TYPES 不含该词汇，'
         + '且 Session.append 无法为非 surface 类型盖 ignorable 标记），审计事件不落盘；'
-        + '审计链由审批 seam（approval/asked + approval/decided）与插件审计表承担。',
+        + '审计链由审批 seam（approval/asked + approval/decided）与插件审计表承担。'
+        + '（0.2.1-alpha.2 起宿主新增了 plugin:<name>/* 命名空间的 appendPluginRecord 写入器，'
+        + '但宿主 README 明文禁止仓外插件调用，且强制 plugin: 前缀无法表达 memory/*，故本门继续关闭。）',
       )
     }
     return 'skipped-unknown-type'
