@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.24] - 2026-10-12
+
+### Changed
+
+- **Unfrozen (2026-10-12).** The 2026-10-05 maintenance freeze is lifted: the package is back on the actively maintained roster (34 of 42) and receives feature work again, not only breakage fixes. The five READMEs replace `## Maintenance status: 🧊 FROZEN` with `## Maintenance status: ✅ Active` and keep the 2026-10-05 supersession measurement verbatim as a dated record; the family tables in the sibling repositories now state 34 active / 5 frozen / 3 retired, with this package's row carrying no status cell. No code, dependency or behaviour change, and existing installs need no migration.
+- Credits [@alex-debap](https://github.com/alex-debap) in the Contributors section of all five READMEs, for work that starts at the 0.1.0 conception stage: the seam-not-warehouse thesis, the structurally unbypassable approval gate, the audit guarantee rebuildable from the approval pair plus the plugin audit table, the bounded layered recall model, local-first zero-credential storage, and the public protocol rehearsal with its adapter registry and conformance suite.
+
+  This is a **deliberate documentation-only release**, against the usual "release only for an install-breaking defect" rule, and the exception is recorded here so the rule is not quietly broken. The reason: npm serves this README as the package page, and it was still telling readers that no new features were coming and to prefer `@openviking/dsh-memory-plugin`. Those statements stopped being true when the freeze was lifted, and waiting for the next code fix would leave the package's only public page arguing against its own use. The published tarball differs from 0.5.23 in `README*`, `CHANGELOG.md` and `package.json` only — the same shape as the documentation-only `0.5.20`.
+
+
 ## [0.5.23] - 2026-10-10
 
 ### Changed
@@ -25,11 +35,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [Unreleased]
-
-### Changed
-
-- **Unfrozen (2026-10-12).** The 2026-10-05 maintenance freeze is lifted: the package is back on the actively maintained roster (34 of 42) and receives feature work again, not only breakage fixes. Documentation only — no behaviour change, no version bump, and existing installs need no migration. The five READMEs replace `## Maintenance status: 🧊 FROZEN` with `## Maintenance status: ✅ Active` and keep the 2026-10-05 supersession measurement verbatim as a dated record; the family tables in the sibling repositories now state 34 active / 5 frozen / 3 retired, with this package's row carrying no status cell.
-- Credits [@alex-debap](https://github.com/alex-debap) in the Contributors section of all five READMEs, for work that starts at the 0.1.0 conception stage: the seam-not-warehouse thesis, the structurally unbypassable approval gate, the audit guarantee rebuildable from the approval pair plus the plugin audit table, the bounded layered recall model, local-first zero-credential storage, and the public protocol rehearsal with its adapter registry and conformance suite.
 
 ## [0.5.21] - 2026-10-05
 
