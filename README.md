@@ -48,11 +48,13 @@ A typed `ctx.memory` seam, a write-approval gate no model path can bypass, and a
 
 *The same run, animated.*
 
-## Maintenance status: 🧊 FROZEN
+## Maintenance status: ✅ Active
 
-> **Frozen on 2026-10-05. No new features.** This package still works, and it is not retired — but it no longer receives feature work. Only a genuine breakage will be fixed.
+> **Unfrozen on 2026-10-12 — feature work has resumed.** The freeze of 2026-10-05 is lifted: this package is back on the actively maintained roster (**34 of 42**) and receives features again, not only breakage fixes. Nothing was removed while it was frozen, and existing installs need no migration.
 
-Maintainers treat this capability as one where **better-adopted alternatives now exist**, so effort has moved elsewhere. The comparison below was measured on 2026-10-05 and is recorded so nobody has to redo it.
+The freeze was a **scheduling** call, not a defect ruling: this capability's field is crowded and better-adopted rivals exist, so effort moved elsewhere for a season. That season is over. What the freeze note named as the differentiator is still the reason to keep the package — recall is **bounded, layered and approval-gated**, and every write stays reconstructable from the approval pair plus the plugin's own audit table.
+
+The comparison below is kept **verbatim as a dated record** of 2026-10-05: it is the evidence the freeze rested on, and nobody should have to redo it. Read it as that day's snapshot, not as this package's current standing.
 
 | | package | weekly downloads |
 |---|---|---|
@@ -65,9 +67,9 @@ Maintainers treat this capability as one where **better-adopted alternatives now
 
 **Compatibility caveat.** its declared dsh peers cap below 0.2.0, so the 0.2.x compatibility guard SKIPS it on a 0.2.1-alpha.1 host unless you add an exemption
 
-**What this package still does that the alternatives do not.** this package's differentiator is that recall is bounded, layered and approval-gated, with recoverable citations into the session log; the field is crowded and several rivals are far better adopted
+**What this package still does that the alternatives do not.** this package's differentiator is that recall is bounded, layered and approval-gated, with recoverable citations into the session log.
 
-👉 **For new work, prefer any of the above — but check the compatibility guard first.** Existing installs keep working unchanged; nothing is being removed.
+👉 **Both paths are open again.** New work can use this package — it is maintained — and the alternatives above stay reasonable where they fit; check the compatibility guard either way. Existing installs keep working unchanged; nothing was ever removed.
 
 *Full evidence, including the host-version compatibility matrix: `dsh-plugin-supersession-review-20261005.md`.*
 
@@ -75,7 +77,7 @@ Maintainers treat this capability as one where **better-adopted alternatives now
 
 ![Measured comparison chart for dsh-memento](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-evidence.png)
 
-measured 2026-10-05 · from the README's FROZEN maintenance table (npm weekly downloads)
+measured 2026-10-05 · the freeze-period comparison, kept as a dated record (npm weekly downloads)
 
 ## Compatibility
 
@@ -316,10 +318,11 @@ Static evidence: `dsh-plugin-doctor` K10–K13 report `pass` for every check on 
 ## Contributors
 
 - [@Niuniu-Sir](https://github.com/Niuniu-Sir) — the boot-crash report in [issue #1](https://github.com/PerryLink/dsh-memento/issues/1) that led to the `~/.dsh` fallback shipped in 0.3.1.
+- [@alex-debap](https://github.com/alex-debap) — present from the 0.1.0 conception stage onward: the seam-not-warehouse thesis, insisting the approval gate be structurally unbypassable, and an audit trail rebuildable from the approval pair plus the plugin audit table. Named the bounded, layered recall model, argued for local-first, zero-credential storage, and took the protocol rehearsal public with an adapter registry and conformance suite.
 
 ## PerryLink DSH Plugin Family
 
-This project is one of the **33 actively maintained** DeepSeek Harness plugins from [PerryLink](https://github.com/PerryLink) — the roster is **42**, of which **6** are frozen and **3** retired; every one keeps its row below, with the reason in the Status column. If this one helps you, the others likely will too:
+This project is one of the **34 actively maintained** DeepSeek Harness plugins from [PerryLink](https://github.com/PerryLink) — the roster is **42**, of which **5** are frozen and **3** retired; every one keeps its row below, with the reason in the Status column. If this one helps you, the others likely will too:
 
 | Plugin | One-liner | Status |
 |---|---|---|
@@ -347,7 +350,7 @@ This project is one of the **33 actively maintained** DeepSeek Harness plugins f
 | **[dsh-lsp-actions](https://github.com/PerryLink/dsh-lsp-actions)** | LSP diagnostics, formatting, completion, code actions and rename over language servers | |
 | **[dsh-mask](https://github.com/PerryLink/dsh-mask)** | PII masking middleware: anonymize at the model boundary, restore at the display layer | |
 | **[dsh-mcp-panel](https://github.com/PerryLink/dsh-mcp-panel)** | Read-only MCP runtime panel: /mcp command + Settings tab with status, tools and errors | |
-| **[dsh-memento](https://github.com/PerryLink/dsh-memento)** | Approval-gated cross-session memory: ctx.memory seam + SQLite + memory tool | 🧊 FROZEN — see the repo README |
+| **[dsh-memento](https://github.com/PerryLink/dsh-memento)** | Approval-gated cross-session memory: ctx.memory seam + SQLite + memory tool | |
 | **[dsh-observe](https://github.com/PerryLink/dsh-observe)** | OpenTelemetry and Langfuse observability exporter for DeepSeek Harness. | |
 | **[dsh-output-styles](https://github.com/PerryLink/dsh-output-styles)** | Claude Code outputStyles-equivalent runtime style switching | |
 | **[dsh-permission-rules](https://github.com/PerryLink/dsh-permission-rules)** | Claude Code-style declarative allow/deny/ask permission rules with audit | |

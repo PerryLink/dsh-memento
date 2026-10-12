@@ -47,11 +47,13 @@ DeepSeek Harness के लिए परिबद्ध, स्तरित, अ
 
 *वही रन, एनिमेटेड।*
 
-## रखरखाव स्थिति: 🧊 फ़्रीज़
+## रखरखाव स्थिति: ✅ सक्रिय
 
-> **2026-10-05 से फ़्रीज़। कोई नई सुविधा नहीं।** यह पैकेज अभी भी काम करता है और **सेवानिवृत्त नहीं है**, पर अब इसमें नई सुविधाओं का काम नहीं होगा; केवल वास्तविक खराबी ठीक की जाएगी।
+> **2026-10-12 को अनफ़्रीज़ — सुविधा कार्य फिर शुरू।** 2026-10-05 का फ़्रीज़ हटा लिया गया है: यह पैकेज सक्रिय रूप से अनुरक्षित सूची (**42 में से 34**) में लौट आया है और अब केवल खराबी सुधार नहीं, बल्कि नई सुविधाएँ भी लेता है। फ़्रीज़ के दौरान कुछ हटाया नहीं गया था, और मौजूदा इंस्टॉल को किसी माइग्रेशन की ज़रूरत नहीं है।
 
-रखरखावकर्ताओं का मानना है कि इस क्षमता में **अधिक अपनाए गए विकल्प अब मौजूद हैं**, इसलिए प्रयास अन्यत्र स्थानांतरित किया गया। 2026-10-05 को मापी गई तुलना:
+फ़्रीज़ एक **समय-निर्धारण** का निर्णय था, खराबी का फ़ैसला नहीं: इस क्षमता का क्षेत्र भीड़-भरा है और अधिक अपनाए गए प्रतिद्वंद्वी मौजूद हैं, इसलिए प्रयास कुछ समय के लिए अन्यत्र चला गया। वह दौर समाप्त हो चुका है। फ़्रीज़ नोट में जिस विशेषता को कारण बताया गया था, वही आज भी इस पैकेज को रखने का कारण है — रिकॉल **परिबद्ध, स्तरित और अनुमोदन-द्वारित** है, और हर लेखन अनुमोदन जोड़ी तथा प्लगइन की अपनी ऑडिट तालिका से पुनर्निर्मेय रहता है।
+
+नीचे दी गई तुलना 2026-10-05 की **दिनांकित अभिलेख** के रूप में **ज्यों की त्यों** रखी गई है: यह वह प्रमाण है जिस पर फ़्रीज़ टिका था, और इसे दोबारा करने की ज़रूरत किसी को नहीं होनी चाहिए। इसे उस दिन का स्नैपशॉट पढ़ें, इस पैकेज की वर्तमान स्थिति नहीं।
 
 | | पैकेज | साप्ताहिक डाउनलोड |
 |---|---|---|
@@ -60,15 +62,15 @@ DeepSeek Harness के लिए परिबद्ध, स्तरित, अ
 | अन्य विकल्प | `dsh-prime-memory` | 6,157 |
 | अन्य विकल्प | `@a9i5k4/dsh-auto-memory` | 4,781 |
 
-👉 **नए काम के लिए ऊपर दिए गए किसी भी विकल्प को प्राथमिकता दें — पर पहले संगतता गार्ड जाँच लें।** मौजूदा इंस्टॉल बिना किसी बदलाव के काम करते रहेंगे।
+👉 **दोनों रास्ते फिर खुले हैं।** नया काम इस पैकेज का उपयोग कर सकता है — यह अनुरक्षित है — और ऊपर दिए विकल्प जहाँ उपयुक्त हों वहाँ उचित बने हुए हैं; किसी भी स्थिति में संगतता गार्ड जाँच लें। मौजूदा इंस्टॉल बिना किसी बदलाव के काम करते रहेंगे; कभी कुछ हटाया नहीं गया।
 
-*पूर्ण प्रमाण: `dsh-plugin-supersession-review-20261005.md`। पूरा पाठ [README.md](README.md) के **Maintenance status: 🧊 FROZEN** अनुभाग में।*
+*पूर्ण प्रमाण, होस्ट संस्करण संगतता मैट्रिक्स सहित: `dsh-plugin-supersession-review-20261005.md`।*
 
 ## Comparison
 
 ![dsh-memento का मापा गया तुलना चार्ट](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-evidence.png)
 
-measured 2026-10-05 · from the README's FROZEN maintenance table (npm weekly downloads)
+measured 2026-10-05 · the freeze-period comparison, kept as a dated record (npm weekly downloads)
 
 ## Compatibility
 
@@ -309,10 +311,11 @@ npm run verify:artifacts # artifact presence + syntax + import
 ## Contributors
 
 - [@Niuniu-Sir](https://github.com/Niuniu-Sir) — [issue #1](https://github.com/PerryLink/dsh-memento/issues/1) में बूट-क्रैश रिपोर्ट, जिससे 0.3.1 में `~/.dsh` फ़ॉलबैक आया।
+- [@alex-debap](https://github.com/alex-debap) — 0.1.0 के संकल्पना चरण से ही उपस्थित: भंडार नहीं बल्कि सीम होने का प्रस्ताव, अनुमोदन द्वार के संरचनात्मक रूप से अटल रहने पर ज़ोर, और अनुमोदन जोड़ी तथा प्लगइन की अपनी ऑडिट तालिका से पुनर्निर्मेय ऑडिट ट्रेल। परिबद्ध, स्तरित रिकॉल मॉडल का नामकरण, स्थानीय-प्रथम शून्य-क्रेडेंशियल भंडारण पर ज़ोर, और Adapter registry तथा Conformance suite के साथ प्रोटोकॉल रिहर्सल को सार्वजनिक रूप से आगे बढ़ाया।
 
 ## PerryLink DSH Plugin Family
 
-यह प्रोजेक्ट [PerryLink](https://github.com/PerryLink) के DeepSeek Harness प्लगइन परिवार का हिस्सा है — **33 सक्रिय रूप से अनुरक्षित**, कुल सूची **42** है जिसमें **6 फ़्रोज़न** और **3 सेवानिवृत्त** हैं; हर एक की पंक्ति नीचे बनी रहती है, कारण “स्थिति” कॉलम में है। अगर यह उपयोगी लगे, तो अन्य भी मददगार होंगे:
+यह प्रोजेक्ट [PerryLink](https://github.com/PerryLink) के DeepSeek Harness प्लगइन परिवार का हिस्सा है — **34 सक्रिय रूप से अनुरक्षित**, कुल सूची **42** है जिसमें **5 फ़्रोज़न** और **3 सेवानिवृत्त** हैं; हर एक की पंक्ति नीचे बनी रहती है, कारण “स्थिति” कॉलम में है। अगर यह उपयोगी लगे, तो अन्य भी मददगार होंगे:
 
 | Plugin | एक पंक्ति में | स्थिति |
 |---|---|---|
@@ -340,7 +343,7 @@ npm run verify:artifacts # artifact presence + syntax + import
 | **[dsh-lsp-actions](https://github.com/PerryLink/dsh-lsp-actions)** | LSP diagnostics, formatting, completion, code actions and rename over language servers | |
 | **[dsh-mask](https://github.com/PerryLink/dsh-mask)** | PII masking middleware: anonymize at the model boundary, restore at the display layer | |
 | **[dsh-mcp-panel](https://github.com/PerryLink/dsh-mcp-panel)** | Read-only MCP runtime panel: /mcp command + Settings tab with status, tools and errors | |
-| **[dsh-memento](https://github.com/PerryLink/dsh-memento)** | Approval-gated cross-session memory: ctx.memory seam + SQLite + memory tool | 🧊 फ़्रोज़न — रिपॉज़िटरी README देखें |
+| **[dsh-memento](https://github.com/PerryLink/dsh-memento)** | Approval-gated cross-session memory: ctx.memory seam + SQLite + memory tool | |
 | **[dsh-observe](https://github.com/PerryLink/dsh-observe)** | OpenTelemetry and Langfuse observability exporter for DeepSeek Harness. | |
 | **[dsh-output-styles](https://github.com/PerryLink/dsh-output-styles)** | Claude Code outputStyles-equivalent runtime style switching | |
 | **[dsh-permission-rules](https://github.com/PerryLink/dsh-permission-rules)** | Claude Code-style declarative allow/deny/ask permission rules with audit | |

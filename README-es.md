@@ -47,11 +47,13 @@ Una costura tipada `ctx.memory`, una puerta de aprobación de escritura que ning
 
 *La misma ejecución, animada.*
 
-## Estado de mantenimiento: 🧊 CONGELADO
+## Estado de mantenimiento: ✅ Activo
 
-> **Congelado el 2026-10-05. Sin nuevas funciones.** Este paquete sigue funcionando y **no está retirado**, pero ya no recibe trabajo de funciones; solo se corregirá una avería real.
+> **Descongelado el 2026-10-12: se reanuda el trabajo de funciones.** El congelamiento del 2026-10-05 queda levantado: este paquete vuelve al registro de mantenimiento activo (**34 de 42**) y recibe funciones de nuevo, no solo correcciones de averías. No se eliminó nada durante el congelamiento y las instalaciones existentes no necesitan migración.
 
-Los mantenedores consideran que en esta capacidad **ya existen alternativas con mejor adopción**, así que el esfuerzo se ha trasladado. Comparativa medida el 2026-10-05:
+El congelamiento fue una decisión de **planificación**, no un veredicto sobre defectos: el campo de esta capacidad está saturado y existen rivales con mejor adopción, así que el esfuerzo se trasladó durante una temporada. Esa temporada ha terminado. Lo que la nota del congelamiento señalaba como diferencial sigue siendo la razón para conservar el paquete: el recuerdo es **acotado, por capas y con puerta de aprobación**, y cada escritura sigue siendo reconstruible a partir del par de aprobación más la tabla de auditoría del propio plugin.
+
+La comparación de abajo se conserva **literalmente como registro fechado** del 2026-10-05: es la evidencia en la que se apoyó el congelamiento y nadie debería tener que rehacerla. Léala como la instantánea de aquel día, no como la posición actual de este paquete.
 
 | | paquete | descargas semanales |
 |---|---|---|
@@ -60,15 +62,15 @@ Los mantenedores consideran que en esta capacidad **ya existen alternativas con 
 | otra alternativa | `dsh-prime-memory` | 6,157 |
 | otra alternativa | `@a9i5k4/dsh-auto-memory` | 4,781 |
 
-👉 **Para trabajo nuevo, prefiera cualquiera de las anteriores, pero compruebe antes la barrera de compatibilidad.** Las instalaciones existentes siguen funcionando sin cambios.
+👉 **Ambos caminos vuelven a estar abiertos.** El trabajo nuevo puede usar este paquete —está mantenido— y las alternativas anteriores siguen siendo razonables donde encajen; compruebe la barrera de compatibilidad en cualquier caso. Las instalaciones existentes siguen funcionando sin cambios; nunca se eliminó nada.
 
-*Evidencia completa: `dsh-plugin-supersession-review-20261005.md`. Texto completo en la sección **Maintenance status: 🧊 FROZEN** de [README.md](README.md).*
+*Evidencia completa, incluida la matriz de compatibilidad de versiones del host: `dsh-plugin-supersession-review-20261005.md`.*
 
 ## Comparison
 
 ![Gráfico comparativo medido de dsh-memento](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-evidence.png)
 
-measured 2026-10-05 · from the README's FROZEN maintenance table (npm weekly downloads)
+measured 2026-10-05 · the freeze-period comparison, kept as a dated record (npm weekly downloads)
 
 ## Compatibility
 
@@ -309,10 +311,11 @@ Evidencia estática: `dsh-plugin-doctor` K10–K13 dan `pass` en todas las compr
 ## Contributors
 
 - [@Niuniu-Sir](https://github.com/Niuniu-Sir) — el informe de fallo de arranque en [issue #1](https://github.com/PerryLink/dsh-memento/issues/1) que llevó al fallback `~/.dsh` incluido en 0.3.1.
+- [@alex-debap](https://github.com/alex-debap) — presente desde la etapa de concepción de la 0.1.0: la tesis de la costura y no otro almacén, la insistencia en que la puerta de aprobación sea estructuralmente ineludible y una auditoría reconstruible desde el par de aprobación más la tabla de auditoría del plugin. Nombró el modelo de recuerdo acotado y por capas, defendió el almacenamiento local primero y sin credenciales, y llevó el ensayo del protocolo al espacio público con un registro de adaptadores y una suite de conformidad.
 
 ## PerryLink DSH Plugin Family
 
-Este proyecto es uno de los **33 plugins activamente mantenidos** de DeepSeek Harness de [PerryLink](https://github.com/PerryLink): el registro tiene **42**, de los cuales **6** están congelados y **3** retirados; cada uno conserva su fila abajo, con el motivo en la columna Estado. Si este te ayuda, probablemente los demás también:
+Este proyecto es uno de los **34 plugins activamente mantenidos** de DeepSeek Harness de [PerryLink](https://github.com/PerryLink): el registro tiene **42**, de los cuales **5** están congelados y **3** retirados; cada uno conserva su fila abajo, con el motivo en la columna Estado. Si este te ayuda, probablemente los demás también:
 
 | Plugin | En una línea | Estado |
 |---|---|---|
@@ -340,7 +343,7 @@ Este proyecto es uno de los **33 plugins activamente mantenidos** de DeepSeek Ha
 | **[dsh-lsp-actions](https://github.com/PerryLink/dsh-lsp-actions)** | LSP diagnostics, formatting, completion, code actions and rename over language servers | |
 | **[dsh-mask](https://github.com/PerryLink/dsh-mask)** | PII masking middleware: anonymize at the model boundary, restore at the display layer | |
 | **[dsh-mcp-panel](https://github.com/PerryLink/dsh-mcp-panel)** | Read-only MCP runtime panel: /mcp command + Settings tab with status, tools and errors | |
-| **[dsh-memento](https://github.com/PerryLink/dsh-memento)** | Approval-gated cross-session memory: ctx.memory seam + SQLite + memory tool | 🧊 CONGELADO — ver el README del repositorio |
+| **[dsh-memento](https://github.com/PerryLink/dsh-memento)** | Approval-gated cross-session memory: ctx.memory seam + SQLite + memory tool | |
 | **[dsh-observe](https://github.com/PerryLink/dsh-observe)** | OpenTelemetry and Langfuse observability exporter for DeepSeek Harness. | |
 | **[dsh-output-styles](https://github.com/PerryLink/dsh-output-styles)** | Claude Code outputStyles-equivalent runtime style switching | |
 | **[dsh-permission-rules](https://github.com/PerryLink/dsh-permission-rules)** | Claude Code-style declarative allow/deny/ask permission rules with audit | |

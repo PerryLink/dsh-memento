@@ -47,11 +47,13 @@
 
 *同一次运行，动图版。*
 
-## 维护状态：🧊 已冻结
+## 维护状态：✅ 活跃
 
-> **2026-10-05 起冻结，不再新增功能。** 本包仍可正常使用，**没有退役**——但不再投入功能开发，只有真实故障才会修复。
+> **2026-10-12 解冻——功能开发已恢复。** 2026-10-05 的冻结已解除：本包回到活跃维护名册（**42 个中的第 34 个**），重新接收功能开发，而不再只修故障。冻结期间没有任何东西被移除，已安装的用户也无需迁移。
 
-维护者判定该能力面**已出现采用度更高、更值得推荐的替代方案**，因此把精力移到了别处。
+冻结是一次**排期**判断，不是缺陷裁定：该能力赛道拥挤、已出现采用度更高的对手，所以精力暂时移到了别处。这个阶段结束了。冻结说明里点出的差异化，仍然是保留本包的理由——召回是**有界、分层、带审批门**的，且每次写入都能从审批对加插件自有审计表重建。
+
+下表**按 2026-10-05 原样保留**为日期记录：它是当时冻结所依据的证据，不该有人再重做一遍。请把它读作那一天的快照，而不是本包的现状。
 
 | | 包 | 周下载量 |
 |---|---|---|
@@ -64,17 +66,17 @@
 
 **兼容性提醒。** 它声明的 dsh peer 上限低于 0.2.0，因此在 0.2.1-alpha.1 宿主上会被 0.2.x 兼容性守卫**直接跳过**，除非你手动加豁免。
 
-**本包仍然独有的能力。** 召回是**有界、分层、带审批门**的，且引用可从句会日志重建；但该赛道极其拥挤，多个替代品的采用度远高于本包。
+**本包仍然独有的能力。** 召回是**有界、分层、带审批门**的，且引用可从句会日志重建。
 
-👉 **新工作请优先使用上述任一替代品——但请先确认它是否被兼容性守卫放行。** 已安装的照常可用，没有任何东西被移除。
+👉 **两条路都重新打开。** 新工作可以用本包——它在维护中；上述替代品在合适的地方仍然合理；无论选哪个，都先确认兼容性守卫是否放行。已安装的照常可用，从来没有东西被移除。
 
-*完整证据（含宿主版本兼容矩阵）见 `dsh-plugin-supersession-review-20261005.md`；英文版见 [README.md](README.md) 的 **Maintenance status: 🧊 FROZEN** 一节。*
+*完整证据（含宿主版本兼容矩阵）见 `dsh-plugin-supersession-review-20261005.md`。*
 
 ## Comparison
 
 ![dsh-memento 的实测对比柱状图](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-evidence.png)
 
-measured 2026-10-05 · from the README's FROZEN maintenance table (npm weekly downloads)
+measured 2026-10-05 · the freeze-period comparison, kept as a dated record (npm weekly downloads)
 
 ## Compatibility
 
@@ -315,10 +317,11 @@ npm run verify:artifacts # artifact presence + syntax + import
 ## Contributors
 
 - [@Niuniu-Sir](https://github.com/Niuniu-Sir) — [issue #1](https://github.com/PerryLink/dsh-memento/issues/1) 中的启动崩溃报告，催生了 0.3.1 引入的 `~/.dsh` 回退。
+- [@alex-debap](https://github.com/alex-debap) — 从 0.1.0 的构想阶段起就在场：提出「做能力接缝、不做又一个记忆仓库」的立项主张，坚持审批门在结构上不可绕过，并确立「每次写入都能从审批对加插件自有审计表重建」的审计保证。命名了有界、分层的召回模型，主张本地优先、零网络零凭据的存储，并把协议预演推向公开——适配器注册表与可分发一致性套件。
 
 ## PerryLink DSH Plugin Family
 
-本项目是 [PerryLink](https://github.com/PerryLink) 维护的 DeepSeek Harness 插件家族成员：**33 个活跃维护**，名册共 **42** 个，其中 **6 个已冻结**、**3 个已退役**——每一个都在下表保留自己的行，原因见「状态」列。如果它能帮到你，其他的也会：
+本项目是 [PerryLink](https://github.com/PerryLink) 维护的 DeepSeek Harness 插件家族成员：**34 个活跃维护**，名册共 **42** 个，其中 **5 个已冻结**、**3 个已退役**——每一个都在下表保留自己的行，原因见「状态」列。如果它能帮到你，其他的也会：
 
 | Plugin | 一句话 | 状态 |
 |---|---|---|
@@ -346,7 +349,7 @@ npm run verify:artifacts # artifact presence + syntax + import
 | **[dsh-lsp-actions](https://github.com/PerryLink/dsh-lsp-actions)** | LSP diagnostics, formatting, completion, code actions and rename over language servers | |
 | **[dsh-mask](https://github.com/PerryLink/dsh-mask)** | PII masking middleware: anonymize at the model boundary, restore at the display layer | |
 | **[dsh-mcp-panel](https://github.com/PerryLink/dsh-mcp-panel)** | Read-only MCP runtime panel: /mcp command + Settings tab with status, tools and errors | |
-| **[dsh-memento](https://github.com/PerryLink/dsh-memento)** | Approval-gated cross-session memory: ctx.memory seam + SQLite + memory tool | 🧊 已冻结 — 见仓库 README |
+| **[dsh-memento](https://github.com/PerryLink/dsh-memento)** | Approval-gated cross-session memory: ctx.memory seam + SQLite + memory tool | |
 | **[dsh-observe](https://github.com/PerryLink/dsh-observe)** | OpenTelemetry and Langfuse observability exporter for DeepSeek Harness. | |
 | **[dsh-output-styles](https://github.com/PerryLink/dsh-output-styles)** | Claude Code outputStyles-equivalent runtime style switching | |
 | **[dsh-permission-rules](https://github.com/PerryLink/dsh-permission-rules)** | Claude Code-style declarative allow/deny/ask permission rules with audit | |

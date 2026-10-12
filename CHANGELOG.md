@@ -26,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Unfrozen (2026-10-12).** The 2026-10-05 maintenance freeze is lifted: the package is back on the actively maintained roster (34 of 42) and receives feature work again, not only breakage fixes. Documentation only — no behaviour change, no version bump, and existing installs need no migration. The five READMEs replace `## Maintenance status: 🧊 FROZEN` with `## Maintenance status: ✅ Active` and keep the 2026-10-05 supersession measurement verbatim as a dated record; the family tables in the sibling repositories now state 34 active / 5 frozen / 3 retired, with this package's row carrying no status cell.
+- Credits [@alex-debap](https://github.com/alex-debap) in the Contributors section of all five READMEs, for work that starts at the 0.1.0 conception stage: the seam-not-warehouse thesis, the structurally unbypassable approval gate, the audit guarantee rebuildable from the approval pair plus the plugin audit table, the bounded layered recall model, local-first zero-credential storage, and the public protocol rehearsal with its adapter registry and conformance suite.
+
 ## [0.5.21] - 2026-10-05
 
 undefined
