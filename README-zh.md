@@ -47,37 +47,6 @@
 
 *同一次运行，动图版。*
 
-## 维护状态：✅ 活跃
-
-> **2026-10-12 解冻——功能开发已恢复。** 2026-10-05 的冻结已解除：本包回到活跃维护名册（**42 个中的第 34 个**），重新接收功能开发，而不再只修故障。冻结期间没有任何东西被移除，已安装的用户也无需迁移。
-
-冻结是一次**排期**判断，不是缺陷裁定：该能力赛道拥挤、已出现采用度更高的对手，所以精力暂时移到了别处。这个阶段结束了。冻结说明里点出的差异化，仍然是保留本包的理由——召回是**有界、分层、带审批门**的，且每次写入都能从审批对加插件自有审计表重建。
-
-下表**按 2026-10-05 原样保留**为日期记录：它是当时冻结所依据的证据，不该有人再重做一遍。请把它读作那一天的快照，而不是本包的现状。
-
-| | 包 | 周下载量 |
-|---|---|---|
-| **本包** | `dsh-memento` | 1,202 |
-| 更值得推荐的替代品 | [`@openviking/dsh-memory-plugin`](https://github.com/volcengine/OpenViking) | **10,160** |
-| 另一个替代品 | `dsh-prime-memory` | 6,157 |
-| 另一个替代品 | `@a9i5k4/dsh-auto-memory` | 4,781 |
-
-**为什么替代品更强。** `@openviking/dsh-memory-plugin` 是 **volcengine（字节跳动）官方组织仓**发布的记忆与上下文 bundle，带自动召回与自动捕获。
-
-**兼容性提醒。** 它声明的 dsh peer 上限低于 0.2.0，因此在 0.2.1-alpha.2 宿主上会被 0.2.x 兼容性守卫**直接跳过**，除非你手动加豁免。
-
-**本包仍然独有的能力。** 召回是**有界、分层、带审批门**的，且引用可从句会日志重建。
-
-👉 **两条路都重新打开。** 新工作可以用本包——它在维护中；上述替代品在合适的地方仍然合理；无论选哪个，都先确认兼容性守卫是否放行。已安装的照常可用，从来没有东西被移除。
-
-*完整证据（含宿主版本兼容矩阵）见 `dsh-plugin-supersession-review-20261005.md`。*
-
-## Comparison
-
-![dsh-memento 的实测对比柱状图](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-evidence.png)
-
-measured 2026-10-05 · the freeze-period comparison, kept as a dated record (npm weekly downloads)
-
 ## Compatibility
 
 | Surface | Status |

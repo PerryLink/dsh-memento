@@ -47,31 +47,6 @@ Uma costura tipada `ctx.memory`, uma porta de aprovação de escrita que nenhum 
 
 *A mesma execução, animada.*
 
-## Status de manutenção: ✅ Ativo
-
-> **Descongelado em 2026-10-12 — o trabalho de recursos foi retomado.** O congelamento de 2026-10-05 foi suspenso: este pacote volta ao registro de manutenção ativa (**34 de 42**) e recebe recursos de novo, não apenas correções de falhas. Nada foi removido durante o congelamento e as instalações existentes não precisam de migração.
-
-O congelamento foi uma decisão de **agendamento**, não um veredicto sobre defeitos: o campo desta capacidade está saturado e existem rivais com melhor adoção, então o esforço foi redirecionado por uma temporada. Essa temporada terminou. O que a nota do congelamento apontava como diferencial continua sendo a razão para manter o pacote: a recordação é **limitada, em camadas e com porta de aprovação**, e cada escrita continua reconstruível a partir do par de aprovação mais a tabela de auditoria do próprio plugin.
-
-A comparação abaixo é mantida **literalmente como registro datado** de 2026-10-05: é a evidência em que o congelamento se apoiou e ninguém deveria ter de refazê-la. Leia-a como o instantâneo daquele dia, não como a posição atual deste pacote.
-
-| | pacote | downloads semanais |
-|---|---|---|
-| **este pacote** | `dsh-memento` | 1,202 |
-| alternativa mais adotada | [`@openviking/dsh-memory-plugin`](https://github.com/volcengine/OpenViking) | **10,160** |
-| outra alternativa | `dsh-prime-memory` | 6,157 |
-| outra alternativa | `@a9i5k4/dsh-auto-memory` | 4,781 |
-
-👉 **Os dois caminhos estão abertos de novo.** O trabalho novo pode usar este pacote —ele é mantido— e as alternativas acima continuam razoáveis onde couberem; verifique a barreira de compatibilidade em qualquer caso. As instalações existentes continuam funcionando sem alterações; nada jamais foi removido.
-
-*Evidência completa, incluindo a matriz de compatibilidade de versões do host: `dsh-plugin-supersession-review-20261005.md`.*
-
-## Comparison
-
-![Gráfico comparativo medido do dsh-memento](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-evidence.png)
-
-measured 2026-10-05 · the freeze-period comparison, kept as a dated record (npm weekly downloads)
-
 ## Compatibility
 
 | Surface | Status |

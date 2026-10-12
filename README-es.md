@@ -47,31 +47,6 @@ Una costura tipada `ctx.memory`, una puerta de aprobación de escritura que ning
 
 *La misma ejecución, animada.*
 
-## Estado de mantenimiento: ✅ Activo
-
-> **Descongelado el 2026-10-12: se reanuda el trabajo de funciones.** El congelamiento del 2026-10-05 queda levantado: este paquete vuelve al registro de mantenimiento activo (**34 de 42**) y recibe funciones de nuevo, no solo correcciones de averías. No se eliminó nada durante el congelamiento y las instalaciones existentes no necesitan migración.
-
-El congelamiento fue una decisión de **planificación**, no un veredicto sobre defectos: el campo de esta capacidad está saturado y existen rivales con mejor adopción, así que el esfuerzo se trasladó durante una temporada. Esa temporada ha terminado. Lo que la nota del congelamiento señalaba como diferencial sigue siendo la razón para conservar el paquete: el recuerdo es **acotado, por capas y con puerta de aprobación**, y cada escritura sigue siendo reconstruible a partir del par de aprobación más la tabla de auditoría del propio plugin.
-
-La comparación de abajo se conserva **literalmente como registro fechado** del 2026-10-05: es la evidencia en la que se apoyó el congelamiento y nadie debería tener que rehacerla. Léala como la instantánea de aquel día, no como la posición actual de este paquete.
-
-| | paquete | descargas semanales |
-|---|---|---|
-| **este paquete** | `dsh-memento` | 1,202 |
-| alternativa mejor adoptada | [`@openviking/dsh-memory-plugin`](https://github.com/volcengine/OpenViking) | **10,160** |
-| otra alternativa | `dsh-prime-memory` | 6,157 |
-| otra alternativa | `@a9i5k4/dsh-auto-memory` | 4,781 |
-
-👉 **Ambos caminos vuelven a estar abiertos.** El trabajo nuevo puede usar este paquete —está mantenido— y las alternativas anteriores siguen siendo razonables donde encajen; compruebe la barrera de compatibilidad en cualquier caso. Las instalaciones existentes siguen funcionando sin cambios; nunca se eliminó nada.
-
-*Evidencia completa, incluida la matriz de compatibilidad de versiones del host: `dsh-plugin-supersession-review-20261005.md`.*
-
-## Comparison
-
-![Gráfico comparativo medido de dsh-memento](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-evidence.png)
-
-measured 2026-10-05 · the freeze-period comparison, kept as a dated record (npm weekly downloads)
-
 ## Compatibility
 
 | Surface | Status |

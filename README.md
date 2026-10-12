@@ -48,37 +48,6 @@ A typed `ctx.memory` seam, a write-approval gate no model path can bypass, and a
 
 *The same run, animated.*
 
-## Maintenance status: ✅ Active
-
-> **Unfrozen on 2026-10-12 — feature work has resumed.** The freeze of 2026-10-05 is lifted: this package is back on the actively maintained roster (**34 of 42**) and receives features again, not only breakage fixes. Nothing was removed while it was frozen, and existing installs need no migration.
-
-The freeze was a **scheduling** call, not a defect ruling: this capability's field is crowded and better-adopted rivals exist, so effort moved elsewhere for a season. That season is over. What the freeze note named as the differentiator is still the reason to keep the package — recall is **bounded, layered and approval-gated**, and every write stays reconstructable from the approval pair plus the plugin's own audit table.
-
-The comparison below is kept **verbatim as a dated record** of 2026-10-05: it is the evidence the freeze rested on, and nobody should have to redo it. Read it as that day's snapshot, not as this package's current standing.
-
-| | package | weekly downloads |
-|---|---|---|
-| **this package** | `dsh-memento` | 1,202 |
-| better-adopted alternative | [`@openviking/dsh-memory-plugin`](https://github.com/volcengine/OpenViking) | **10,160** |
-| another alternative | `dsh-prime-memory` | 6,157 |
-| another alternative | `@a9i5k4/dsh-auto-memory` | 4,781 |
-
-**Why the alternative leads.** `@openviking/dsh-memory-plugin` provides a memory and context bundle published by the volcengine organisation.
-
-**Compatibility caveat.** its declared dsh peers cap below 0.2.0, so the 0.2.x compatibility guard SKIPS it on a 0.2.1-alpha.2 host unless you add an exemption
-
-**What this package still does that the alternatives do not.** this package's differentiator is that recall is bounded, layered and approval-gated, with recoverable citations into the session log.
-
-👉 **Both paths are open again.** New work can use this package — it is maintained — and the alternatives above stay reasonable where they fit; check the compatibility guard either way. Existing installs keep working unchanged; nothing was ever removed.
-
-*Full evidence, including the host-version compatibility matrix: `dsh-plugin-supersession-review-20261005.md`.*
-
-## Comparison
-
-![Measured comparison chart for dsh-memento](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-evidence.png)
-
-measured 2026-10-05 · the freeze-period comparison, kept as a dated record (npm weekly downloads)
-
 ## Compatibility
 
 | Surface | Status |
