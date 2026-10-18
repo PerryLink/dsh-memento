@@ -1,6 +1,14 @@
-{
-  "screenshots": [
-    "docs/assets/dsh-memento-demo.png",
-    "docs/assets/dsh-memento-evidence.png"
-  ]
-}
+[
+  {
+    "path": "docs/assets/dsh-memento-hero.png",
+    "kind": "hero",
+    "alt": "dsh-memento terminal output",
+    "caption": "Real dsh-memento test run; test suite green."
+  },
+  {
+    "path": "docs/assets/dsh-memento-demo.gif",
+    "kind": "demo",
+    "alt": "Animated dsh-memento terminal session",
+    "caption": "The same run, assembled line by line."
+  }
+]

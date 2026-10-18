@@ -1,9 +1,32 @@
 # Changelog
 
+## [0.5.27] - 2026-10-18
+
+### Changed
+
+- Add a 1280×720 hero and a 960×540, 4-second terminal GIF rendered from the test run; `screenshots.json` is an object array and `capture.json` records the command.
+
+## [0.5.26] - 2026-10-18
+
+### Changed
+
+- Compatibility: devDependencies to `0.2.1-rc.2`; add `@deepseek-ai/dsh-working-directory`; `dshVersions` includes `0.2.1-rc.2`. The peer range keeps the old-host corridors.
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+
+- **The README now carries the video walkthrough.** `docs/assets/dsh-memento-demo.mp4` — a 2 min 23 s narrated run, H.264 (Main @ 4.2) + AAC-LC stereo, 960×544, 1.87 MB — sits behind a click-to-open thumbnail (`docs/assets/dsh-memento-demo-video.png`: the documented terminal still with a play affordance, carrying no language-specific copy so all five READMEs share one asset). All five READMEs carry the block. Neither asset joins the published `files` list: the poster is referenced by absolute `raw.githubusercontent.com` URL, as the PNG and the GIF already were, and the MP4 by both a `github.com/blob` link and a raw direct-download link.
+
+### Changed
+
+- **The video is documented as a file to open, not as inline playback.** Two facts drive the wording, both checked against the hosts rather than assumed: GitHub's HTML sanitizer whitelists no `video`/`source` element, so a `<video>` tag in a README renders as nothing, and `raw.githubusercontent.com` serves `.mp4` as `application/octet-stream`, i.e. a download. The caption therefore says what to do — the thumbnail opens the MP4 file, and *Download raw file* is the fallback if it does not play on the page — rather than promising playback inside the README.
+- **The `@alex-debap` credit is restated with the role named.** `0.5.24` introduced the credit; this release names the role (**product manager**), writes out the scope it covers, and drops the version anchor `0.5.24` used. Two claims are narrowed to what the code actually guarantees: the write-approval gate is enforced inside the service so that **no model path** can bypass it — an in-process holder of `ctx.memory` can still reach the store — and the character budgets are hard **per track and per layer**, not per track alone.
 
 ## [0.5.25] - 2026-10-12
 

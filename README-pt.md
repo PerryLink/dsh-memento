@@ -41,11 +41,15 @@ Memória entre sessões limitada, em camadas, com porta de aprovação e auditá
 
 Uma costura tipada `ctx.memory`, uma porta de aprovação de escrita que nenhum caminho do modelo pode contornar e uma auditoria reconstruível — do par de aprovação mais a tabela de auditoria do plugin, com a lacuna do log de sessão dita em voz alta.
 
-![Demonstração de terminal do dsh-memento: dsh-memento — read-only stdio MCP server, tools/list over JSON-RPC](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo.png)
+![Demonstração de terminal do dsh-memento: dsh-memento — read-only stdio MCP server, tools/list over JSON-RPC](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-hero.png)
 
 ![Animated terminal demo of dsh-memento](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo.gif)
 
 *A mesma execução, animada.*
+
+[![Passo a passo em vídeo do dsh-memento — abre o arquivo MP4](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo-video.png)](https://github.com/PerryLink/dsh-memento/blob/main/docs/assets/dsh-memento-demo.mp4)
+
+*▶ **Passo a passo narrado de 2 min 23 s** — a miniatura abre o arquivo MP4; se não reproduzir na página, use *Download raw file* lá ([MP4, 1,87 MB](https://github.com/PerryLink/dsh-memento/blob/main/docs/assets/dsh-memento-demo.mp4) · [download direto](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo.mp4)). O GitHub remove as tags `<video>` dos READMEs, então o vídeo é um arquivo a abrir, e não algo embutido.*
 
 ## Compatibility
 
@@ -286,7 +290,7 @@ Evidência estática: `dsh-plugin-doctor` K10–K13 retornam `pass` em todas as 
 ## Contributors
 
 - [@Niuniu-Sir](https://github.com/Niuniu-Sir) — o relato de falha de inicialização na [issue #1](https://github.com/PerryLink/dsh-memento/issues/1) que levou ao fallback `~/.dsh` incluído na 0.3.1.
-- [@alex-debap](https://github.com/alex-debap) — presente desde a etapa de concepção da 0.1.0: a tese da costura e não outro armazém, a insistência em que a porta de aprovação seja estruturalmente incontornável e uma auditoria reconstruível a partir do par de aprovação mais a tabela de auditoria do plugin. Nomeou o modelo de recordação limitado e em camadas, defendeu o armazenamento local primeiro e sem credenciais, e levou o ensaio do protocolo ao espaço público com um registro de adaptadores e uma suíte de conformidade.
+- [@alex-debap](https://github.com/alex-debap) — **product manager**. Cuidou da forma do produto, não do seu código, ao longo de toda a linha de design desde o início: a tese da costura e não outro armazém (uma costura tipada `ctx.memory`, não outro armazém de memória), a exigência de que a porta de aprovação de escrita seja aplicada dentro do serviço, de modo que nenhum caminho do modelo possa contorná-la, em vez de ser uma convenção da camada de ferramentas, e a garantia de auditoria de que toda escrita seja reconstruível a partir do par de aprovação mais a tabela de auditoria do próprio plugin. Nomeou o modelo de recordação limitado e em camadas — duas trilhas × duas camadas, chave por agente, orçamentos de caracteres rígidos por trilha e por camada — e defendeu o armazenamento local primeiro e sem credenciais (`0600`, SQLite sob `$DSH_HOME`, sem rede e sem chaves). Levou o trabalho de protocolo como uma linha de produto: o ensaio público do `dsh-memory-protocol` v1, seu registro de adaptadores e sua suíte de conformidade. Sustentou a linha de escopo sobre o que este plugin deliberadamente não faz.
 
 ## PerryLink DSH Plugin Family
 

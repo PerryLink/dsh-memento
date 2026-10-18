@@ -41,11 +41,15 @@ DeepSeek Harness के लिए परिबद्ध, स्तरित, अ
 
 एक टाइप्ड `ctx.memory` सीम, एक राइट-अनुमोदन द्वार जिसे मॉडल का कोई रास्ता बायपास नहीं कर सकता, और एक पुनर्निर्मेय ऑडिट — अनुमोदन जोड़ी और प्लगइन की अपनी ऑडिट तालिका से, सेशन लॉग की कमी को खुलकर बताते हुए।
 
-![dsh-memento का टर्मिनल डेमो: dsh-memento — read-only stdio MCP server, tools/list over JSON-RPC](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo.png)
+![dsh-memento का टर्मिनल डेमो: dsh-memento — read-only stdio MCP server, tools/list over JSON-RPC](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-hero.png)
 
 ![Animated terminal demo of dsh-memento](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo.gif)
 
 *वही रन, एनिमेटेड।*
+
+[![dsh-memento वीडियो वॉकथ्रू — MP4 फ़ाइल खोलता है](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo-video.png)](https://github.com/PerryLink/dsh-memento/blob/main/docs/assets/dsh-memento-demo.mp4)
+
+*▶ **2 मिनट 23 सेकंड का नैरेटेड वॉकथ्रू** — थंबनेल MP4 फ़ाइल खोलता है; अगर पेज पर न चले तो वहाँ *Download raw file* इस्तेमाल करें ([MP4, 1.87 MB](https://github.com/PerryLink/dsh-memento/blob/main/docs/assets/dsh-memento-demo.mp4) · [सीधा डाउनलोड](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo.mp4))। GitHub README फ़ाइलों से `<video>` टैग हटा देता है, इसलिए वीडियो खोलने की फ़ाइल है, इनलाइन एम्बेडेड नहीं।*
 
 ## Compatibility
 
@@ -286,7 +290,7 @@ npm run verify:artifacts # artifact presence + syntax + import
 ## Contributors
 
 - [@Niuniu-Sir](https://github.com/Niuniu-Sir) — [issue #1](https://github.com/PerryLink/dsh-memento/issues/1) में बूट-क्रैश रिपोर्ट, जिससे 0.3.1 में `~/.dsh` फ़ॉलबैक आया।
-- [@alex-debap](https://github.com/alex-debap) — 0.1.0 के संकल्पना चरण से ही उपस्थित: भंडार नहीं बल्कि सीम होने का प्रस्ताव, अनुमोदन द्वार के संरचनात्मक रूप से अटल रहने पर ज़ोर, और अनुमोदन जोड़ी तथा प्लगइन की अपनी ऑडिट तालिका से पुनर्निर्मेय ऑडिट ट्रेल। परिबद्ध, स्तरित रिकॉल मॉडल का नामकरण, स्थानीय-प्रथम शून्य-क्रेडेंशियल भंडारण पर ज़ोर, और Adapter registry तथा Conformance suite के साथ प्रोटोकॉल रिहर्सल को सार्वजनिक रूप से आगे बढ़ाया।
+- [@alex-debap](https://github.com/alex-debap) — **प्रोडक्ट मैनेजर**। इन्होंने कोड नहीं, उत्पाद का आकार संभाला — शुरुआत से पूरी डिज़ाइन-रेखा पर: भंडार नहीं बल्कि सीम होने का प्रस्ताव (एक टाइप्ड `ctx.memory` सीम, न कि एक और मेमोरी भंडार), यह माँग कि राइट-अनुमोदन द्वार सेवा के भीतर लागू हो ताकि मॉडल का कोई रास्ता उसे बायपास न कर सके — टूल-परत का अभ्यास नहीं, और यह ऑडिट गारंटी कि हर लेख अनुमोदन जोड़ी तथा प्लगइन की अपनी ऑडिट तालिका से पुनर्निर्मेय हो। परिबद्ध, स्तरित रिकॉल मॉडल का नामकरण किया — दो ट्रैक × दो परतें, प्रति-एजेंट कुंजी, प्रति-ट्रैक और प्रति-परत कठोर वर्ण बजट — और स्थानीय-प्रथम, शून्य-क्रेडेंशियल भंडारण की वकालत की (`$DSH_HOME` के नीचे `0600` SQLite, कोई नेटवर्क नहीं, कोई कुंजी नहीं)। प्रोटोकॉल कार्य को एक उत्पाद-पंक्ति की तरह आगे बढ़ाया: सार्वजनिक `dsh-memory-protocol` v1 रिहर्सल, उसका Adapter registry और Conformance suite। इस बात की दायरा-सीमा थामे रखी कि यह प्लगइन जानबूझकर क्या नहीं करता।
 
 ## PerryLink DSH Plugin Family
 

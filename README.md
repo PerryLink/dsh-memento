@@ -42,11 +42,15 @@ Bounded, layered, approval-gated, auditable cross-session memory for DeepSeek Ha
 
 A typed `ctx.memory` seam, a write-approval gate no model path can bypass, and an audit trail you can rebuild — from the approval pair plus the plugin's own audit table, with the session-log gap named out loud.
 
-![Terminal demo of dsh-memento: dsh-memento — read-only stdio MCP server, tools/list over JSON-RPC](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo.png)
+![Terminal demo of dsh-memento: dsh-memento — read-only stdio MCP server, tools/list over JSON-RPC](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-hero.png)
 
 ![Animated terminal demo of dsh-memento](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo.gif)
 
 *The same run, animated.*
+
+[![dsh-memento video walkthrough — opens the MP4 file](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo-video.png)](https://github.com/PerryLink/dsh-memento/blob/main/docs/assets/dsh-memento-demo.mp4)
+
+*▶ **2 min 23 s narrated walkthrough** — the thumbnail opens the MP4 file; if it does not play on the page, use *Download raw file* there ([MP4, 1.87 MB](https://github.com/PerryLink/dsh-memento/blob/main/docs/assets/dsh-memento-demo.mp4) · [direct download](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo.mp4)). GitHub strips `<video>` tags from README files, so the video is a file to open rather than something embedded inline.*
 
 ## Compatibility
 
@@ -287,7 +291,7 @@ Static evidence: `dsh-plugin-doctor` K10–K13 report `pass` for every check on 
 ## Contributors
 
 - [@Niuniu-Sir](https://github.com/Niuniu-Sir) — the boot-crash report in [issue #1](https://github.com/PerryLink/dsh-memento/issues/1) that led to the `~/.dsh` fallback shipped in 0.3.1.
-- [@alex-debap](https://github.com/alex-debap) — present from the 0.1.0 conception stage onward: the seam-not-warehouse thesis, insisting the approval gate be structurally unbypassable, and an audit trail rebuildable from the approval pair plus the plugin audit table. Named the bounded, layered recall model, argued for local-first, zero-credential storage, and took the protocol rehearsal public with an adapter registry and conformance suite.
+- [@alex-debap](https://github.com/alex-debap) — **product manager**. Owned the shape of the product rather than its code, across the whole design arc from the outset: the seam-not-warehouse thesis (a typed `ctx.memory` seam, not another memory warehouse), the requirement that the write-approval gate be enforced inside the service so that no model path can bypass it rather than being a tool-layer convention, and the audit guarantee that every write be rebuildable from the approval pair plus the plugin's own audit table. Named the bounded, layered recall model — two tracks × two layers, per-agent key, hard per-track/per-layer character budgets — and argued for local-first, zero-credential storage (`0600` SQLite under `$DSH_HOME`, no network, no keys). Carried the protocol work as a product line: the public `dsh-memory-protocol` v1 rehearsal, its adapter registry and its conformance suite. Held the scope line on what this plugin deliberately does not do.
 
 ## PerryLink DSH Plugin Family
 
