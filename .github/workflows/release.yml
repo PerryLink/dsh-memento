@@ -4,6 +4,7 @@ name: release
 # 发布走 npm trusted publishing（OIDC，依赖上面的 `id-token: write`）：不再需要 NPM_TOKEN secret。
 # 幂等：标签版本已在 npm 上时跳过 publish——重推旧标签/补标签不会红。
 on:
+  workflow_dispatch:
   push:
     tags: ['v*']
 
