@@ -406,7 +406,9 @@ npm run verify:artifacts # artifact presence + syntax + import
 
 </details>
 
-</details>## License
+</details>
+
+## License
 
 [Apache License 2.0](LICENSE) © 2026 dsh-memento contributors
 
