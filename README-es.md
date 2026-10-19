@@ -146,6 +146,22 @@ memory_stats
 
 *Observado en `test/mcp.test.mjs:108-118 (fixture seed at 21-27); README.md:160-176`*
 
+#### Rama de fallo
+
+**Entrada**
+
+~~~text
+{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"memory_search","arguments":{}}}
+~~~
+
+**Salida**
+
+~~~text
+{"jsonrpc":"2.0","id":10,"result":{"content":[{"type":"text","text":"invalid arguments: query must be a non-empty string"}],"isError":true}}
+~~~
+
+*Observado en `plugins/dsh-memento/lib/mcp.mjs:188; plugins/dsh-memento/test/mcp.test.mjs:126-127; reproduced via plugins/dsh-memento/bin/mcp-server.mjs`*
+
 #### Ejemplos breves
 
 - `/memory`

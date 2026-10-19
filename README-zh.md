@@ -146,6 +146,22 @@ memory_stats
 
 *来源 `test/mcp.test.mjs:108-118 (fixture seed at 21-27); README.md:160-176`*
 
+#### 失败分支
+
+**输入**
+
+~~~text
+{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"memory_search","arguments":{}}}
+~~~
+
+**输出**
+
+~~~text
+{"jsonrpc":"2.0","id":10,"result":{"content":[{"type":"text","text":"invalid arguments: query must be a non-empty string"}],"isError":true}}
+~~~
+
+*来源 `plugins/dsh-memento/lib/mcp.mjs:188; plugins/dsh-memento/test/mcp.test.mjs:126-127; reproduced via plugins/dsh-memento/bin/mcp-server.mjs`*
+
 #### 简短示例
 
 - `/memory`
