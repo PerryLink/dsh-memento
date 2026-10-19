@@ -297,7 +297,7 @@ Evidência estática: `dsh-plugin-doctor` K10–K13 retornam `pass` em todas as 
 - [@Niuniu-Sir](https://github.com/Niuniu-Sir) — o relato de falha de inicialização na [issue #1](https://github.com/PerryLink/dsh-memento/issues/1) que levou ao fallback `~/.dsh` incluído na 0.3.1.
 - [@alex-debap](https://github.com/alex-debap) — **product manager**. Cuidou da forma do produto, não do seu código, ao longo de toda a linha de design desde o início: a tese da costura e não outro armazém (uma costura tipada `ctx.memory`, não outro armazém de memória), a exigência de que a porta de aprovação de escrita seja aplicada dentro do serviço, de modo que nenhum caminho do modelo possa contorná-la, em vez de ser uma convenção da camada de ferramentas, e a garantia de auditoria de que toda escrita seja reconstruível a partir do par de aprovação mais a tabela de auditoria do próprio plugin. Nomeou o modelo de recordação limitado e em camadas — duas trilhas × duas camadas, chave por agente, orçamentos de caracteres rígidos por trilha e por camada — e defendeu o armazenamento local primeiro e sem credenciais (`0600`, SQLite sob `$DSH_HOME`, sem rede e sem chaves). Levou o trabalho de protocolo como uma linha de produto: o ensaio público do `dsh-memory-protocol` v1, seu registro de adaptadores e sua suíte de conformidade. Sustentou a linha de escopo sobre o que este plugin deliberadamente não faz.
 
-## Família de plugins DSH da PerryLink
+## PerryLink DSH Plugin Family
 
 Este projeto faz parte da família de plugins do DeepSeek Harness da [PerryLink](https://github.com/PerryLink). O registro fica recolhido abaixo para que cada README mantenha uma primeira tela curta; expanda para ver cada linha e seu status.
 

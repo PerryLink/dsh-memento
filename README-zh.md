@@ -297,7 +297,7 @@ npm run verify:artifacts # artifact presence + syntax + import
 - [@Niuniu-Sir](https://github.com/Niuniu-Sir) — [issue #1](https://github.com/PerryLink/dsh-memento/issues/1) 中的启动崩溃报告，催生了 0.3.1 引入的 `~/.dsh` 回退。
 - [@alex-debap](https://github.com/alex-debap) — **产品经理**。他管的是产品的形状，而不是代码，从项目一开始就贯穿整条设计线：提出「做能力接缝、不做又一个记忆仓库」的立项主张（一个类型安全的 `ctx.memory` 接缝，而非又一个记忆仓库），要求写入审批门必须在服务内部强制执行、让模型的任何路径都绕不过去，而不是工具层的一句约定，并确立「每次写入都能从审批对加插件自有审计表重建」的审计保证。命名了有界、分层的召回模型——两轨 × 两层、按 agent 预设隔离、按轨与层硬性字符预算——并主张本地优先、零网络零凭据的存储（`$DSH_HOME` 下 `0600` 的 SQLite，不联网、不存密钥）。把协议当作产品线来推——公开的 `dsh-memory-protocol` v1 预演、适配器注册表与可分发一致性套件。守住「这个插件刻意不做什么」的范围线。
 
-## PerryLink DSH 插件家族
+## PerryLink DSH Plugin Family
 
 本项目是 [PerryLink](https://github.com/PerryLink) 维护的 DeepSeek Harness 插件家族成员。完整名单默认折叠，避免每个 README 的首屏被长表淹没；点击展开可查看每一行及其状态。
 
