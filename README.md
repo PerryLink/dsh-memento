@@ -107,7 +107,44 @@ These are the plugin's real entry points; install once, then call one.
 
 #### Detailed example
 
-- `memory_recall`
+**Command**
+
+~~~sh
+memory_stats
+~~~
+
+**Input**
+
+~~~json
+{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"memory_stats","arguments":{}}}
+~~~
+
+**Output**
+
+~~~text
+{
+  "total": 3,
+  "namespaces": [
+    {
+      "track": "agent",
+      "scope": "user-global",
+      "count": 1
+    },
+    {
+      "track": "agent",
+      "scope": "workspace",
+      "count": 1
+    },
+    {
+      "track": "user",
+      "scope": "workspace",
+      "count": 1
+    }
+  ]
+}
+~~~
+
+*Observed from `test/mcp.test.mjs:108-118 (fixture seed at 21-27); README.md:160-176`*
 
 #### Brief examples
 

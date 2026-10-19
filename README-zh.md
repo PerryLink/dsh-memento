@@ -107,7 +107,44 @@ dsh --profile web --dump-config | grep -A3 'id: memento'
 
 #### 详细示例
 
-- `memory_recall`
+**命令**
+
+~~~sh
+memory_stats
+~~~
+
+**输入**
+
+~~~json
+{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"memory_stats","arguments":{}}}
+~~~
+
+**输出**
+
+~~~text
+{
+  "total": 3,
+  "namespaces": [
+    {
+      "track": "agent",
+      "scope": "user-global",
+      "count": 1
+    },
+    {
+      "track": "agent",
+      "scope": "workspace",
+      "count": 1
+    },
+    {
+      "track": "user",
+      "scope": "workspace",
+      "count": 1
+    }
+  ]
+}
+~~~
+
+*来源 `test/mcp.test.mjs:108-118 (fixture seed at 21-27); README.md:160-176`*
 
 #### 简短示例
 

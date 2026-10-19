@@ -107,7 +107,44 @@ São os pontos de entrada reais; instale e chame um.
 
 #### Exemplo detalhado
 
-- `memory_recall`
+**Comando**
+
+~~~sh
+memory_stats
+~~~
+
+**Entrada**
+
+~~~json
+{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"memory_stats","arguments":{}}}
+~~~
+
+**Saída**
+
+~~~text
+{
+  "total": 3,
+  "namespaces": [
+    {
+      "track": "agent",
+      "scope": "user-global",
+      "count": 1
+    },
+    {
+      "track": "agent",
+      "scope": "workspace",
+      "count": 1
+    },
+    {
+      "track": "user",
+      "scope": "workspace",
+      "count": 1
+    }
+  ]
+}
+~~~
+
+*Observado em `test/mcp.test.mjs:108-118 (fixture seed at 21-27); README.md:160-176`*
 
 #### Exemplos breves
 
