@@ -295,6 +295,9 @@ Static evidence: `dsh-plugin-doctor` K10–K13 report `pass` for every check on 
 
 ## Contributors
 
+- [@alone-tree](https://github.com/alone-tree) — DSH settings panel entry and hideable floating window (#8).
+- [@zzproc](https://github.com/zzproc) — `memory_recall` output schema `source`/`tags` fix (#11).
+
 - [@Niuniu-Sir](https://github.com/Niuniu-Sir) — the boot-crash report in [issue #1](https://github.com/PerryLink/dsh-memento/issues/1) that led to the `~/.dsh` fallback shipped in 0.3.1.
 - [@alex-debap](https://github.com/alex-debap) — **product manager**. Owned the shape of the product rather than its code, across the whole design arc from the outset: the seam-not-warehouse thesis (a typed `ctx.memory` seam, not another memory warehouse), the requirement that the write-approval gate be enforced inside the service so that no model path can bypass it rather than being a tool-layer convention, and the audit guarantee that every write be rebuildable from the approval pair plus the plugin's own audit table. Named the bounded, layered recall model — two tracks × two layers, per-agent key, hard per-track/per-layer character budgets — and argued for local-first, zero-credential storage (`0600` SQLite under `$DSH_HOME`, no network, no keys). Carried the protocol work as a product line: the public `dsh-memory-protocol` v1 rehearsal, its adapter registry and its conformance suite. Held the scope line on what this plugin deliberately does not do.
 
