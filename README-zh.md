@@ -53,9 +53,10 @@ dsh plugin --profile <name> add dsh-memento
 
 一个类型安全的 `ctx.memory` 接缝、模型绕不过去的写入审批门，以及可重建的审计链——来自审批对加插件自有审计表，并把会话日志侧的缺口说出来。
 
-![dsh-memento 终端演示：dsh-memento — read-only stdio MCP server, tools/list over JSON-RPC](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-hero.png)
+![dsh-memento 工作流图：安装 → 打开面板 → 操作。](docs/assets/dsh-memento-flow.svg)
 
-![Animated terminal demo of dsh-memento](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo.gif)
+*工作流概览：安装 → 打开面板 → 操作。下面的示例使用实际命令面。*
+
 
 *同一次运行，动图版。*
 
@@ -99,6 +100,18 @@ dsh plugin --profile web add dsh-memento
 # 2. restart and verify the row
 dsh --profile web --dump-config | grep -A3 'id: memento'
 ```
+
+### 示例
+
+以下为插件真实入口；安装后调用一个即可。
+
+#### 详细示例
+
+- `memory_recall`
+
+#### 简短示例
+
+- `/memory`
 
 ## Configuration
 

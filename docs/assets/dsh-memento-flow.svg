@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-label="dsh-memento workflow">
+<title>dsh-memento workflow</title>
+<rect width="1200" height="360" rx="18" fill="#0d1117"/>
+<text x="60" y="58" fill="#f0f6fc" font-family="ui-sans-serif,system-ui,sans-serif" font-size="30" font-weight="700">dsh-memento</text>
+<text x="60" y="92" fill="#8b949e" font-family="ui-monospace,monospace" font-size="16">DeepSeek Harness plugin</text>
+<line x1="60" y1="118" x2="1140" y2="118" stroke="#30363d"/>
+<rect x="120" y="150" width="240" height="140" rx="14" fill="#161b22" stroke="#7c3aed" stroke-width="2"/>
+<path d="M240 189v38m0 0l13-13m-13 13L227 214" stroke="#7c3aed" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M217 235h46" stroke="#7c3aed" stroke-width="3"/>
+<circle cx="330" cy="270" r="13" fill="#7c3aed"/><text x="330" y="276" fill="#0d1117" text-anchor="middle" font-family="ui-monospace,monospace" font-size="14" font-weight="700">1</text>
+<path d="M368 220h64" stroke="#7c3aed" stroke-width="3"/><path d="M422 213l10 7-10 7" fill="none" stroke="#7c3aed" stroke-width="3" stroke-linecap="round"/>
+<rect x="480" y="150" width="240" height="140" rx="14" fill="#161b22" stroke="#7c3aed" stroke-width="2"/>
+<rect x="576" y="189" width="48" height="50" rx="7" fill="none" stroke="#7c3aed" stroke-width="3"/><path d="M576 203h48M585 196h4m6 0h4" stroke="#7c3aed" stroke-width="3"/>
+<circle cx="690" cy="270" r="13" fill="#7c3aed"/><text x="690" y="276" fill="#0d1117" text-anchor="middle" font-family="ui-monospace,monospace" font-size="14" font-weight="700">2</text>
+<path d="M728 220h64" stroke="#7c3aed" stroke-width="3"/><path d="M782 213l10 7-10 7" fill="none" stroke="#7c3aed" stroke-width="3" stroke-linecap="round"/>
+<rect x="840" y="150" width="240" height="140" rx="14" fill="#161b22" stroke="#7c3aed" stroke-width="2"/>
+<path d="M947 193l30 32-14 2-8 15z" fill="none" stroke="#7c3aed" stroke-width="3" stroke-linejoin="round"/>
+<circle cx="1050" cy="270" r="13" fill="#7c3aed"/><text x="1050" y="276" fill="#0d1117" text-anchor="middle" font-family="ui-monospace,monospace" font-size="14" font-weight="700">3</text>
+<text x="60" y="332" fill="#8b949e" font-family="ui-monospace,monospace" font-size="14">PerryLink DSH plugin family · Apache-2.0</text>
+</svg>

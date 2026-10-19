@@ -53,9 +53,10 @@ DeepSeek Harness के लिए परिबद्ध, स्तरित, अ
 
 एक टाइप्ड `ctx.memory` सीम, एक राइट-अनुमोदन द्वार जिसे मॉडल का कोई रास्ता बायपास नहीं कर सकता, और एक पुनर्निर्मेय ऑडिट — अनुमोदन जोड़ी और प्लगइन की अपनी ऑडिट तालिका से, सेशन लॉग की कमी को खुलकर बताते हुए।
 
-![dsh-memento का टर्मिनल डेमो: dsh-memento — read-only stdio MCP server, tools/list over JSON-RPC](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-hero.png)
+![dsh-memento कार्यप्रवाह आरेख: इंस्टॉल → पैनल खोलें → कार्य।](docs/assets/dsh-memento-flow.svg)
 
-![Animated terminal demo of dsh-memento](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo.gif)
+*कार्यप्रवाह: इंस्टॉल → पैनल खोलें → कार्य। नीचे के उदाहरण वास्तविक कमांड सतह का उपयोग करते हैं।*
+
 
 *वही रन, एनिमेटेड।*
 
@@ -99,6 +100,18 @@ dsh plugin --profile web add dsh-memento
 # 2. restart and verify the row
 dsh --profile web --dump-config | grep -A3 'id: memento'
 ```
+
+### उदाहरण
+
+ये वास्तविक प्रवेश बिंदु हैं; इंस्टॉल के बाद एक चलाएँ।
+
+#### विस्तृत उदाहरण
+
+- `memory_recall`
+
+#### संक्षिप्त उदाहरण
+
+- `/memory`
 
 ## Configuration
 

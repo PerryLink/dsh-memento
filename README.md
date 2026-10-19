@@ -54,11 +54,11 @@ Bounded, layered, approval-gated, auditable cross-session memory for DeepSeek Ha
 
 A typed `ctx.memory` seam, a write-approval gate no model path can bypass, and an audit trail you can rebuild — from the approval pair plus the plugin's own audit table, with the session-log gap named out loud.
 
-![Terminal demo of dsh-memento: dsh-memento — read-only stdio MCP server, tools/list over JSON-RPC](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-hero.png)
+![Workflow diagram for dsh-memento: install → open panel → act.](docs/assets/dsh-memento-flow.svg)
 
-![Animated terminal demo of dsh-memento](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo.gif)
+*Workflow overview: install → open panel → act. The examples below use the real command surface.*
 
-*The same run, animated.*
+
 
 [![dsh-memento video walkthrough — opens the MP4 file](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo-video.png)](https://github.com/PerryLink/dsh-memento/blob/main/docs/assets/dsh-memento-demo.mp4)
 
@@ -100,6 +100,18 @@ dsh plugin --profile web add dsh-memento
 # 2. restart and verify the row
 dsh --profile web --dump-config | grep -A3 'id: memento'
 ```
+
+### Examples
+
+These are the plugin's real entry points; install once, then call one.
+
+#### Detailed example
+
+- `memory_recall`
+
+#### Brief examples
+
+- `/memory`
 
 ## Configuration
 

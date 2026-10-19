@@ -53,9 +53,10 @@ Memoria entre sesiones acotada, por capas, con puerta de aprobación y auditable
 
 Una costura tipada `ctx.memory`, una puerta de aprobación de escritura que ninguna ruta del modelo puede eludir y una auditoría reconstruible — desde el par de aprobación más la tabla de auditoría del plugin, con la brecha del registro de sesión dicha en voz alta.
 
-![Demostración de terminal de dsh-memento: dsh-memento — read-only stdio MCP server, tools/list over JSON-RPC](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-hero.png)
+![Diagrama de flujo de dsh-memento: instalar → abrir panel → actuar.](docs/assets/dsh-memento-flow.svg)
 
-![Animated terminal demo of dsh-memento](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo.gif)
+*Resumen del flujo: instalar → abrir panel → actuar. Los ejemplos siguientes usan la superficie de comandos real.*
+
 
 *La misma ejecución, animada.*
 
@@ -99,6 +100,18 @@ dsh plugin --profile web add dsh-memento
 # 2. restart and verify the row
 dsh --profile web --dump-config | grep -A3 'id: memento'
 ```
+
+### Ejemplos
+
+Son los puntos de entrada reales; instala y llama a uno.
+
+#### Ejemplo detallado
+
+- `memory_recall`
+
+#### Ejemplos breves
+
+- `/memory`
 
 ## Configuration
 
