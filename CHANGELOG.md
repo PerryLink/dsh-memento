@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.5.28] - 2026-10-22
+
+### Added
+
+- **The floating entry is draggable and remembers its position (issue #21).** Pointer Events with `setPointerCapture` move `#mem-open`; a drag past 4px persists `{x,y}` in `localStorage` (`dsh.memento.fab.position.v1`), clamps into the viewport with an 8px margin, and re-clamps on `resize` / `orientationchange`. Double-click resets to the CSS default. The click that follows a drag is swallowed, and the suppression clears on the next task so a later click still opens the drawer.
+
+### Fixed
+
+- **Narrow screens no longer put the entry on top of the send button.** Below 640px the default position moves to `bottom: 132px`; once the user drags it, the stored position wins.
+
 ## [0.5.27] - 2026-10-18
 
 ### Changed

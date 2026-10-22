@@ -33,6 +33,13 @@
 
 const PANEL_ID = 'dsh-memento-panel'
 
+/** 悬浮入口位置（localStorage，per-device）。 */
+const FAB_POSITION_KEY = 'dsh.memento.fab.position.v1'
+/** 悬浮入口与视口边缘的最小间距（px）。 */
+const FAB_MARGIN = 8
+/** 超过该位移才算拖动，避免手抖吞掉点击（px）。 */
+const FAB_DRAG_THRESHOLD = 4
+
 /** 本页已渲染的悬浮入口按钮引用（设置页 panel.enabled 开关即时切换用）。 */
 /** @type {HTMLElement | null} */
 let panelOpenButton = null
@@ -188,8 +195,11 @@ function installPanel(state) {
   style.textContent = `
 #dsh-memento-panel { position: fixed; z-index: 2147483000; font: 13px/1.5 system-ui, "Segoe UI", sans-serif; }
 #mem-open { position: fixed; right: 16px; bottom: 56px; z-index: 2147483000; padding: 8px 14px; border: 1px solid #3f6fae;
-  border-radius: 999px; background: #0d1526; color: #7db4ff; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+  border-radius: 999px; background: #0d1526; color: #7db4ff; cursor: grab; touch-action: none; user-select: none;
+  box-shadow: 0 4px 14px rgba(0,0,0,.35); }
 #mem-open:hover { background: #16233c; }
+#mem-open[data-dragging="1"] { cursor: grabbing; }
+@media (max-width: 640px) { #mem-open:not([data-positioned="1"]) { bottom: 132px; } }
 #mem-drawer { position: fixed; right: 0; top: 0; bottom: 0; width: 460px; max-width: 92vw; display: flex; flex-direction: column;
   background: #101827; color: #d7e2f2; border-left: 1px solid #24344d; box-shadow: -8px 0 24px rgba(0,0,0,.4); }
 #mem-head { padding: 10px 12px; border-bottom: 1px solid #24344d; display: flex; gap: 8px; align-items: center; }
@@ -238,6 +248,161 @@ function installPanel(state) {
   const refreshBtn = document.getElementById('mem-refresh')
   const closeBtn = document.getElementById('mem-close')
   const filterInput = /** @type {HTMLInputElement} */ (document.getElementById('mem-filter'))
+
+  // ── 悬浮入口：可拖动 + 位置记忆 + 视口夹取 + 双击复位 ─────────────────────
+  /** @returns {{width: number, height: number}} 当前视口尺寸。 */
+  const viewportSize = () => ({
+    width: Number.isFinite(window.innerWidth) ? window.innerWidth : 1024,
+    height: Number.isFinite(window.innerHeight) ? window.innerHeight : 768,
+  })
+
+  /**
+   * 把一个坐标夹进视口内（保留 FAB_MARGIN 边距）。
+   * @param {number} value - 目标坐标。
+   * @param {number} size - 悬浮钮在该轴上的尺寸。
+   * @param {number} limit - 视口在该轴上的尺寸。
+   * @returns {number} 夹取后的坐标。
+   */
+  const clampAxis = (value, size, limit) => Math.min(
+    Math.max(value, FAB_MARGIN),
+    Math.max(FAB_MARGIN, limit - size - FAB_MARGIN),
+  )
+
+  /** @returns {{x: number, y: number} | null} 上次持久化的位置，损坏/不可用时为 null。 */
+  const readFabPosition = () => {
+    try {
+      const raw = localStorage.getItem(FAB_POSITION_KEY)
+      if (raw === null) return null
+      const parsed = JSON.parse(raw)
+      if (Number.isFinite(parsed?.x) && Number.isFinite(parsed?.y)) return { x: parsed.x, y: parsed.y }
+    } catch {
+      // 隐私模式或损坏值：退回 CSS 默认位置。
+    }
+    return null
+  }
+
+  /** @param {{x: number, y: number}} position - 要持久化的位置。 */
+  const storeFabPosition = (position) => {
+    try {
+      localStorage.setItem(FAB_POSITION_KEY, JSON.stringify(position))
+    } catch {
+      // 存储不可用不阻断拖动。
+    }
+  }
+
+  const clearFabPosition = () => {
+    try {
+      localStorage.removeItem(FAB_POSITION_KEY)
+    } catch {
+      // 存储不可用不阻断复位。
+    }
+  }
+
+  /**
+   * 应用并夹取一个位置；返回实际落点。
+   * @param {number} x - 目标 left。
+   * @param {number} y - 目标 top。
+   * @returns {{x: number, y: number}} 夹取后的落点。
+   */
+  const applyFabPosition = (x, y) => {
+    const rect = openBtn.getBoundingClientRect()
+    const viewport = viewportSize()
+    const left = clampAxis(x, rect.width || 96, viewport.width)
+    const top = clampAxis(y, rect.height || 36, viewport.height)
+    openBtn.style.left = `${left}px`
+    openBtn.style.top = `${top}px`
+    openBtn.style.right = 'auto'
+    openBtn.style.bottom = 'auto'
+    openBtn.dataset.positioned = '1'
+    return { x: left, y: top }
+  }
+
+  /** 清掉持久化与内联坐标，回到 CSS 默认位置（窄屏 media query 也重新生效）。 */
+  const resetFabPosition = () => {
+    clearFabPosition()
+    openBtn.style.left = ''
+    openBtn.style.top = ''
+    openBtn.style.right = ''
+    openBtn.style.bottom = ''
+    delete openBtn.dataset.positioned
+  }
+
+  const storedFab = readFabPosition()
+  if (storedFab !== null) applyFabPosition(storedFab.x, storedFab.y)
+
+  /** @type {{id: number, startX: number, startY: number, offsetX: number, offsetY: number, moved: boolean} | null} */
+  let fabDrag = null
+  let fabSuppressClick = false
+
+  /**
+   * 结束一次拖动；移动过则持久化并吞掉紧随的 click。
+   * @param {PointerEvent} event - pointerup / pointercancel。
+   * @returns {void}
+   */
+  const endFabDrag = (event) => {
+    if (fabDrag === null) return
+    if (event?.pointerId !== undefined && event.pointerId !== fabDrag.id) return
+    const moved = fabDrag.moved
+    fabDrag = null
+    delete openBtn.dataset.dragging
+    try {
+      openBtn.releasePointerCapture?.(event?.pointerId)
+    } catch {
+      // 指针可能已释放。
+    }
+    if (moved) {
+      fabSuppressClick = true
+      // The click that follows this pointerup (if any) is swallowed synchronously; clear the
+      // flag on the next task so a drag that ended outside the button cannot eat a later click.
+      setTimeout(() => { fabSuppressClick = false }, 0)
+      const rect = openBtn.getBoundingClientRect()
+      storeFabPosition({ x: rect.left, y: rect.top })
+    }
+  }
+
+  openBtn.addEventListener('pointerdown', (event) => {
+    if (event.button !== undefined && event.button !== 0) return
+    const rect = openBtn.getBoundingClientRect()
+    fabDrag = {
+      id: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+      moved: false,
+    }
+    try {
+      openBtn.setPointerCapture?.(event.pointerId)
+    } catch {
+      // 指针捕获是增强项，失败仍可拖动。
+    }
+  })
+
+  openBtn.addEventListener('pointermove', (event) => {
+    if (fabDrag === null || event.pointerId !== fabDrag.id) return
+    if (!fabDrag.moved && Math.hypot(event.clientX - fabDrag.startX, event.clientY - fabDrag.startY) < FAB_DRAG_THRESHOLD) return
+    fabDrag.moved = true
+    openBtn.dataset.dragging = '1'
+    applyFabPosition(event.clientX - fabDrag.offsetX, event.clientY - fabDrag.offsetY)
+    event.preventDefault?.()
+  })
+
+  openBtn.addEventListener('pointerup', endFabDrag)
+  openBtn.addEventListener('pointercancel', endFabDrag)
+
+  openBtn.addEventListener('dblclick', (event) => {
+    event.preventDefault()
+    resetFabPosition()
+  })
+
+  /** 视口变化时把已定位的按钮重新夹回可见区域。 */
+  const reclampFab = () => {
+    if (openBtn.dataset.positioned !== '1') return
+    const rect = openBtn.getBoundingClientRect()
+    applyFabPosition(rect.left, rect.top)
+  }
+  window.addEventListener('resize', reclampFab)
+  window.addEventListener('orientationchange', reclampFab)
 
   /**
    * 按服务端 language 切换文案并刷新静态标签（语言随配置，运行期不变）。
@@ -363,6 +528,10 @@ function installPanel(state) {
   }
 
   openBtn.addEventListener('click', () => {
+    if (fabSuppressClick) {
+      fabSuppressClick = false
+      return
+    }
     drawer.style.display = drawer.style.display === 'none' ? 'flex' : 'none'
     if (drawer.style.display !== 'none') void refresh()
   })
