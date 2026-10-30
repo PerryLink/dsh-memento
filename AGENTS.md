@@ -22,7 +22,7 @@ lib/workspace.mjs    工作区键规范化（Windows 大小写不敏感，零依
 lib/extract.mjs      会话事件文本抽取（memory_recall 历史片段用，零依赖）
 lib/strings.mjs      模型可见/命令面双语词表（快照头/分组标题/提案头，零依赖）
 lib/store.mjs        node:sqlite Provider：条目表+审计账本+迁移（零依赖）
-client/client.js     Web 面板（零构建 vanilla，只读；en/zh 随 language 配置；经 dsh.client 注入；设置句柄两线解析：configForms / settingsScope）
+client/client.js     Web 面板（零构建 vanilla，只读；en/zh 随 language 配置；经 dsh.client 注入；设置句柄经注入的 configForms 服务解析）
 scripts/             机械门：verify-readmes.mjs（五语一致性）、check-coverage.mjs（覆盖率）、verify-self-contained.mjs（拒绝仓库外依赖）、verify-artifacts.mjs（制品齐全+语法+导入）、loader-runner.mjs（真实 Loader composition，装 stderr log exporter）、typecheck-checkout.mjs、check-lockfile-drift.mjs
 cordis.patch.yml     bundle 声明（insert memento；其 `id` 就是设置表单的 namespace，见 index.mjs 的 SETTINGS_ENTRY_ID）
 package.json         npm 元数据；files 白名单 = 发布内容（含 docs/ 协议三件套与一致性套件）
@@ -96,7 +96,7 @@ npm run test:conformance  # 协议一致性套件（黄金参考；第三方 Pro
 - 注册期固定的面（工具描述文案、快照段顺序）在 volatile 编辑后**不会**跟着变，只能重载——这是与旧线的唯一行为差异，`onChange` 里对 `snapshotOrder` 写 `settings-startup-fields` 审计行。
 - `.volatile()` 是 **3.18.3 起的运行期方法**，schema 在模块求值期构建：裸调用会让 peer 范围仍声明支持的 `0.1.2-rc.1` / `0.1.5-alpha.1` / `0.1.6-0` 线在 import 阶段硬崩。一律经 `liveField()` 探测；旧宿主上字段保持普通值，设置面走保留下来的 `installSection` 形状分派。
 - 注册面能表达的约束搬进 schema（`.pattern()` / `min` / `max` / `step(1)`）——设置编辑器在**持久化前**用 schema 解析合并后的 config；schemastery 3.18.3 **没有 `.check()`**，跨字段规则（`writePolicies` 键文法、`budgets` 形状）只能留在 `validateMemoryConfig`（加载期 + 运行期，被拒的实时编辑留 `settings-rejected` 审计行）。
-- 浏览器半**不要把任一设置服务写进 `inject`**（`configForms` / `settingsScope`）：两条线各只有一个在场，写进去会让对面宿主的 fiber 永久 PENDING，连只读浮层面板一起消失。解析走 `resolveSettingsScope` 的可选读取，缺席降级只读。
+- 浏览器半把 `configForms` 静态写进 `inject`（`['slots', 'configForms']`）：0.2.x 宿主把 configForms 作为**注入式**客户端服务提供，软探测永远落空，不声明就只能渲染只读空壳。代价是 0.1.x 旧宿主线上整个客户端模块（含悬浮面板）不会挂载——peer/engines 已收窄到 `>=0.2.1-0 <0.3.0`，不再支持也不声明旧线。
 
 ## 质量约定
 
