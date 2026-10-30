@@ -136,9 +136,18 @@ async function mountPanel({ storageSeed } = {}) {
   assert.ok(entry, 'bundle must register through window.__ModuleLoader__.load')
   const client = entry.factory(() => ({ createElement: () => null }))
   const ctx = {
-    get() { return undefined },
     effect(callback) { return callback() },
     slots: { inject() { return () => {} }, register(options) { return options } },
+    // 拖拽测试不关心设置卡片，但 apply 恒挂卡片：给一个最小 ConfigForm 替身。
+    configForms: {
+      get() {
+        return {
+          getSnapshot: () => ({ status: 'ready', value: { language: 'en', writePolicy: 'ask', writePolicies: {}, dbPath: '', budgets: { user: { userGlobal: 2000, workspace: 2000 }, agent: { userGlobal: 4000, workspace: 4000 } }, panel: { enabled: true } }, user: {}, base: {}, writable: true }),
+          subscribe: () => () => {},
+          set: async () => false,
+        }
+      },
+    },
   }
   client.apply(ctx)
   await new Promise(resolve => setImmediate(resolve))

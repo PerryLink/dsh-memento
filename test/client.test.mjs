@@ -1,13 +1,12 @@
-// test/client.test.mjs — 浏览器半的设置句柄解析与两线行为。
+// test/client.test.mjs — 浏览器半的设置句柄解析。
 //
 // client/client.js 不是 Node 模块：宿主把它当 classic script 注入页面，执行时经
 // window.__ModuleLoader__.load 注册 factory。本套件用 node:vm 提供那一层环境，
 // 拿 factory 造出客户端插件定义，再用假 ctx 驱动 apply——于是有两条硬证据：
 //
-// 1. `inject` 里**只有 slots**。设置句柄的两条线（0.1.7 的 configForms、旧线的
-//    settingsScope）各只有一个在场，任一个写进 inject 都会让对面宿主的 fiber 永久
-//    PENDING——整个客户端插件连同只读面板一起不挂载。
-// 2. 两条线各自解析到正确的句柄与 namespace，缺席时降级为只读卡片（不抛）。
+// 1. `inject` 静态声明 `['slots', 'configForms']`。configForms 在 0.2.x 宿主上
+//    是注入式提供的客户端服务，软探测拿不到，不声明就只能渲染只读空壳。
+// 2. 句柄解析到 configForms.get(entryId) 的 ConfigForm，卡片读到实时快照。
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -54,14 +53,14 @@ function makeClientPlugin() {
 }
 
 /**
- * 假客户端上下文：记录 slots 注册与 effect 回调，服务面按名字取。
- * @param {Record<string, unknown>} services - 在场服务。
+ * 假客户端上下文：记录 slots 注册与 effect 回调，注入的服务直接挂属性。
+ * @param {Record<string, unknown>} services - 注入服务（如 configForms）。
  */
 function makeClientCtx(services) {
   /** @type {Array<{name: string, options: object, side: () => object}>} */
   const contributions = []
   const ctx = {
-    get(/** @type {string} */ name) { return services[name] },
+    ...services,
     effect(/** @type {() => unknown} */ callback) { return callback() },
     slots: {
       inject(/** @type {string} */ name, /** @type {() => object} */ callback) {
@@ -105,30 +104,12 @@ function makeFakeConfigForm() {
   return { configForms, form, calls }
 }
 
-/** 旧线 settingsScope 替身。 */
-function makeFakeSettingsScope() {
-  const calls = { bound: [], subscribed: 0, set: [] }
-  const scope = {
-    getSnapshot: () => ({
-      status: 'ready',
-      value: { language: 'en', writePolicy: 'ask', writePolicies: {}, dbPath: '', budgets: { user: { userGlobal: 2000, workspace: 2000 }, agent: { userGlobal: 4000, workspace: 4000 } }, panel: { enabled: true } },
-      user: {},
-      base: {},
-      writable: true,
-    }),
-    subscribe() { calls.subscribed += 1; return () => {} },
-    async set(/** @type {string} */ field, /** @type {unknown} */ value) { calls.set.push([field, value]); return true },
-  }
-  const settingsScope = { bind(/** @type {{namespace: string}} */ options) { calls.bound.push(options); return scope } }
-  return { settingsScope, scope, calls }
-}
-
 /** 等一个宏任务，让 save() 的 await 链跑完。 */
 const settle = () => new Promise((resolve) => { setImmediate(resolve) })
 
-test('inject 只有 slots：两条设置线都不写进 inject（否则对面宿主 fiber 永久 PENDING）', () => {
+test('inject 声明 slots + configForms：0.2.x 注入式设置服务的静态声明', () => {
   const client = makeClientPlugin()
-  assert.deepEqual(hostValue(client.inject), ['slots'])
+  assert.deepEqual(hostValue(client.inject), ['slots', 'configForms'])
   assert.equal(client.name, 'memento-client')
 })
 
@@ -170,38 +151,4 @@ test('0.1.7 线：暂存—保存按顶层聚合并经 CF.set(field, value) 写�
   face.save()
   await settle()
   assert.deepEqual(hostValue(fake.calls.set), [['panel', { enabled: true }]], '非法草稿不得写入')
-})
-
-test('旧线：settingsScope.bind({namespace: dsh-memento}) 仍是可用来源', () => {
-  const client = makeClientPlugin()
-  const fake = makeFakeSettingsScope()
-  const { ctx, contributions } = makeClientCtx({ settingsScope: fake.settingsScope })
-  ctx.effect(() => client.apply(ctx))
-  assert.deepEqual(hostValue(fake.calls.bound), [{ namespace: 'dsh-memento' }])
-  assert.equal(fake.calls.subscribed, 1)
-  const face = /** @type {any} */ (contributions[0].options).inject()
-  const snapshot = face.hooks.mementoCard.getSnapshot()
-  assert.equal(snapshot.available, true)
-  assert.equal(snapshot.language, 'en')
-})
-
-test('两条线同时在场时取 0.1.7 线（configForms 优先）', () => {
-  const client = makeClientPlugin()
-  const forms = makeFakeConfigForm()
-  const legacy = makeFakeSettingsScope()
-  const { ctx } = makeClientCtx({ configForms: forms.configForms, settingsScope: legacy.settingsScope })
-  ctx.effect(() => client.apply(ctx))
-  assert.equal(forms.calls.get, 1)
-  assert.deepEqual(legacy.calls.bound, [], '不得回退到旧线')
-})
-
-test('两条线都不在场：卡片降级为只读，不抛错', () => {
-  const client = makeClientPlugin()
-  const { ctx, contributions } = makeClientCtx({})
-  ctx.effect(() => client.apply(ctx))
-  const face = /** @type {any} */ (contributions[0].options).inject()
-  const snapshot = face.hooks.mementoCard.getSnapshot()
-  assert.equal(snapshot.available, false)
-  assert.equal(snapshot.writable, false, '缺席即只读（与旧线 namespace 未注册时的形态一致）')
-  assert.doesNotThrow(() => face.save())
 })
