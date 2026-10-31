@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.29] - 2026-10-31
+
+### Changed
+
+- Docs: correct the stale FROZEN description and add the active/see-also note; no code change.
+
 ## [0.5.28] - 2026-10-22
 
 ### Added
