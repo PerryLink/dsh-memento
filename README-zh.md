@@ -1,6 +1,10 @@
 <div align="center">
 
 # dsh-memento
+
+> **状态：活跃。** 2026-10-12 已解冻；旧的 “FROZEN since 2026-10-05” 描述已过期。
+
+**参见：** `dsh-mnemon` 是带 mem0/Honcho 托管 provider 的 framework，锁在 0.2.1 线；`@openviking/dsh-memory-plugin` 是 Volcengine 示例，未声明 dsh engine；`dsh-plugin-memory` 是最接近的同类，无 provenance。`dsh-memento` 是本地 SQLite + 审批门 + 审计链，不是托管 provider 的 drop-in。
 - **1024 商店渠道**：先 `npm i -g dsh1024`，再 `dsh1024 plugin --profile web add dsh-memento`（计入 [deepseek1024.com](https://deepseek1024.com) 安装排行）。
 
 **给 DeepSeek Harness 补上有界、分层、带审批门、可审计的跨会话记忆。**

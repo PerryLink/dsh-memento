@@ -1,6 +1,11 @@
 <div align="center">
 
 # dsh-memento
+
+> **Status: active.** Unfrozen on 2026-10-12; the old "FROZEN since 2026-10-05" description was stale.
+
+**See also.** `dsh-mnemon` is a framework with mem0/Honcho hosted providers, pinned to the 0.2.1 line; `@openviking/dsh-memory-plugin` is a Volcengine example with no declared dsh engine; `dsh-plugin-memory` is the closest in kind and has no provenance. `dsh-memento` is the local SQLite seam with an approval gate and audit trail, not a drop-in for the hosted providers.
+
 - **Canal 1024 store**: `npm i -g dsh1024` una vez, luego `dsh1024 plugin --profile web add dsh-memento` (cuenta para el ranking de instalaciones de [deepseek1024.com](https://deepseek1024.com)).
 
 **Memoria entre sesiones acotada, por capas, con puerta de aprobación y auditable para DeepSeek Harness.**
