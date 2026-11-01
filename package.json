@@ -53,7 +53,9 @@
     "docs/upstream-proposal.md",
     "docs/upstream-proposal.zh.md",
     "docs/schemas",
-    "test/protocol-conformance"
+    "test/protocol-conformance",
+    "PRIVACY.md",
+    "icon.svg"
   ],
   "repository": {
     "type": "git",
@@ -186,5 +188,6 @@
   "funding": {
     "type": "individual",
     "url": "https://github.com/sponsors/PerryLink"
-  }
+  },
+  "icon": "icon.svg"
 }
