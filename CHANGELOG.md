@@ -1,10 +1,16 @@
 # Changelog
 
-## [0.5.29] - 2026-10-31
+## [Unreleased]
 
 ### Changed
 
-- Docs: correct the stale FROZEN description and add the active/see-also note; no code change.
+- **Host 0.2.2 line support.** devDependencies move from 0.2.1-rc.2 to 0.2.2-rc.1; cordis `^4.1.0`, cordis-plugin-include `^1.1.0`, cordis-plugin-loader `^1.1.0`, and schemastery `~3.19.0` so one copy resolves against the host vendor set. `pnpm-workspace.yaml`'s load-bearing overrides follow the same line (cordis 4.1.0 / cosmokit 1.9.0 / schemastery 3.19.0). `engines.dsh` appends `>=0.2.2-0 <0.3.0` (append-only timeline) and `engines.node` becomes `^22.19.0 || >=24.9.0`. Both lockfiles are regenerated for the new pins.
+- **Composition fixtures mount two services the 0.2.2 line made mandatory.** `@deepseek-ai/dsh-tool-executor-native` (raw batch execution moved behind a pluggable executor) and `@deepseek-ai/dsh-session-projection` (`dsh-user-approval` 0.2.2 injects `sessionProjections`) are added as devDependencies and as rows in the Loader composition fixtures.
+
+### Fixed
+
+- **`scripts/loader-runner.mjs` uses the 0.2.2 batch tool API.** The single `ctx.tools.execute({callId, name, arguments, …})` call becomes `calls: [{type: 'tool-call', id, name, arguments: JSON.stringify(…)}]` with a required `signal`, and the result is read from `batch.results[0]?.result`. The runner now awaits each loaded row with `fiber.await()`: cordis 4.1.0 settles a failed row on the fiber instead of rejecting `loader.await()`, so the invalid-config and default-export negatives keep failing for their real reason.
+- **`package-lock.json` regenerated.** CI installs with `npm ci`; the tracked lockfile still described the 0.2.1 line (and an older package version), which no longer matches `package.json` after the bump.
 
 ## [0.5.28] - 2026-10-22
 

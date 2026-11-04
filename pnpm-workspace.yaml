@@ -1,14 +1,14 @@
 ﻿# 本地安装策略（pnpm 11 只读本文件，不读 package.json 的 pnpm 字段）。
 #
-# overrides 的三条**裸包名**行是承重的：0.1.7-rc.2 线要求
-# `Volatile` 由 cordis 4.0.3 转出（cosmokit 1.8.4 提供），
-# `Schema.prototype.volatile` 由 schemastery 3.18.3 提供。名义范围
-# （`^4.0.2` / `^3.18.2`）虽覆盖这些版本，但已钉旧 patch 的 lockfile
-# 会继续解析到旧版，所以下限必须显式写死。
+# overrides 的三条**裸包名**行是承重的：0.2.2 线要求
+# `Volatile` 由 cordis 4.1.0 转出（cosmokit 1.9.0 提供），
+# `Schema.prototype.volatile` 由 schemastery 3.19.0 提供。名义范围
+# （`^4.1.0` / `~3.19.0`）虽覆盖这些版本，但已钉旧 patch 的 lockfile
+# 会继续解析到旧版，所以下限必须显式写死（与宿主 checkout 的 vendor 一致）。
 overrides:
-  '@deepseek-ai/cordis': 4.0.5-alpha.1
-  '@deepseek-ai/cosmokit': 1.8.6-alpha.1
-  '@deepseek-ai/schemastery': 3.18.5-alpha.1
+  '@deepseek-ai/cordis': 4.1.0
+  '@deepseek-ai/cosmokit': 1.9.0
+  '@deepseek-ai/schemastery': 3.19.0
 
 minimumReleaseAgeExclude:
   - '@deepseek-ai/*'

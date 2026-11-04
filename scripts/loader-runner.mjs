@@ -74,7 +74,21 @@ try {
     name: 'cordis:include',
     config: { path: pathToFileURL(configPath).href },
   })
-  await ctx.loader.await()
+
+  /**
+   * 等 Loader 与每一行 fiber 落定。
+   *
+   * 0.2.2 线（loader 1.1.0）起，行导入失败或 config 解析失败**不再 reject**
+   * `loader.await()`，错误落在该行自己的 fiber 上：不逐行 await 的话，负例会
+   * 以「注册表里少了个条目」的兜底断言收场，而不是真实的 config / import 原因。
+   */
+  const awaitLoader = async () => {
+    await ctx.loader.await()
+    // cordis 4.1.0 的 Fiber 不是 thenable（`await fiber` 是 no-op），必须用
+    // fiber.await()：它等到加载落定并重抛该行自己的错误。
+    for (const entry of ctx.loader.entries()) await entry.fiber?.await()
+  }
+  await awaitLoader()
 
   if (expected === 'reload') {
     const include = /** @type {any} */ (ctx.loader.resolve(includeId)?.subtree)
@@ -91,7 +105,7 @@ try {
     const editConfig = async (from, to) => {
       writeFileSync(configPath, readFileSync(configPath, 'utf8').replace(from, to))
       await include.refresh()
-      await ctx.loader.await()
+      await awaitLoader()
     }
     /**
      * 断言当前注册路由条数。
@@ -183,16 +197,20 @@ try {
     steer: /** @type {() => void} */ (() => undefined),
     inject: /** @type {() => void} */ (() => undefined),
   })
-  const result = await ctx.tools.execute({
-    callId: CallId('dsh-memento-loader-runner'),
-    name: 'memory',
-    arguments: { action: 'query', text: 'preferences' },
+  const batch = await ctx.tools.execute({
+    calls: [{
+      type: 'tool-call',
+      id: CallId('dsh-memento-loader-runner'),
+      name: 'memory',
+      arguments: JSON.stringify({ action: 'query', text: 'preferences' }),
+    }],
     agent,
     signal: new AbortController().signal,
   })
-  const value = /** @type {any} */ (result.value)
-  if (result.isError !== false || value?.ok !== true || value?.action !== 'query') {
-    throw new Error(`Loader composition: memory query returned ${JSON.stringify(result)}`)
+  const result = batch.results[0]?.result
+  const value = /** @type {any} */ (result?.value)
+  if (result?.isError !== false || value?.ok !== true || value?.action !== 'query') {
+    throw new Error(`Loader composition: memory query returned ${JSON.stringify({ batch, result })}`)
   }
 
   const summary = {
