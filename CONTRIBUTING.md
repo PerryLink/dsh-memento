@@ -21,3 +21,10 @@ Thanks for helping. This project is maintained as a normal member of the PerryLi
 By contributing, you agree that your contribution is licensed under the project's
 LICENSE (Apache-2.0 for the family, or the upstream license stated in the
 repository). See `LICENSE` for the authoritative text.
+
+## Contributors whose review shaped this repository
+
+- **@alone-tree** — client injection and settings-scope review on the 0.2.2
+  compatibility pass (PR #23). The PR itself was not merged because it narrowed
+  the append-only harness compatibility timeline and conflicted with the same
+  files in our 0.2.2 work, but the reasoning informed the result.
