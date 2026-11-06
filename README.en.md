@@ -1,8 +1,8 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-memento-flow-dark.svg">
-  <img src="docs/assets/dsh-memento-flow-light.svg" width="100%" alt="dsh-memento data flow: memory tool → budget precheck → approval/asked gate → memory.db (0600, WAL) → a frozen snapshot injected into systemPrompt on the next session; dsh-memento-mcp is a read-only side door; the audit chain is the approval pair plus the plugin's own audit table">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-memento-hero-en-dark.webp">
+  <img src="docs/assets/dsh-memento-hero-en-light.webp" width="100%" alt="dsh-memento: a cross-session memory seam — gated writes land in a local SQLite store, each of the two tracks and two layers has a hard character budget (user 2000 / agent 4000), the next session freezes the snapshot into systemPrompt, and the audit chain is the approval pair, the audit table and the snapshot row">
 </picture>
 
 # dsh-memento
@@ -39,6 +39,11 @@ dsh plugin --profile <name> add dsh-memento
 Write down something worth remembering and it is waiting for the model at the start of the next session — and that write went through an approval gate and left an audit row. `dsh-memento` adds a **capability seam** to DeepSeek Harness rather than another memory warehouse: a typed `ctx.memory` service, a local SQLite provider (`node:sqlite`, WAL, `0600`, default `$DSH_HOME/dsh-memento/memory.db`), and its two consumers — the `memory` tool and a frozen snapshot injected into the system prompt. Two tracks (`user` / `agent`) × two layers (`user-global` / `workspace`) × a per-`agentPreset` key, with hard per-track/per-layer character budgets; `dsh-memento-mcp` adds a read-only stdio MCP entry point.
 
 **See also.** `dsh-mnemon` is a framework with mem0/Honcho hosted providers, pinned to the 0.2.1 line; `@openviking/dsh-memory-plugin` is a Volcengine example with no declared dsh engine; `dsh-plugin-memory` is the closest in kind and has no provenance. `dsh-memento` is the local SQLite seam with an approval gate and audit trail, not a drop-in for the hosted providers.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-memento-flow-v5-dark.svg">
+  <img src="docs/assets/dsh-memento-flow-v5-light.svg" width="100%" alt="dsh-memento structure (a loop between two sessions): in session S1 the memory tool, the /memory command and the adapter seed run the budget precheck and the unique substring match, then pass the in-service approval gate (writePolicy ask/auto/off, approval/asked + approval/decided, payload = the full changed text) before landing in memory.db (entries / audit / proposals / meta, WAL, 0600); the audit chain is the approval pair, the plugin audit table and the snapshot row; the next session's first assemble reads the store synchronously and freezes one snapshot into the systemPrompt segment (order -50); retrieval is case-insensitive substring with an optional vector path; the MCP entry point is read-only">
+</picture>
 
 ## Three-step setup
 

@@ -1,8 +1,8 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-memento-flow-dark.svg">
-  <img src="docs/assets/dsh-memento-flow-light.svg" width="100%" alt="dsh-memento 数据流：memory 工具 → 预算预检 → approval/asked 审批门 → memory.db（0600、WAL）→ 下次会话把冻结快照注入 systemPrompt；dsh-memento-mcp 为只读旁路；审计由审批对加插件审计表承担">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-memento-hero-zh-dark.webp">
+  <img src="docs/assets/dsh-memento-hero-zh-light.webp" width="100%" alt="dsh-memento：跨会话记忆接缝——写入经审批门落进本地 SQLite，两轨两层各有硬字符预算（user 2000 / agent 4000），下次会话把冻结快照注入 systemPrompt，审计由审批对、审计表与快照行组成">
 </picture>
 
 # dsh-memento
@@ -39,6 +39,11 @@ dsh plugin --profile <name> add dsh-memento
 写下一条值得记住的事，它就在下一次会话开头等着模型——而那次写入过了审批门、留了审计行。`dsh-memento` 给 DeepSeek Harness 补的是**能力接缝**，不是又一个记忆仓库：一个类型安全的 `ctx.memory` 服务、一个本地 SQLite 提供方（`node:sqlite`，WAL，权限 `0600`，默认 `$DSH_HOME/dsh-memento/memory.db`），以及它的两个消费方——`memory` 工具与注入系统提示的冻结快照。两条轨道（`user` / `agent`）× 两个层级（`user-global` / `workspace`）× 按 `agentPreset` 隔离，每轨每层都有硬字符预算；`dsh-memento-mcp` 另提供一个只读 stdio MCP 入口。
 
 **参见同类。** `dsh-mnemon` 是带 mem0/Honcho 托管 provider 的 framework，锁在 0.2.1 线；`@openviking/dsh-memory-plugin` 是 Volcengine 示例，未声明 dsh engine；`dsh-plugin-memory` 是最接近的同类，无 provenance。`dsh-memento` 是本地 SQLite + 审批门 + 审计链，不是托管 provider 的 drop-in。
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-memento-flow-v5-dark.svg">
+  <img src="docs/assets/dsh-memento-flow-v5-light.svg" width="100%" alt="dsh-memento 结构图（会话间的回环）：会话 S1 的 memory 工具、/memory 命令与适配器 seed 先做预算预检与唯一子串定位，再经服务内部的审批门（writePolicy ask/auto/off，approval/asked + approval/decided，载荷为将被改动的全文）写入 memory.db（entries / audit / proposals / meta，WAL、0600）；审计由审批对、插件审计表与快照行组成；下一次会话首次 assemble 同步读库，把冻结快照注入 systemPrompt 段（order -50）；检索走大小写不敏感子串，vector 可选；MCP 入口只读">
+</picture>
 
 ## 三步上手
 

@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="660" viewBox="0 0 1100 660" role="img" aria-labelledby="t d">
+<title id="t">dsh-memento structure: a loop between two sessions — session S1 writes through the in-service approval gate into the SQLite store, the audit chain records it, and session S2's first assemble reads the store and freezes it into the systemPrompt segment</title>
+<desc id="d">Left column: session S1 (memory tool, /memory command, adapter seed) and session S2 (systemPrompt segment order -50, frozen once, mid-turn memory_recall), separated by a new-session rail. Top lane: MemoryProtocolCore does the budget precheck and the unique substring match, then the approval gate (writePolicy ask, auto or off) carries approval/asked + approval/decided with the full changed text as the payload; denied writes still leave a *-denied row. Middle: the audit chain — session log approval pair, plugin audit table, and the snapshot row that matches system/message verbatim. Bottom lane: the next assemble reads the store synchronously and freezes one snapshot. Right column: memory.db (node:sqlite, WAL, 0600) with entries, audit, proposals and meta, the four per-track/per-layer budgets (2000 / 2000 / 4000 / 4000), and the read-only MCP side door.</desc>
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" stop-color="#131a2a"/><stop offset="1" stop-color="#0c1016"/></linearGradient>
+<filter id="soft" x="-30%" y="-30%" width="160%" height="180%"><feDropShadow dx="0" dy="8" stdDeviation="11" flood-color="#000000" flood-opacity=".55"/></filter>
+<pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse"><circle cx="1.4" cy="1.4" r="1.4" fill="#26314a"/></pattern>
+<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8496f5"/></marker>
+<marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#3fb950"/></marker>
+</defs>
+<rect x="0" y="0" width="1100" height="660" fill="url(#bg)"/>
+<rect x="0" y="0" width="1100" height="660" fill="url(#dots)" opacity=".45"/>
+<text x="44" y="58" fill="#f0f3f9" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="32" font-weight="700">dsh-memento</text>
+<text x="44" y="88" fill="#a8b1c4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="15">one store, one gate, one frozen read — the loop between two sessions</text>
+<text x="1056" y="56" fill="#8791a4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" text-anchor="end">v0.5.30 · ctx.memory · node:sqlite · read-only MCP</text>
+<line x1="40" y1="104" x2="1060" y2="104" stroke="#2e374b" stroke-width="2"/>
+<rect x="40" y="120" width="260" height="476" fill="#151d2b" rx="22" stroke="#2b3448" stroke-width="1"/>
+<text x="60" y="148" fill="#8791a4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" letter-spacing="1.4">SESSION</text>
+<text x="60" y="172" fill="#8496f5" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700">S1 · write turn</text>
+<rect x="56" y="186" width="228" height="124" fill="#1b2231" rx="18" stroke="#2e374b" stroke-width="1" filter="url(#soft)"/>
+<text x="72" y="208" fill="#f0f3f9" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700">memory tool</text>
+<text x="72" y="232" fill="#a8b1c4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="12.5">add · replace · remove</text>
+<text x="72" y="252" fill="#a8b1c4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="12.5">consolidate → proposal</text>
+<text x="72" y="272" fill="#a8b1c4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="12.5">/memory cmd · adapters seed</text>
+<text x="72" y="294" fill="#8791a4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">agentKey + workspaceKey</text>
+<path d="M74 316 V376" fill="none" stroke="#8791a4" stroke-width="1.6" marker-end="url(#arr)" stroke-dasharray="5 5"/>
+<text x="88" y="340" fill="#8791a4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="11">session ends</text>
+<text x="88" y="356" fill="#8791a4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="11">next session starts</text>
+<text x="60" y="398" fill="#8496f5" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" font-weight="700">S2 · next assemble</text>
+<rect x="56" y="412" width="228" height="166" fill="#1b2231" rx="18" stroke="#2e374b" stroke-width="1" filter="url(#soft)"/>
+<text x="72" y="434" fill="#f0f3f9" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700">systemPrompt</text>
+<text x="72" y="458" fill="#a8b1c4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="12.5">segment order -50</text>
+<text x="72" y="478" fill="#a8b1c4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="12.5">snapshot frozen once</text>
+<text x="72" y="498" fill="#a8b1c4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="12.5">memory_recall · mid-turn</text>
+<text x="72" y="520" fill="#8791a4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">system/message · verbatim</text>
+<rect x="72" y="534" width="92" height="24" fill="#202939" rx="12" stroke="#2e374b" stroke-width="1"/>
+<text x="118" y="550" fill="#3fb950" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" text-anchor="middle">frozen</text>
+<rect x="800" y="120" width="260" height="476" fill="#151d2b" rx="22" stroke="#2b3448" stroke-width="1"/>
+<text x="820" y="148" fill="#8791a4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" letter-spacing="1.4">STORE</text>
+<text x="820" y="172" fill="#f0f3f9" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="700">memory.db</text>
+<text x="820" y="192" fill="#a8b1c4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">node:sqlite · WAL · 0600</text>
+<text x="820" y="210" fill="#f0f3f9" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700">entries</text>
+<text x="1040" y="209" fill="#8791a4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" text-anchor="end">track × scope</text>
+<text x="820" y="227" fill="#8791a4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">text · tags · version · recall</text>
+<text x="820" y="250" fill="#f0f3f9" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700">audit</text>
+<text x="1040" y="249" fill="#8791a4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" text-anchor="end">chain</text>
+<text x="820" y="267" fill="#8791a4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">asked · decided · *-denied</text>
+<text x="820" y="290" fill="#f0f3f9" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700">proposals</text>
+<text x="1040" y="289" fill="#8791a4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" text-anchor="end">queue</text>
+<text x="820" y="307" fill="#8791a4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">pending · max 8</text>
+<text x="820" y="330" fill="#f0f3f9" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700">meta</text>
+<text x="1040" y="329" fill="#8791a4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" text-anchor="end">loud check</text>
+<text x="820" y="347" fill="#8791a4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">schema_version 4</text>
+<text x="820" y="392" fill="#8496f5" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" letter-spacing="0.8">CHAR BUDGET · TRACK × SCOPE</text>
+<text x="820" y="408" fill="#a8b1c4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">user / user-global</text>
+<text x="1040" y="408" fill="#f0f3f9" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" text-anchor="end">2000</text>
+<text x="820" y="430" fill="#a8b1c4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">user / workspace</text>
+<text x="1040" y="430" fill="#f0f3f9" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" text-anchor="end">2000</text>
+<text x="820" y="452" fill="#a8b1c4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">agent / user-global</text>
+<text x="1040" y="452" fill="#f0f3f9" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" text-anchor="end">4000</text>
+<text x="820" y="474" fill="#a8b1c4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">agent / workspace</text>
+<text x="1040" y="474" fill="#f0f3f9" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" text-anchor="end">4000</text>
+<text x="820" y="508" fill="#8791a4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="11">hard cap · never truncated</text>
+<rect x="820" y="522" width="220" height="30" fill="#202939" rx="10" stroke="#2e374b" stroke-width="1"/>
+<text x="834" y="542" fill="#8496f5" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700">dsh-memento-mcp · readOnly</text>
+<text x="820" y="572" fill="#8791a4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="11">no network · no credentials</text>
+<text x="320" y="162" fill="#8496f5" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700" letter-spacing="0.9">WRITE PATH · GATED IN THE SERVICE</text>
+<rect x="320" y="178" width="200" height="142" fill="#1b2231" rx="18" stroke="#2e374b" stroke-width="1" filter="url(#soft)"/>
+<text x="336" y="198" fill="#8496f5" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700">protocol core</text>
+<text x="336" y="220" fill="#f0f3f9" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13.5" font-weight="700">MemoryProtocolCore</text>
+<text x="336" y="240" fill="#8791a4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">lib/protocol.mjs</text>
+<text x="336" y="260" fill="#a8b1c4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="12">budget precheck</text>
+<text x="336" y="280" fill="#a8b1c4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="12">unique substring match</text>
+<text x="336" y="300" fill="#a8b1c4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="12">0 / 2+ hits → error</text>
+<rect x="540" y="178" width="240" height="142" fill="#1b2231" rx="18" stroke="#8496f5" stroke-width="2.2" filter="url(#soft)"/>
+<text x="556" y="198" fill="#8496f5" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700">approval gate</text>
+<text x="556" y="220" fill="#f0f3f9" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14.5" font-weight="700">writePolicy</text>
+<rect x="556" y="230" width="40" height="18" fill="#202939" rx="9" stroke="#2e374b" stroke-width="1"/>
+<text x="576" y="243" fill="#a8b1c4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" text-anchor="middle">ask</text>
+<rect x="602" y="230" width="40" height="18" fill="#202939" rx="9" stroke="#2e374b" stroke-width="1"/>
+<text x="622" y="243" fill="#a8b1c4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" text-anchor="middle">auto</text>
+<rect x="648" y="230" width="40" height="18" fill="#202939" rx="9" stroke="#2e374b" stroke-width="1"/>
+<text x="668" y="243" fill="#a8b1c4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" text-anchor="middle">off</text>
+<text x="556" y="264" fill="#a8b1c4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">approval/asked → decided</text>
+<text x="556" y="284" fill="#a8b1c4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">payload = full changed text</text>
+<text x="556" y="304" fill="#a8b1c4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">denied → *-denied row</text>
+<circle cx="756" cy="214" r="3" fill="#8496f5"/>
+<circle cx="756" cy="214" r="7" fill="none" stroke="#8496f5" stroke-width="1.2" opacity=".5"/>
+<path d="M288 249 H314" fill="none" stroke="#8496f5" stroke-width="2.2" marker-end="url(#arr)"/>
+<path d="M520 249 H534" fill="none" stroke="#8496f5" stroke-width="2.2" marker-end="url(#arr)"/>
+<path d="M780 249 H794" fill="none" stroke="#8496f5" stroke-width="2.2" marker-end="url(#arr)"/>
+<rect x="320" y="340" width="460" height="76" fill="#202939" rx="18" stroke="#8496f5" stroke-width="1.2" stroke-dasharray="6 5"/>
+<text x="336" y="358" fill="#8496f5" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" letter-spacing="0.8">AUDIT CHAIN · REBUILDABLE</text>
+<text x="336" y="378" fill="#f0f3f9" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700">session log</text>
+<text x="336" y="396" fill="#8791a4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">asked + decided</text>
+<text x="488" y="378" fill="#f0f3f9" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700">audit table</text>
+<text x="488" y="396" fill="#8791a4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">*-denied · snapshot</text>
+<text x="640" y="378" fill="#f0f3f9" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700">system/message</text>
+<text x="640" y="396" fill="#8791a4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">same text, verbatim</text>
+<path d="M660 320 V337" fill="none" stroke="#8496f5" stroke-width="1.6" marker-end="url(#arr)" stroke-dasharray="5 4"/>
+<path d="M780 378 H796" fill="none" stroke="#8496f5" stroke-width="1.6" marker-end="url(#arr)" stroke-dasharray="5 4"/>
+<text x="320" y="436" fill="#8496f5" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700" letter-spacing="0.9">READ PATH · NO APPROVAL · FROZEN FOR THE SESSION</text>
+<rect x="540" y="452" width="240" height="126" fill="#1b2231" rx="18" stroke="#2e374b" stroke-width="1" filter="url(#soft)"/>
+<text x="556" y="472" fill="#8496f5" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700">read provider</text>
+<text x="556" y="494" fill="#f0f3f9" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700">assemble · sync read</text>
+<text x="556" y="520" fill="#a8b1c4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="12">SQLite sync read</text>
+<text x="556" y="540" fill="#a8b1c4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="12">WeakMap per session</text>
+<text x="556" y="560" fill="#a8b1c4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="12">first assemble only</text>
+<rect x="320" y="452" width="200" height="126" fill="#1b2231" rx="18" stroke="#2e374b" stroke-width="1" filter="url(#soft)"/>
+<text x="336" y="472" fill="#8496f5" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700">injected segment</text>
+<text x="336" y="494" fill="#f0f3f9" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700">frozen snapshot</text>
+<text x="336" y="520" fill="#a8b1c4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="12">one render, then frozen</text>
+<text x="336" y="540" fill="#a8b1c4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="12">section order -50</text>
+<text x="336" y="560" fill="#a8b1c4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="12">prefix cache stable</text>
+<path d="M800 515 H785" fill="none" stroke="#8496f5" stroke-width="2.2" marker-end="url(#arr)"/>
+<path d="M540 515 H525" fill="none" stroke="#8496f5" stroke-width="2.2" marker-end="url(#arr)"/>
+<path d="M320 515 H289" fill="none" stroke="#8496f5" stroke-width="2.2" marker-end="url(#arr)"/>
+<line x1="40" y1="604" x2="1060" y2="604" stroke="#2e374b" stroke-width="2"/>
+<text x="44" y="622" fill="#a8b1c4" font-family="Segoe UI, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif" font-size="12.5">budget enforced twice — precheck before the ask, recheck after it — and never truncated</text>
+<text x="44" y="644" fill="#8791a4" font-family="Consolas, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5">2 tracks × 2 scopes × per-agent key · MCP side door is readOnly · *-denied rows keep refused writes visible</text>
+</svg>

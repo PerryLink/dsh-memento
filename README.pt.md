@@ -1,8 +1,8 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-memento-flow-dark.svg">
-  <img src="docs/assets/dsh-memento-flow-light.svg" width="100%" alt="Fluxo de dados do dsh-memento: ferramenta memory → checagem de orçamento → porta approval/asked → memory.db (0600, WAL) → instantâneo congelado injetado em systemPrompt na sessão seguinte; dsh-memento-mcp é uma via somente leitura; a auditoria é o par de aprovação mais a tabela de auditoria do plugin">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-memento-hero-en-dark.webp">
+  <img src="docs/assets/dsh-memento-hero-en-light.webp" width="100%" alt="dsh-memento: costura de memória entre sessões — as escritas passam pela porta de aprovação e chegam a um SQLite local; cada trilha e cada camada têm um orçamento rígido de caracteres (user 2000 / agent 4000); a sessão seguinte injeta um instantâneo congelado no systemPrompt e a auditoria é o par de aprovação, a tabela de auditoria e a linha do instantâneo">
 </picture>
 
 # dsh-memento
@@ -39,6 +39,11 @@ dsh plugin --profile <name> add dsh-memento
 Anote algo que valha a pena lembrar e ele estará esperando o modelo no início da sessão seguinte — e essa escrita passou por uma porta de aprovação e deixou uma linha de auditoria. O `dsh-memento` acrescenta ao DeepSeek Harness uma **costura de capacidade**, não outro armazém de memória: um serviço tipado `ctx.memory`, um provedor SQLite local (`node:sqlite`, WAL, `0600`, por padrão `$DSH_HOME/dsh-memento/memory.db`) e seus dois consumidores — a ferramenta `memory` e um instantâneo congelado injetado no prompt do sistema. Duas trilhas (`user` / `agent`) × duas camadas (`user-global` / `workspace`) × chave por `agentPreset`, com orçamentos rígidos de caracteres por trilha e por camada; o `dsh-memento-mcp` acrescenta uma entrada MCP stdio somente leitura.
 
 **Veja também.** `dsh-mnemon` é um framework com provedores hospedados mem0/Honcho, fixado na linha 0.2.1; `@openviking/dsh-memory-plugin` é um exemplo da Volcengine sem `dsh` engine declarado; `dsh-plugin-memory` é o mais próximo em espécie e não tem procedência. O `dsh-memento` é a costura SQLite local com porta de aprovação e auditoria, não um substituto direto dos provedores hospedados.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-memento-flow-v5-dark.svg">
+  <img src="docs/assets/dsh-memento-flow-v5-light.svg" width="100%" alt="Estrutura do dsh-memento (um ciclo entre duas sessões): na sessão S1 a ferramenta memory, o comando /memory e o seed de adaptadores fazem a checagem de orçamento e a correspondência única de subcadeia, e então passam a porta de aprovação interna (writePolicy ask/auto/off, approval/asked + approval/decided, com o texto completo como carga) antes de chegar a memory.db (entries / audit / proposals / meta, WAL, 0600); a auditoria é o par de aprovação, a tabela de auditoria do plugin e a linha do instantâneo; o primeiro assemble da sessão seguinte lê o armazém de forma síncrona e congela um instantâneo no segmento systemPrompt (ordem -50); a recuperação é subcadeia sem distinção de maiúsculas, com vetor opcional; a entrada MCP é somente leitura">
+</picture>
 
 ## Instalação em três passos
 

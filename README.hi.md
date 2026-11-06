@@ -1,8 +1,8 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-memento-flow-dark.svg">
-  <img src="docs/assets/dsh-memento-flow-light.svg" width="100%" alt="dsh-memento डेटा फ़्लो: memory टूल → बजट प्रीचेक → approval/asked द्वार → memory.db (0600, WAL) → अगले सत्र में systemPrompt में फ़्रोज़न स्नैपशॉट; dsh-memento-mcp केवल-पढ़ने का रास्ता है; ऑडिट अनुमोदन जोड़ी और प्लगइन की ऑडिट तालिका से बनता है">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-memento-hero-en-dark.webp">
+  <img src="docs/assets/dsh-memento-hero-en-light.webp" width="100%" alt="dsh-memento: सत्रों के पार मेमोरी सीम — लिखावटें अनुमोदन द्वार से गुज़रकर स्थानीय SQLite में जाती हैं; दोनों ट्रैक और दोनों परतों का कठोर वर्ण बजट है (user 2000 / agent 4000); अगला सत्र systemPrompt में फ़्रोज़न स्नैपशॉट डालता है और ऑडिट अनुमोदन जोड़ी, ऑडिट तालिका और स्नैपशॉट पंक्ति से बनता है">
 </picture>
 
 # dsh-memento
@@ -39,6 +39,11 @@ dsh plugin --profile <name> add dsh-memento
 कोई याद रखने योग्य बात लिखिए और वह अगले सत्र की शुरुआत में मॉडल का इंतज़ार करती मिलेगी — और वह लिखावट एक अनुमोदन द्वार से गुज़री और एक ऑडिट पंक्ति छोड़ गई। `dsh-memento` DeepSeek Harness को **क्षमता सीम** देता है, कोई दूसरा मेमोरी गोदाम नहीं: एक टाइप्ड `ctx.memory` सेवा, स्थानीय SQLite प्रोवाइडर (`node:sqlite`, WAL, `0600`, डिफ़ॉल्ट `$DSH_HOME/dsh-memento/memory.db`) और उसके दो उपभोक्ता — `memory` टूल और सिस्टम प्रॉम्प्ट में इंजेक्ट होने वाला फ़्रोज़न स्नैपशॉट। दो ट्रैक (`user` / `agent`) × दो परतें (`user-global` / `workspace`) × प्रति `agentPreset` कुंजी, प्रति ट्रैक-परत कठोर वर्ण बजट के साथ; `dsh-memento-mcp` एक केवल-पढ़ने वाला stdio MCP प्रवेश भी देता है।
 
 **यह भी देखें।** `dsh-mnemon` mem0/Honcho होस्टेड प्रोवाइडर वाला framework है, 0.2.1 लाइन पर पिन; `@openviking/dsh-memory-plugin` Volcengine का उदाहरण है जिसमें dsh engine घोषित नहीं; `dsh-plugin-memory` प्रकार में सबसे निकट है और उसकी कोई provenance नहीं। `dsh-memento` स्थानीय SQLite + अनुमोदन द्वार + ऑडिट श्रृंखला है, होस्टेड प्रोवाइडर का drop-in नहीं।
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-memento-flow-v5-dark.svg">
+  <img src="docs/assets/dsh-memento-flow-v5-light.svg" width="100%" alt="dsh-memento संरचना (दो सत्रों के बीच एक चक्र): सत्र S1 में memory टूल, /memory कमांड और adapter seed बजट प्रीचेक तथा अद्वितीय सबस्ट्रिंग मिलान करते हैं, फिर सेवा के भीतर के अनुमोदन द्वार (writePolicy ask/auto/off, approval/asked + approval/decided, पूरा बदला हुआ पाठ payload) से गुज़रकर memory.db (entries / audit / proposals / meta, WAL, 0600) में लिखते हैं; ऑडिट अनुमोदन जोड़ी, प्लगइन ऑडिट तालिका और स्नैपशॉट पंक्ति से बनता है; अगले सत्र का पहला assemble स्टोर को सिंक्रोनस रूप से पढ़कर systemPrompt खंड (order -50) में एक फ़्रोज़न स्नैपशॉट डालता है; पुनर्प्राप्ति केस-असंवेदी सबस्ट्रिंग है, vector वैकल्पिक; MCP प्रवेश केवल-पढ़ने वाला है">
+</picture>
 
 ## तीन चरणों में शुरुआत
 
