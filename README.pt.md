@@ -1,0 +1,562 @@
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-memento-flow-dark.svg">
+  <img src="docs/assets/dsh-memento-flow-light.svg" width="100%" alt="Fluxo de dados do dsh-memento: ferramenta memory → checagem de orçamento → porta approval/asked → memory.db (0600, WAL) → instantâneo congelado injetado em systemPrompt na sessão seguinte; dsh-memento-mcp é uma via somente leitura; a auditoria é o par de aprovação mais a tabela de auditoria do plugin">
+</picture>
+
+# dsh-memento
+
+**Lembre-se entre sessões — com cada escrita atrás de uma porta de aprovação e de um rastro de auditoria.**
+
+Uma costura tipada `ctx.memory` mais um provedor SQLite local, a ferramenta `memory` e a injeção de um instantâneo congelado: outros plugins de memória vendem um armazém; este vende a costura, a porta de aprovação de escrita e uma auditoria reconstruível a partir do registro de sessão.
+
+[Instalar](#instalação-em-três-passos) · [Configuração](#configuração) · [FAQ](#faq) · [简体中文](README.md) · [English](README.en.md) · [Español](README.es.md) · [Português](README.pt.md) · [हिन्दी](README.hi.md)
+
+[![License](https://img.shields.io/badge/license-Apache--2.0-3366CC?style=flat-square&labelColor=2B3245)](LICENSE)
+[![DSH](https://img.shields.io/badge/DSH-%E2%89%A50.1.2%20%3C0.3.0-4B67B4?style=flat-square&labelColor=2B3245)](#compatibilidade)
+[![npm](https://img.shields.io/npm/v/dsh-memento?style=flat-square&labelColor=2B3245&color=CB3837)](https://www.npmjs.com/package/dsh-memento)
+[![CI](https://img.shields.io/github/actions/workflow/status/PerryLink/dsh-memento/ci.yml?branch=main&label=CI&style=flat-square&labelColor=2B3245)](https://github.com/PerryLink/dsh-memento/actions/workflows/ci.yml)
+[![Node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24.9-339933?style=flat-square&labelColor=2B3245)](#compatibilidade)
+
+[![Stars](https://img.shields.io/github/stars/PerryLink/dsh-memento?style=flat-square&labelColor=2B3245)](https://github.com/PerryLink/dsh-memento/stargazers)
+[![npm downloads](https://img.shields.io/npm/dm/dsh-memento?style=flat-square&labelColor=2B3245&color=CB3837)](https://www.npmjs.com/package/dsh-memento)
+[![dshfind](https://dshfind.com/api/badge/PerryLink/dsh-memento?metric=downloads)](https://dshfind.com/plugins/PerryLink/dsh-memento?ref=badge)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/PerryLink/dsh-memento/badge)](https://securityscorecards.dev/viewer/?uri=github.com/PerryLink/dsh-memento)
+[![DSH Market](https://img.shields.io/badge/DSH_Market-listed-4B67B4?style=flat-square&labelColor=2B3245)](https://dsh.market/)
+[![Gitee](https://img.shields.io/badge/Gitee-mirror-C71D23?style=flat-square&labelColor=2B3245&logo=gitee)](https://gitee.com/perrylink/dsh-memento)
+
+```sh
+dsh plugin --profile <name> add dsh-memento
+```
+
+</div>
+
+<sub>Plugin da comunidade, sem afiliação com a DeepSeek. Repositório canônico: <https://github.com/PerryLink/dsh-memento> (o Gitee é um espelho).</sub>
+
+## O que é
+
+Anote algo que valha a pena lembrar e ele estará esperando o modelo no início da sessão seguinte — e essa escrita passou por uma porta de aprovação e deixou uma linha de auditoria. O `dsh-memento` acrescenta ao DeepSeek Harness uma **costura de capacidade**, não outro armazém de memória: um serviço tipado `ctx.memory`, um provedor SQLite local (`node:sqlite`, WAL, `0600`, por padrão `$DSH_HOME/dsh-memento/memory.db`) e seus dois consumidores — a ferramenta `memory` e um instantâneo congelado injetado no prompt do sistema. Duas trilhas (`user` / `agent`) × duas camadas (`user-global` / `workspace`) × chave por `agentPreset`, com orçamentos rígidos de caracteres por trilha e por camada; o `dsh-memento-mcp` acrescenta uma entrada MCP stdio somente leitura.
+
+**Veja também.** `dsh-mnemon` é um framework com provedores hospedados mem0/Honcho, fixado na linha 0.2.1; `@openviking/dsh-memory-plugin` é um exemplo da Volcengine sem `dsh` engine declarado; `dsh-plugin-memory` é o mais próximo em espécie e não tem procedência. O `dsh-memento` é a costura SQLite local com porta de aprovação e auditoria, não um substituto direto dos provedores hospedados.
+
+## Instalação em três passos
+
+1. **Instalar** (escolha um canal):
+
+   ```sh
+   # canal git (último main; equivale a git+https://github.com/PerryLink/dsh-memento.git)
+   dsh plugin --profile web add github:PerryLink/dsh-memento
+   # canal npm (versões publicadas)
+   dsh plugin --profile web add dsh-memento
+   # canal tarball: após npm pack neste repo
+   dsh plugin --profile web add ./dsh-memento-<version>.tgz
+   ```
+
+   Sem etapa de build: `index.mjs`, `lib/` e `client/` são os artefatos publicados.
+
+2. **Configuração mínima** (os padrões já funcionam; isto só explicita a política de escrita e os orçamentos):
+
+   ```yaml
+   - insert:
+       - id: memento
+         name: dsh-memento
+         config:
+           writePolicy: ask
+           budgets:
+             user:
+               userGlobal: 2000
+               workspace: 2000
+             agent:
+               userGlobal: 4000
+               workspace: 4000
+   ```
+
+3. **Conferir que está ativo**:
+
+   ```sh
+   dsh --profile web --dump-config | grep -A3 'id: memento'
+   ```
+
+   ```
+   > /memory budgets
+   > /memory list
+   ```
+
+**Desinstalar**: `dsh plugin --profile web remove dsh-memento` (o banco de memória e os logs de sessão são mantidos).
+
+<details>
+<summary>Instalar pelo mercado do DSH Desktop</summary>
+
+Todos os plugins da PerryLink estão no mercado embutido do DSH Desktop: **Mercado → Fontes → Adicionar fonte → cole** `https://perrylink-dsh-catalog.perrylink.workers.dev/catalog-source.json` **→ selecione**. A instalação continua passando pela verificação de identidade npm do mercado e pela sua confirmação.
+
+</details>
+
+*A mesma execução, animada.*
+
+[![Passo a passo em vídeo do dsh-memento — abre o arquivo MP4](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo-video.png)](https://github.com/PerryLink/dsh-memento/blob/main/docs/assets/dsh-memento-demo.mp4)
+
+*▶ **Passo a passo narrado de 2 min 23 s** — a miniatura abre o arquivo MP4; se não reproduzir na página, use *Download raw file* lá ([MP4, 1,87 MB](https://github.com/PerryLink/dsh-memento/blob/main/docs/assets/dsh-memento-demo.mp4) · [download direto](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo.mp4)). O GitHub remove as tags `<video>` dos READMEs, então o vídeo é um arquivo a abrir, e não algo embutido.*
+
+## Capacidades principais
+
+O `dsh-memento` impõe a porta de aprovação **dentro do serviço**, deixa a evidência **no registro de sessão** e trata um armazém cheio como erro, não como convite a escrever demais:
+
+- **A porta não pode ser contornada.** Todo caminho de escrita (`add` / `replace` / `remove` / `seed`) passa pela cascata de aprovação dentro do serviço, não na camada de ferramentas. `writePolicy: ask | auto | off` é configuração invisível para o modelo; `replace` / `remove` / `consolidate` carregam o texto completo das entradas que alteram no payload de aprovação, e uma escrita negada ainda gera uma linha de auditoria `*-denied`.
+- **Visível para o modelo ⟺ registrado.** O snapshot injetado chega textualmente a `system/message`; toda escrita é reconstruível a partir de `approval/asked` + `approval/decided` + a própria tabela de auditoria do plugin.
+- **Limitado e honesto.** Orçamentos rígidos de caracteres por trilha e por camada (padrão usuário 2000 / agente 4000). Um armazém cheio falha com erro estruturado (uso + limite) — nunca trunca, nunca compacta automaticamente.
+- **A lacuna de auditoria é visível.** `/memory audit` lista a tabela de auditoria do plugin e acrescenta uma linha quando o lado do log de sessão não é escrito: este host não conhece os tipos de evento `memory/*`, e acrescentar tipos desconhecidos deixaria a sessão ilegível, então as escritas são auditadas por `approval/asked` + `approval/decided` e pela tabela do plugin. A porta é adaptativa: a linha desaparece sozinha quando o host conhece esses tipos.
+
+Duas trilhas × duas camadas × chave por agente: uma trilha `user` (fatos sobre o usuário) e uma trilha `agent` (fatos de ambiente e convenções), cada uma dividida em camadas `user-global` e `workspace`, isoladas por `agentPreset`. O snapshot é congelado uma vez por sessão na primeira montagem do prompt e nunca muda no meio da sessão.
+
+### Superfície de ferramentas e comandos
+
+| Superfície | Tipo | Notas |
+|---|---|---|
+| `memory` | ferramenta | add/replace/remove/consolidate/query com orientação Save/Skip; escritas passam pela porta de aprovação |
+| `memory_recall` | ferramenta | Correspondências limitadas de memória mais correspondências recentes do histórico de sessão |
+| `/memory` | comando | `list` · `query` · `add` · `remove` · `consolidate` · `proposals` · `budgets` · `audit` · `export` · `import <path>` · `adapters` |
+| painel web | gaveta do cliente | Somente leitura: navegar entradas, buscar, barras de orçamento, cauda de auditoria; o botão flutuante pode ser ocultado (`panel.enabled`) |
+| seção de configurações | Barra lateral de configurações do DSH → `dsh-memento` | Edita todos os campos de configuração (exceto `enabled`) sem tocar em arquivos (na linha `0.1.7` o namespace é a entrada de perfil `memento`; antes era o namespace de configurações `dsh-memento`); o momento de aplicação (ao vivo ou após recarga) é indicado na página |
+
+### Exemplos
+
+#### Exemplo detalhado
+
+**Comando**
+
+~~~sh
+memory_stats
+~~~
+
+**Entrada**
+
+~~~json
+{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"memory_stats","arguments":{}}}
+~~~
+
+**Saída**
+
+~~~text
+{
+  "total": 3,
+  "namespaces": [
+    {
+      "track": "agent",
+      "scope": "user-global",
+      "count": 1
+    },
+    {
+      "track": "agent",
+      "scope": "workspace",
+      "count": 1
+    },
+    {
+      "track": "user",
+      "scope": "workspace",
+      "count": 1
+    }
+  ]
+}
+~~~
+
+*Observado em `test/mcp.test.mjs:108-118 (fixture seed at 21-27); README.md:160-176`*
+
+#### Ramo de falha
+
+**Entrada**
+
+~~~text
+{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"memory_search","arguments":{}}}
+~~~
+
+**Saída**
+
+~~~text
+{"jsonrpc":"2.0","id":10,"result":{"content":[{"type":"text","text":"invalid arguments: query must be a non-empty string"}],"isError":true}}
+~~~
+
+*Observado em `plugins/dsh-memento/lib/mcp.mjs:188; plugins/dsh-memento/test/mcp.test.mjs:126-127; reproduced via plugins/dsh-memento/bin/mcp-server.mjs`*
+
+#### Exemplos breves
+
+- `/memory`
+
+### Servidor MCP
+
+O `dsh-memento` inclui um **servidor MCP** stdio somente-leitura (`dsh-memento-mcp`) para que clientes MCP externos (Claude, Codex, …) pesquisem o armazenamento de memória sem o harness. Ele fala JSON-RPC 2.0 sobre JSON delimitado por novas linhas (NDJSON): um objeto JSON por linha, sem enquadramento `Content-Length`.
+
+**Somente leitura.** O banco é aberto com `readOnly: true` do `node:sqlite` (sem migrações, sem gravações WAL, sem incremento do contador de recall); um banco ausente retorna resultados vazios em vez de falhar.
+
+| Ferramenta | Propósito |
+|---|---|
+| `memory_search` | `{query, limit?}` → entradas ordenadas (substring sem distinção de maiúsculas via o seam do Provider de recuperação) |
+| `memory_stats` | `{}` → `{total, namespaces}` contagem de entradas + visão geral por track/scope |
+
+Execução direta:
+
+```sh
+node bin/mcp-server.mjs
+# ou, após npm install: npx dsh-memento-mcp
+```
+
+O caminho do banco é `$DSH_MEMENTO_DB_PATH` (absoluto, ou relativo a `$DSH_HOME`); padrão `$DSH_HOME/dsh-memento/memory.db`.
+
+Exemplo para o Claude Desktop (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "dsh-memento": {
+      "command": "npx",
+      "args": ["-y", "dsh-memento-mcp"],
+      "env": {
+        "DSH_MEMENTO_DB_PATH": "/home/you/.dsh/dsh-memento/memory.db"
+      }
+    }
+  }
+}
+```
+
+O servidor é somente-leitura: sem rede, sem gravações, sem porta de aprovação — apenas busca e estatísticas.
+
+### dsh-memory-protocol v1
+
+O `dsh-memento` é o ensaio comunitário do protocolo de memória DSH — uma forma candidata para uma costura oficial `ctx.memory`. O protocolo normaliza a costura deste plugin em um contrato entre plugins:
+
+- **Entry spec** — duas trilhas × duas camadas × chave por agente, mais `tags` curtos (≤16 × ≤32 caracteres) e um `version` por entrada que incrementa a cada `replace`.
+- **Write semantics** — escritas condicionais idempotentes por substring única; payloads de aprovar-o-que-se-vê (`replace` / `remove` / `consolidate` carregam o texto completo que alteram).
+- **Audit contract** — toda escrita reconstruível a partir de `approval/asked` + `approval/decided` + o livro-razão do provedor.
+- **Budget model** — semântica `BUDGET_EXCEEDED` / `AMBIGUOUS_MATCH`.
+- **Schema versioning** — regras de migração com verificações de versão ruidosas.
+
+- **Spec** — [docs/protocol-v1.md](docs/protocol-v1.md) (chinês: [protocol-v1.zh.md](docs/protocol-v1.zh.md)); JSON Schema normativo em [docs/schemas/dsh-memory-protocol-v1.schema.json](docs/schemas/dsh-memory-protocol-v1.schema.json).
+
+**Registro de adaptadores** — `ctx.memoryAdapters` (`register` / `list` / `adapt` / `export`) permite que plugins de memória de terceiros falem o protocolo registrando um conversor de dados puro (`register()` reversível; a importação usa o `seed` com porta de aprovação, a exportação é somente leitura). Integração: [docs/adapters-guide.md](docs/adapters-guide.md) (chinês: [adapters-guide.zh.md](docs/adapters-guide.zh.md)).
+
+| Adaptador integrado | Formato externo | Notas |
+|---|---|---|
+| `mem0` | coleções de fatos mem0 (`{facts: [{memory, metadata?}]}`) | `metadata.category` / `metadata.tags` viram tags; arrays `messages` crus são rejeitados — adaptadores convertem, nunca extraem |
+| `hermes-memory-md` | `memory.md` do Hermes (`## section` + marcadores) | nomes de seção viram tags; prosa sem marcadores falha ruidosamente |
+| `claude-code-memory-md` | markdown estilo `CLAUDE.md` (títulos, marcadores, parágrafos) | marcadores e parágrafos viram entradas; nomes de seção viram tags |
+
+**Suíte de conformidade** — [test/protocol-conformance/](test/protocol-conformance/README.md): um conjunto de casos distribuível que qualquer provedor que reivindique compatibilidade executa (`node test/protocol-conformance/run.mjs --provider ./your-factory.mjs`); o CI deste repo o executa contra seu próprio provedor como referência dourada (`npm run test:conformance`).
+
+- **Upstream proposal** — [docs/upstream-proposal.md](docs/upstream-proposal.md) (chinês: [upstream-proposal.zh.md](docs/upstream-proposal.zh.md)): por que a costura oficial `ctx.memory` deveria adotar o protocolo, as diferenças e o caminho de migração.
+
+### Em que difere de outros plugins de memória
+
+| Plugin | O que é | Diferença do dsh-memento |
+|---|---|---|
+| dsh-memory-evolve | armazém de memória / laços de evolução | costura de serviço tipada, porta de aprovação e auditoria de log de sessão; sem ambição de armazém |
+| dsh-mnemon | auxiliar de armazenamento de memória | protocolo + porta + auditoria, não outro armazém |
+| dsh-kb-sieve | peneiramento de base de conhecimento | sem engenharia de recuperação: busca por substring em corpus pequeno, recall entre sessões via `session_search`/`sessionQuery` |
+| dsh-tdai-memory | ferramentas de memória dirigidas por tarefa | orçamentos são por track×camada e aplicados no serviço, não no melhor esforço |
+| claude-bridge | ponte do Claude Code | nativo do DSH; uma futura rota `seed(source:'claude')` deixa uma ponte alimentar o mesmo armazém |
+| dsh-external/Recall | memória de agente externa | local primeiro, zero rede, usa a própria costura de aprovação do DSH |
+| Official MCP memory examples | a posição declarada do DSH de "memória = MCP externo" | o complemento **nativo de primeira parte**: mesmo objetivo, sem servidor externo; ambos coexistem |
+
+O nome é **`dsh-memento`** (publicado no npm e no GitHub). Não `dsh-recall` (confundível com dsh-external/Recall), não o nome legado excluído `dsh-memory`.
+
+### O que aprendemos com as memórias de terminal
+
+O `dsh-memento` não é um port do Claude Code, Codex ou Hermes — mas seu design absorveu deliberadamente as partes que cada um acertou, e recusou as que causavam dano:
+
+| Memória de terminal | O que acertou | O que o dsh-memento adotou |
+|---|---|---|
+| **Claude Code** — `CLAUDE.md` | arquivos de memória em texto puro hierárquicos (nível usuário → nível projeto), legíveis e editáveis por humanos, mesclados automaticamente em toda sessão | entradas em texto puro; camadas `user-global` / `workspace` mescladas por sessão; um armazém que você pode navegar, `export` e auditar — transparência como característica |
+| **Codex** — `AGENTS.md` | instruções com escopo por diretório auto-descobertas e injetadas com atrito zero para o modelo | a camada `workspace` indexada pelo cwd da sessão (insensível a maiúsculas no Windows); o snapshot congelado injetado automaticamente no início da sessão |
+| **Hermes** — `memory.md` | gravações de memória proativas e a lição de segurança de que uma porta aplicada só na camada de ferramentas é contornável por injeção tardia de ferramenta | a ferramenta `memory` com orientação Save/Skip + propostas de auto-captura com porta de aprovação; a porta vive dentro dos métodos de escrita de `ctx.memory`, não na camada de ferramentas |
+
+Fontes: [Claude Code memory](https://code.claude.com/docs/en/memory) · [Codex AGENTS.md](https://developers.openai.com/codex/cli/agents-md) · [Hermes memory](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/memory.md) · [Hermes #48181](https://github.com/NousResearch/hermes-agent/issues/48181).
+
+E as partes deliberadamente recusadas: a auto-resumização oculta em estado privado do modelo (os resumos de compactação aqui viram **propostas pendentes** que aguardam um approve/dismiss humano), as ambições de armazém/vector-store, e qualquer escrita sem aprovação ou trilha de auditoria visível para humanos. Também adotado: a ressalva documentada do Hermes de que dois processos que compartilham um diretório home escrevem o mesmo arquivo de memória — veja Limites de segurança.
+
+## Configuração
+
+Todos os parâmetros são campos Schemastery `Config` (alteráveis pelo cordis.yml); valores inválidos falham em voz alta ao carregar. Uma sobrescrita por id substitui a linha inteira: repita cada chave de que precise. O `cordis.patch.yml` é a declaração do bundle, e o `id` dessa linha (`memento`) também é o namespace do formulário de configurações.
+
+**Painel de configurações.** Na linha `0.1.7` o próprio `Config` do plugin **é** a sua página de configurações: o namespace do formulário é o id da entrada do perfil (`memento`, ou seja o `id:` da linha deste bundle), os campos editáveis são exatamente os que o plugin declara `.volatile()` (todas as chaves abaixo exceto `enabled`), e uma edição aceita é mesclada na linha do plugin no perfil e confirmada dentro do plugin em execução — sem editar arquivos nem reiniciar. Quase tudo se aplica ao vivo (políticas de escrita, idioma, orçamentos, limites, propostas, painel; `dbPath` / `auditRetentionDays` reabrindo o armazém; `retrieval.vector` trocando o recuperador); o que o plugin registra ao carregar (`snapshotOrder`, as descrições das ferramentas) é relido na recarga, e a página marca esses campos. Os limites numéricos também estão declarados no schema, então uma edição fora da faixa é recusada no momento da escrita em vez de deixar uma configuração inutilizável. Nas linhas antigas (`0.1.2-rc.1`, `0.1.5-alpha.1`, `0.1.6-0`) o mesmo cartão edita o namespace de configurações `dsh-memento`, como antes; sem nenhum serviço de configurações, tudo volta à configuração composta. O botão flutuante do painel pode ser ocultado na mesma página (`panel.enabled`).
+
+Chaves mais usadas:
+
+| Chave | Padrão | Significado |
+|---|---|---|
+| `enabled` | `true` | Interruptor mestre; `false` remove serviço, ferramentas, snapshot, comando, painel e answerer (não editável na página de configurações: um plugin desabilitado não tem entrada de configurações) |
+| `panel.enabled` | `true` | Mostrar o botão flutuante do painel web; ao salvar `false` na página de configurações, a entrada 🧠 é ocultada imediatamente, sem recarregar (a página de configurações não é afetada) |
+| `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | Absoluto, ou relativo a `$DSH_HOME` (no Windows cai para `~/.dsh`) |
+| `budgets.user.userGlobal` | `2000` | Orçamento rígido de caracteres da camada user-global da trilha user |
+| `writePolicy` | `'ask'` | Política de escrita padrão: `ask` / `auto` / `off` (invisível para o modelo) |
+| `language` | `'en'` | Idioma do texto visível e da saída do comando: `en` / `zh` |
+| `retrieval.vector` | `false` | Interruptor de recuperação semântica: `true` ativa a recuperação vetorial do `memory_recall` (embedding de hash falso) quando há um provedor de embedding; caso contrário degrada para substring |
+
+<details>
+<summary>Tabela de configuração completa (25 chaves)</summary>
+
+| Chave | Padrão | Significado |
+|---|---|---|
+| `enabled` | `true` | Interruptor mestre; `false` remove serviço, ferramentas, snapshot, comando, painel e answerer (não editável na página de configurações: um plugin desabilitado não tem entrada de configurações) |
+| `panel.enabled` | `true` | Mostrar o botão flutuante do painel web; ao salvar `false` na página de configurações, a entrada 🧠 é ocultada imediatamente, sem recarregar (a página de configurações não é afetada) |
+| `dbPath` | `''` → `$DSH_HOME/dsh-memento/memory.db` | Absoluto, ou relativo a `$DSH_HOME` (no Windows cai para `~/.dsh`) |
+| `budgets.user.userGlobal` | `2000` | Orçamento rígido de caracteres da camada user-global da trilha user |
+| `budgets.user.workspace` | `2000` | Orçamento rígido de caracteres da camada workspace da trilha user |
+| `budgets.agent.userGlobal` | `4000` | Orçamento rígido de caracteres da camada user-global da trilha agent |
+| `budgets.agent.workspace` | `4000` | Orçamento rígido de caracteres da camada workspace da trilha agent |
+| `writePolicy` | `'ask'` | Política de escrita padrão: `ask` / `auto` / `off` (invisível para o modelo) |
+| `writePolicies` | `{}` | Sobrescritas por trilha/escopo ou por origem (ex.: `user/workspace`, `source:claude`) |
+| `language` | `'en'` | Idioma do texto visível e da saída do comando: `en` / `zh` |
+| `snapshotOrder` | `-50` | Ordem da seção de snapshot (após a identidade do harness, antes de persona) |
+| `maxEntriesPerQuery` | `20` | Limite de resultados por consulta (limite rígido 1000) |
+| `commandListLimit` | `50` | Entradas exibidas por `/memory list` / `query` |
+| `commandAuditLimit` | `10` | Linhas de auditoria exibidas por `/memory audit` |
+| `recall.historyLimitDefault` | `8` | Sessões escaneadas pelo `memory_recall` por padrão |
+| `recall.snippetCap` | `5` | Fragmentos por sessão no `memory_recall` |
+| `recall.snippetChars` | `300` | Caracteres de fragmento no `memory_recall` |
+| `recall.windowDays` | `30` | Janela de recência em dias do `memory_recall` |
+| `retrieval.vector` | `false` | Interruptor de recuperação semântica: `true` ativa a recuperação vetorial do `memory_recall` (embedding de hash falso) quando há um provedor de embedding; caso contrário degrada para substring |
+| `panelEntriesLimit` | `200` | Tamanho de página de entradas do painel web |
+| `panelAuditLimit` | `20` | Linhas de auditoria do painel web por padrão |
+| `auditRetentionDays` | `0` | Retenção de auditoria (0 = manter para sempre) |
+| `proposals.enabled` | `true` | Capturar automaticamente uma proposta de memória após cada compactação bem-sucedida |
+| `proposals.maxChars` | `2000` | Limite de caracteres da proposta |
+| `proposals.maxPending` | `8` | Limite de propostas pendentes |
+
+</details>
+
+Exemplo de sobrescritura no seu patch de perfil:
+
+```yaml
+- insert:
+    - id: memento
+      name: dsh-memento
+      config:
+        writePolicy: auto
+        retrieval:
+          vector: true
+        language: en
+```
+
+## FAQ
+
+<details>
+<summary>Onde as memórias realmente ficam? Elas viajam com o registro de sessão?</summary>
+
+Por padrão num `$DSH_HOME/dsh-memento/memory.db` local (`node:sqlite`, WAL, POSIX `0600`): zero rede, zero credenciais. O registro de sessão não carrega nem o banco nem seu conteúdo: o **texto do instantâneo injetado no modelo** vai literalmente para `system/message` junto de uma linha `audit(snapshot)`, o que é a garantia «visível para o modelo ⟺ registrado», não um vazamento; o armazém nunca sai da sua máquina. Desinstalar mantém o banco e os logs de sessão.
+
+</details>
+
+<details>
+<summary>E se o host não conhecer os tipos de evento `memory/*`? A auditoria quebra?</summary>
+
+Não: só muda de cadeia. Em `0.2.1-alpha.2`, `KNOWN_SESSION_EVENT_TYPES` ainda não tem `memory/*`, e anexar um tipo não registrado tornaria aquela sessão ilegível, então a porta de execução continua fechada: a auditoria vem do par `approval/asked` + `approval/decided` mais a própria tabela `audit` do plugin, o `/memory audit` anexa uma linha quando falta o lado do registro de sessão e o processo avisa uma vez. A porta é adaptativa: abre sozinha quando o host registra esses tipos, sem mudança de código. A política `ask` falha fechada do mesmo jeito: sem answerer a escrita é negada em vez de liberada em silêncio.
+
+</details>
+
+<details>
+<summary>Ele disputa nomes de ferramenta, chaves de serviço ou slots com outros plugins?</summary>
+
+Não. Todas as ferramentas têm espaço de nomes; ele provê quatro chaves de serviço (`memory`, `memoryAdapters`, `memoryEmbedding`, `memoryRetrieval`), nenhuma delas um seam embutido; não registra slot de cliente nem prefixo `webServer`, nunca sobrescreve o `config` de uma linha embutida e não muta globais. O argumento ponto a ponto está em «Interoperabilidade com outros plugins DSH».
+
+</details>
+
+<details>
+<summary>Um armazém cheio é truncado em silêncio? Qual é o custo?</summary>
+
+Nenhum dos dois. O orçamento é verificado duas vezes no serviço (antes e depois da aprovação); um armazém cheio lança um `BUDGET_EXCEEDED` estruturado (com used / limit / needed) para o modelo consolidar ou remover e tentar de novo: nunca trunca, nunca compacta automaticamente. Uma coincidência de substring ambígua lança `AMBIGUOUS_MATCH`. No custo: o provedor é um SQLite síncrono de conexão única, sem rede e sem chamadas ao modelo, e o instantâneo é renderizado uma vez por sessão e congelado, então o prefixo do prompt do sistema fica estável dentro da sessão (amigável ao cache de prefixo).
+
+</details>
+
+## Limites de segurança
+
+- **Somente serviços públicos.** Consome `tools`, `systemPrompt` e a costura de aprovação; sem alterações em engine / agent-loop / apiproxy / UI oficial.
+- **Zero rede, zero credenciais.** Banco de dados local com modo de arquivo POSIX `0600`.
+- **Falha ruidosa.** Banco corrompido, esquema mais novo ou configuração inválida falha ao carregar; orçamentos cheios e correspondências de substring ambíguas falham com erros estruturados.
+- **Um processo, um armazém.** Várias sessões compartilham o armazém SQLite; dois processos que compartilham um `$DSH_HOME` escrevem o mesmo arquivo (último escritor vence sob o bloqueio do SQLite).
+
+## Permissões e dados
+
+- **Permissões**: o manifesto de workshop declara `harness:tool`, `filesystem:read`, `filesystem:write` e `network:none` / `subprocess:none` / `shell:none` / `python:none` / `credentials:none`. A aprovação de escrita usa a costura oficial de aprovação.
+- **Dados**: banco de dados SQLite local (`0600`), zero rede, zero credenciais.
+- **Log de sessão**: a completude da auditoria vem do par de aprovação (`approval/asked` + `approval/decided`) mais a tabela de auditoria do plugin; a lacuna do lado do log de sessão é declarada em `/memory audit` e desaparece quando o host registra `memory/*`.
+
+## Limitações conhecidas
+
+- **Eventos de sessão declarados, ainda não emitidos (rc.2).** `memory/added|updated|removed|recalled|snapshot` são declarados por fusão, mas o rc.2 não tem superfície de registro para tipos de evento fora do repo; a emissão é ativada quando uma build do harness os registrar.
+- **A política `ask` precisa de um answerer.** Sem um answerer UI/ACP composto, as escritas falham fechadas.
+- **Sem indexação FTS5.** A busca por substring usa `instr` insensível a maiúsculas (correto para CJK).
+
+## Interoperabilidade com outros plugins DSH
+
+Verificado contra **DSH `0.2.0-rc.2`** (o runtime para o qual este README é publicado) e o conjunto de plugins com mais estrelas pesquisado em 2026-10-05.
+
+Este plugin **não interfere** em outros plugins, incluindo os de mais estrelas:
+
+- **Sem colisão de nome de ferramenta.** Todas as ferramentas têm namespace; nenhuma ocupa um nome puro já pertencente a uma ferramenta embutida ou a outro plugin.
+- **Sem colisão de chave de serviço.** Fornece apenas `memory`, `memoryAdapters`, `memoryEmbedding`, `memoryRetrieval`; essa chave não é uma costura embutida nem é fornecida por nenhum plugin de mais estrelas.
+- **Sem colisão de slot.** Não registra nenhuma chave de slot de cliente, então não disputa um assento `shadows-shipped-ui`.
+- **Sem colisão de rota HTTP.** Não registra nenhum prefixo `webServer`.
+- **Sem colisão na camada de patch.** O patch do bundle apenas faz `insert` da própria linha; nunca sobrescreve o `config` de uma linha embutida.
+- **Sem mutação global.** Não altera protótipos, não reescreve `process.env` nem substitui o dispatcher global de fetch.
+
+**Listeners de eventos compartilhados não interferem por construção.** Observa os eventos sensíveis à ordem `approval/request` com `ctx.on()` — o registro de difusão do Cordis, onde cada listener executa e nenhum pode privar outro do turno. **Todos os listeners aqui delegam via `next()`**, então a cadeia nunca é curto-circuitada:
+
+Evidência estática: `dsh-plugin-doctor` K10–K13 retornam `pass` em todas as verificações deste repositório.
+
+## Compatibilidade
+
+| Superfície | Estado |
+|---|---|
+| Harness | DeepSeek Harness `dsh-v0.2.1-alpha.2` (adaptado em 2026-10-12; `0.2.1-alpha.1` desde 2026-10-04): a linha `0.1.7` substituiu toda a superfície de registro de configurações (`installSettingsSection` / `SettingsProvider.installSection` / `SettingsNamespace` / `SettingsScope`) por formulários de config ao vivo, então as duas metades seguem o contrato novo — o namespace de um formulário é o id da entrada do perfil (`memento`), seus campos editáveis são os marcados `.volatile()` e uma edição aceita é confirmada **dentro do plugin em execução** em vez de remontá-lo. A metade de navegador lê esse formulário por `ctx.configForms.get(entryId)` (o serviço `ctx.settingsScope` deixou de existir). As duas metades mantêm seus ramos `installSection` / `settingsScope` para as linhas `0.1.2-rc.1`, `0.1.5-alpha.1` e `0.1.6-0` que o intervalo de peers ainda anuncia, e a nova cláusula `>=0.1.7-0 <0.2.0` é o que torna o próprio host alvo instalável (o intervalo antigo o excluía pela regra de semver para versões preliminares). Ainda não há superfície de registro de eventos para plugins — `KNOWN_SESSION_EVENT_TYPES` não inclui `memory/*` e o terceiro argumento de `Session.append` só carrega um `SurfaceIntent` para tipos de superfície, então a porta de auditoria continua adaptativa e pula como antes (diz isso uma vez por processo e em `/memory audit`). A evidência de tipos vem de três faces: os tipos já compilados do checkout local, a linha publicada fixada em `node_modules` e a metade de navegador sob uma lib DOM. **Reverificado contra `0.2.1-alpha.2`:** todas as costuras do host que este pacote toca são **idênticas byte a byte** entre as duas etiquetas (`packages/settings/settings/src/**`, `packages/client/ui-settings/src/**`, `packages/client/ui-slots/src/**`, `packages/client/modules/src/**`, `packages/interaction/user-approval/**`, `vendor/loader/src/**`, `vendor/schemastery/src/**`, `packages/boot/app-boot/src/config-schema/**`), o formato de sessão continua sendo v4 sem migração v4→v5, e `KNOWN_SESSION_EVENT_TYPES` ganhou apenas um tipo de primeira parte — então a porta de auditoria adaptativa continua fechada e **nenhuma mudança de código foi necessária**. O que mudou foi a linha fixada de dev/test (`0.2.1-alpha.2`, mais suas entradas na lista de permitidos por idade de release do `pnpm-workspace.yaml`) e a linha de base de compatibilidade; `npm test` (201 casos, incluindo a suíte de composição com o Loader real), `typecheck:ci`, cobertura, artefatos, conformidade e os portões de cinco idiomas passam contra ela. O alpha.2 de fato adiciona um escritor `appendPluginRecord` no espaço de nomes `plugin:<name>/*`, mas o próprio `packages/core/session/README.md` do host proíbe plugins externos ao repositório de chamá-lo e o prefixo obrigatório `plugin:` não consegue expressar `memory/*`, então este pacote não o adota. |
+| Node | `^22.19.0 \|\| >=24.9.0` |
+| Plataformas | Windows / macOS / Linux (somente host; sem código nativo, sem rede) |
+| Modelo | Qualquer |
+
+## Ecossistema e qualidade
+
+- [Espelho no Gitee](https://gitee.com/perrylink/dsh-memento) (espelho sincronizado; o GitHub é o canônico)
+- [Página do plugin no dshfind](https://dshfind.com/plugins/PerryLink/dsh-memento) (instalações e ranking)
+- [Relatório do OpenSSF Scorecard](https://securityscorecards.dev/viewer/?uri=github.com/PerryLink/dsh-memento) (gerado por [.github/workflows/scorecard.yml](.github/workflows/scorecard.yml))
+- [Relatório de verificação do dsh-plugin-doctor](https://github.com/PerryLink/dsh-plugin-doctor#verified-徽章) (K10–K13 todos `pass`)
+- [DSH Market](https://dsh.market/) (listado)
+- **Canal da loja 1024**: `npm i -g dsh1024` uma vez e depois `dsh1024 plugin --profile web add dsh-memento` (conta para o ranking de instalações do [deepseek1024.com](https://deepseek1024.com))
+- [Base de conhecimento do ecossistema](https://perrylink.github.io/dsh-plugin-guide/) — dados medidos, não marketing: guia de desenvolvimento de plugins · dados de seleção · critérios de manutenção
+
+## Desenvolvimento
+
+```sh
+npm install              # node ^22.19 || >=24.9
+npm test                 # node --test
+npm run lint             # oxlint
+npm run test:conformance # dsh-memory-protocol v1 conformance suite
+npm run typecheck        # face host × checkout local D:\deepseek-harness (imprime «não verificável» e sai 0 sem checkout)
+npm run typecheck:ci     # face host × linha publicada fixada em node_modules
+npm run check:client     # metade de navegador (lib DOM)
+npm run check:coverage   # line-coverage gate
+npm run check:readmes    # five-language README consistency gate
+npm run verify:self-contained # reject out-of-repo dependency specs
+npm run verify:artifacts # artifact presence + syntax + import
+```
+
+`lib/` tem zero dependências de DSH (somente builtins de node:); importações de DSH existem apenas em `index.mjs`.
+
+As imagens do README são geradas programaticamente por [`scripts/gen-readme-assets.py`](scripts/gen-readme-assets.py) (Python + Pillow) e podem ser regeneradas com segurança.
+
+Topics: `dsh`, `dsh-plugin`, `deepseek-harness`, `memory`, `agent-memory`, `approval`, `audit`, `sqlite`, `cordis`, `llm`
+
+## Família e agradecimentos
+
+Este projeto faz parte da família de plugins do DeepSeek Harness da [PerryLink](https://github.com/PerryLink) (todos Apache-2.0). Se for útil, **uma estrela ajuda a próxima pessoa a encontrá-lo** — nada fica bloqueado atrás dela.
+
+- [@alone-tree](https://github.com/alone-tree) — a entrada do painel de configurações do DSH e o botão flutuante ocultável (#8).
+- [@zzproc](https://github.com/zzproc) — a correção do esquema de saída `source`/`tags` do `memory_recall` (#11).
+- [@Niuniu-Sir](https://github.com/Niuniu-Sir) — o relato de falha de inicialização na [issue #1](https://github.com/PerryLink/dsh-memento/issues/1) que levou ao fallback `~/.dsh` incluído na 0.3.1.
+- [@alex-debap](https://github.com/alex-debap) — **product manager**. Cuidou da forma do produto, não do seu código, ao longo de toda a linha de design desde o início: a tese da costura e não outro armazém (uma costura tipada `ctx.memory`, não outro armazém de memória), a exigência de que a porta de aprovação de escrita seja aplicada dentro do serviço, de modo que nenhum caminho do modelo possa contorná-la, em vez de ser uma convenção da camada de ferramentas, e a garantia de auditoria de que toda escrita seja reconstruível a partir do par de aprovação mais a tabela de auditoria do próprio plugin. Nomeou o modelo de recordação limitado e em camadas — duas trilhas × duas camadas, chave por agente, orçamentos de caracteres rígidos por trilha e por camada — e defendeu o armazenamento local primeiro e sem credenciais (`0600`, SQLite sob `$DSH_HOME`, sem rede e sem chaves). Levou o trabalho de protocolo como uma linha de produto: o ensaio público do `dsh-memory-protocol` v1, seu registro de adaptadores e sua suíte de conformidade. Sustentou a linha de escopo sobre o que este plugin deliberadamente não faz.
+
+<details>
+<summary>Expandir todos os plugins</summary>
+
+| Plugin | Status |
+|---|---|
+| **[dsh-aqua-input-check](https://github.com/PerryLink/dsh-aqua-input-check)** |  |
+| **[dsh-archive-check](https://github.com/PerryLink/dsh-archive-check)** |  |
+| **[dsh-auto-review](https://github.com/PerryLink/dsh-auto-review)** |  |
+| **[dsh-autotier](https://github.com/PerryLink/dsh-autotier)** | 🧊 CONGELADO — ver o README do repo |
+| **[dsh-bid-ca-precheck](https://github.com/PerryLink/dsh-bid-ca-precheck)** |  |
+| **[dsh-bid-qual-check](https://github.com/PerryLink/dsh-bid-qual-check)** |  |
+| **[dsh-cert-mcp](https://github.com/PerryLink/dsh-cert-mcp)** | 🧊 CONGELADO — ver o README do repo |
+| **[dsh-checkpoint-rewind](https://github.com/PerryLink/dsh-checkpoint-rewind)** |  |
+| **[dsh-click](https://github.com/PerryLink/dsh-click)** |  |
+| **[dsh-composer-history](https://github.com/PerryLink/dsh-composer-history)** |  |
+| **[dsh-contract-stance](https://github.com/PerryLink/dsh-contract-stance)** |  |
+| **[dsh-customs-doc-check](https://github.com/PerryLink/dsh-customs-doc-check)** |  |
+| **[dsh-data-quality](https://github.com/PerryLink/dsh-data-quality)** | 🧊 CONGELADO — ver o README do repo |
+| **[dsh-demurrage-ledger](https://github.com/PerryLink/dsh-demurrage-ledger)** |  |
+| **[dsh-doublecheck](https://github.com/PerryLink/dsh-doublecheck)** |  |
+| **[dsh-drill-script-check](https://github.com/PerryLink/dsh-drill-script-check)** |  |
+| **[dsh-eia-guide-check](https://github.com/PerryLink/dsh-eia-guide-check)** |  |
+| **[dsh-emergency-plan](https://github.com/PerryLink/dsh-emergency-plan)** |  |
+| **[dsh-essay-rubric-check](https://github.com/PerryLink/dsh-essay-rubric-check)** |  |
+| **[dsh-evidence-check](https://github.com/PerryLink/dsh-evidence-check)** |  |
+| **[dsh-export-ctl-check](https://github.com/PerryLink/dsh-export-ctl-check)** |  |
+| **[dsh-fast](https://github.com/PerryLink/dsh-fast)** |  |
+| **[dsh-fmea-table-check](https://github.com/PerryLink/dsh-fmea-table-check)** |  |
+| **[dsh-forecast-penalty](https://github.com/PerryLink/dsh-forecast-penalty)** |  |
+| **[dsh-fund-research](https://github.com/PerryLink/dsh-fund-research)** |  |
+| **[dsh-github](https://github.com/PerryLink/dsh-github)** |  |
+| **[dsh-gongwen-flow-check](https://github.com/PerryLink/dsh-gongwen-flow-check)** |  |
+| **[dsh-gongwen-word-check](https://github.com/PerryLink/dsh-gongwen-word-check)** |  |
+| **[dsh-guard-plan-qc](https://github.com/PerryLink/dsh-guard-plan-qc)** |  |
+| **[dsh-hazchem-check](https://github.com/PerryLink/dsh-hazchem-check)** |  |
+| **[dsh-hazplan-check](https://github.com/PerryLink/dsh-hazplan-check)** |  |
+| **[dsh-hidden-risk-map](https://github.com/PerryLink/dsh-hidden-risk-map)** |  |
+| **[dsh-hs-classify](https://github.com/PerryLink/dsh-hs-classify)** |  |
+| **[dsh-icd-rule-check](https://github.com/PerryLink/dsh-icd-rule-check)** |  |
+| **[dsh-industry-research](https://github.com/PerryLink/dsh-industry-research)** |  |
+| **[dsh-lawcite-adapter](https://github.com/PerryLink/dsh-lawcite-adapter)** |  |
+| **[dsh-laya](https://github.com/PerryLink/dsh-laya)** |  |
+| **[dsh-lc-doc-check](https://github.com/PerryLink/dsh-lc-doc-check)** |  |
+| **[dsh-learning-gap-check](https://github.com/PerryLink/dsh-learning-gap-check)** |  |
+| **[dsh-library](https://github.com/PerryLink/dsh-library)** |  |
+| **[dsh-local-ai](https://github.com/PerryLink/dsh-local-ai)** |  |
+| **[dsh-lsp-actions](https://github.com/PerryLink/dsh-lsp-actions)** |  |
+| **[dsh-mask](https://github.com/PerryLink/dsh-mask)** |  |
+| **[dsh-mcp-panel](https://github.com/PerryLink/dsh-mcp-panel)** |  |
+| **[dsh-medrec-qc](https://github.com/PerryLink/dsh-medrec-qc)** |  |
+| **[dsh-memento](https://github.com/PerryLink/dsh-memento)** | 🧊 CONGELADO — ver o README do repo |
+| **[dsh-nsfc-form-check](https://github.com/PerryLink/dsh-nsfc-form-check)** |  |
+| **[dsh-nurse-record-check](https://github.com/PerryLink/dsh-nurse-record-check)** |  |
+| **[dsh-observe](https://github.com/PerryLink/dsh-observe)** |  |
+| **[dsh-origin-rvc-check](https://github.com/PerryLink/dsh-origin-rvc-check)** |  |
+| **[dsh-ota-review-check](https://github.com/PerryLink/dsh-ota-review-check)** |  |
+| **[dsh-output-styles](https://github.com/PerryLink/dsh-output-styles)** |  |
+| **[dsh-paper-doc-adapter](https://github.com/PerryLink/dsh-paper-doc-adapter)** |  |
+| **[dsh-permission-rules](https://github.com/PerryLink/dsh-permission-rules)** |  |
+| **[dsh-permit-report-check](https://github.com/PerryLink/dsh-permit-report-check)** |  |
+| **[dsh-pipeline-check](https://github.com/PerryLink/dsh-pipeline-check)** |  |
+| **[dsh-pleading-draft](https://github.com/PerryLink/dsh-pleading-draft)** |  |
+| **[dsh-plugin-doctor](https://github.com/PerryLink/dsh-plugin-doctor)** | 🚫 APOSENTADO (repo arquivado) |
+| **[dsh-plugin-guide](https://github.com/PerryLink/dsh-plugin-guide)** |  |
+| **[dsh-plugin-kit](https://github.com/PerryLink/dsh-plugin-kit)** | 🚫 APOSENTADO (repo arquivado) |
+| **[dsh-plugin-upgrade](https://github.com/PerryLink/dsh-plugin-upgrade)** | 🚫 APOSENTADO (repo arquivado) |
+| **[dsh-policy-brief-draft](https://github.com/PerryLink/dsh-policy-brief-draft)** |  |
+| **[dsh-power-loss-split](https://github.com/PerryLink/dsh-power-loss-split)** |  |
+| **[dsh-power-ticket-check](https://github.com/PerryLink/dsh-power-ticket-check)** |  |
+| **[dsh-ppap-check](https://github.com/PerryLink/dsh-ppap-check)** |  |
+| **[dsh-protest-deadline](https://github.com/PerryLink/dsh-protest-deadline)** |  |
+| **[dsh-railway-window](https://github.com/PerryLink/dsh-railway-window)** |  |
+| **[dsh-repair-order-qc](https://github.com/PerryLink/dsh-repair-order-qc)** |  |
+| **[dsh-research-report](https://github.com/PerryLink/dsh-research-report)** |  |
+| **[dsh-review-reply-check](https://github.com/PerryLink/dsh-review-reply-check)** |  |
+| **[dsh-rulefile-check](https://github.com/PerryLink/dsh-rulefile-check)** |  |
+| **[dsh-safety-brief-check](https://github.com/PerryLink/dsh-safety-brief-check)** |  |
+| **[dsh-score](https://github.com/PerryLink/dsh-score)** | 🧊 CONGELADO — ver o README do repo |
+| **[dsh-session-sync](https://github.com/PerryLink/dsh-session-sync)** |  |
+| **[dsh-site-log-check](https://github.com/PerryLink/dsh-site-log-check)** |  |
+| **[dsh-skill-pack-security](https://github.com/PerryLink/dsh-skill-pack-security)** |  |
+| **[dsh-soe-decision-check](https://github.com/PerryLink/dsh-soe-decision-check)** |  |
+| **[dsh-soilwater-check](https://github.com/PerryLink/dsh-soilwater-check)** |  |
+| **[dsh-sop-sync-check](https://github.com/PerryLink/dsh-sop-sync-check)** |  |
+| **[dsh-spc-gbt-adapter](https://github.com/PerryLink/dsh-spc-gbt-adapter)** |  |
+| **[dsh-talk](https://github.com/PerryLink/dsh-talk)** |  |
+| **[dsh-tender-extract](https://github.com/PerryLink/dsh-tender-extract)** |  |
+| **[dsh-tender-matrix](https://github.com/PerryLink/dsh-tender-matrix)** |  |
+| **[dsh-test-drive](https://github.com/PerryLink/dsh-test-drive)** |  |
+| **[dsh-ticktick](https://github.com/PerryLink/dsh-ticktick)** | 🚫 APOSENTADO (repo arquivado) |
+| **[dsh-translate](https://github.com/PerryLink/dsh-translate)** |  |
+| **[dsh-warranty-calc](https://github.com/PerryLink/dsh-warranty-calc)** |  |
+| **[dsh-budget](https://github.com/PerryLink/dsh-budget)** | 🧊 CONGELADO — ver o README do repositório |
+| **[dsh-claude-move](https://github.com/PerryLink/dsh-claude-move)** | 🧊 CONGELADO — ver o README do repositório |
+| **[dsh-defend](https://github.com/PerryLink/dsh-defend)** | 🧊 CONGELADO — ver o README do repositório |
+| **[dsh-draw](https://github.com/PerryLink/dsh-draw)** | 🧊 CONGELADO — ver o README do repo |
+| **[dsh-reach](https://github.com/PerryLink/dsh-reach)** | 🧊 CONGELADO — ver o README do repositório |
+| **[dsh-background-agents](https://github.com/PerryLink/dsh-background-agents)** | 🚫 APOSENTADO (repo arquivado) |
+| **[dsh-session-pin](https://github.com/PerryLink/dsh-session-pin)** | 🚫 APOSENTADO (repo arquivado) |
+| **[dsh-team-rooms](https://github.com/PerryLink/dsh-team-rooms)** | 🚫 APOSENTADO (repo arquivado) |
+
+</details>
+
+## Licença
+
+[Apache License 2.0](LICENSE) © 2026 dsh-memento contributors
+
+<p align="center"><sub>Apache-2.0 · Plugin da comunidade, sem afiliação com a DeepSeek.</sub></p>

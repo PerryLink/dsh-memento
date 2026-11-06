@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="430" viewBox="0 0 1200 430" role="img" aria-label="dsh-memento data flow">
+<title>dsh-memento data flow</title>
+<rect width="1200" height="430" rx="18" fill="#ffffff"/>
+<text x="60" y="58" fill="#1f2328" font-family="ui-sans-serif,system-ui,sans-serif" font-size="30" font-weight="700">dsh-memento</text>
+<text x="60" y="90" fill="#57606a" font-family="ui-monospace,monospace" font-size="15">ctx.memory · approval/asked · memory.db · systemPrompt</text>
+<line x1="60" y1="112" x2="1140" y2="112" stroke="#d0d7de"/>
+<rect x="60" y="150" width="180" height="104" rx="14" fill="#f6f8fa" stroke="#d0d7de" stroke-width="2"/>
+<text x="150" y="184" fill="#1f2328" text-anchor="middle" font-family="ui-monospace,monospace" font-size="16" font-weight="700">memory</text>
+<text x="150" y="210" fill="#57606a" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11">tool · add/replace/remove</text>
+<text x="150" y="232" fill="#57606a" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11">gate inside the service</text>
+<path d="M246 202h33" stroke="#57606a" stroke-width="3"/>
+<path d="M277 195l10 7-10 7" fill="none" stroke="#57606a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="285" y="150" width="180" height="104" rx="14" fill="#f6f8fa" stroke="#d0d7de" stroke-width="2"/>
+<text x="375" y="184" fill="#1f2328" text-anchor="middle" font-family="ui-monospace,monospace" font-size="16" font-weight="700">ctx.memory</text>
+<text x="375" y="210" fill="#57606a" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11">budget precheck</text>
+<text x="375" y="232" fill="#57606a" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11">two tracks × two layers</text>
+<path d="M471 202h33" stroke="#57606a" stroke-width="3"/>
+<path d="M502 195l10 7-10 7" fill="none" stroke="#57606a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="510" y="150" width="180" height="104" rx="14" fill="#f6f8fa" stroke="#4B67B4" stroke-width="2"/>
+<text x="600" y="184" fill="#1f2328" text-anchor="middle" font-family="ui-monospace,monospace" font-size="16" font-weight="700">approval/asked</text>
+<text x="600" y="210" fill="#57606a" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11">writePolicy: ask</text>
+<text x="600" y="232" fill="#57606a" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11">approval/decided</text>
+<path d="M696 202h33" stroke="#57606a" stroke-width="3"/>
+<path d="M727 195l10 7-10 7" fill="none" stroke="#57606a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="735" y="150" width="180" height="104" rx="14" fill="#f6f8fa" stroke="#4B67B4" stroke-width="2"/>
+<text x="825" y="184" fill="#1f2328" text-anchor="middle" font-family="ui-monospace,monospace" font-size="16" font-weight="700">memory.db</text>
+<text x="825" y="210" fill="#57606a" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11">node:sqlite · 0600 · WAL</text>
+<text x="825" y="232" fill="#57606a" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11">$DSH_HOME/dsh-memento</text>
+<path d="M921 202h33" stroke="#57606a" stroke-width="3"/>
+<path d="M952 195l10 7-10 7" fill="none" stroke="#57606a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="960" y="150" width="180" height="104" rx="14" fill="#f6f8fa" stroke="#16a34a" stroke-width="2"/>
+<text x="1050" y="184" fill="#1f2328" text-anchor="middle" font-family="ui-monospace,monospace" font-size="16" font-weight="700">systemPrompt</text>
+<text x="1050" y="210" fill="#57606a" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11">snapshot · order -50</text>
+<text x="1050" y="232" fill="#57606a" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11">frozen once per session</text>
+<path d="M600 254v32" stroke="#4B67B4" stroke-width="2" stroke-dasharray="5 5"/>
+<path d="M825 254v32" stroke="#4B67B4" stroke-width="2" stroke-dasharray="5 5"/>
+<rect x="510" y="286" width="630" height="44" rx="12" fill="#f6f8fa" stroke="#4B67B4" stroke-width="2"/>
+<text x="825" y="314" fill="#1f2328" text-anchor="middle" font-family="ui-monospace,monospace" font-size="13">audit = approval/asked + approval/decided + audit table</text>
+<rect x="60" y="346" width="1080" height="42" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="2"/>
+<text x="600" y="373" fill="#57606a" text-anchor="middle" font-family="ui-monospace,monospace" font-size="13">dsh-memento-mcp · read-only · memory_search · memory_stats</text>
+<text x="60" y="416" fill="#57606a" font-family="ui-monospace,monospace" font-size="12">memory/* events: declared, not emitted → adaptive gate stays closed</text>
+</svg>
