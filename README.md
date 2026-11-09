@@ -565,3 +565,5 @@ Topics：`dsh`, `dsh-plugin`, `deepseek-harness`, `memory`, `agent-memory`, `app
 [Apache License 2.0](LICENSE) © 2026 dsh-memento contributors
 
 <p align="center"><sub>Apache-2.0 · 社区插件，与 DeepSeek 无关。</sub></p>
+
+<p align="center"><sub>工具链：<a href="https://github.com/PerryLink/dsh-plugin-guide">dsh-plugin-guide</a> · <a href="https://github.com/PerryLink/dsh-standards">dsh-standards</a> · <a href="https://github.com/PerryLink/dsh-plugin-start">dsh-plugin-start</a></sub></p>
