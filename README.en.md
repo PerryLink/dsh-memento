@@ -121,7 +121,7 @@ Two tracks × two layers × per-agent key: a `user` track (facts about the user)
 | Surface | Kind | Notes |
 |---|---|---|
 | `memory` | tool | add/replace/remove/consolidate/query with Save/Skip guidance; writes ride the approval gate |
-| `memory_recall` | tool | Bounded memory matches plus recent session-history matches |
+| `memory_recall` | tool | Bounded memory matches plus recent session-history matches (snippets are visible text only, never reasoning) |
 | `/memory` | command | `list` · `query` · `add` · `remove` · `consolidate` · `proposals` · `budgets` · `audit` · `export` · `import <path>` · `adapters` |
 | web panel | client drawer | Read-only: browse entries, search, budget bars, audit tail; the floating entry button can be hidden (`panel.enabled`) |
 | settings section | DSH settings sidebar → `dsh-memento` | Edit every config field except `enabled` without touching files (namespace = the `memento` profile entry on the `0.1.7` line, the `dsh-memento` settings namespace before it); live vs reload-required timing is marked on the page |

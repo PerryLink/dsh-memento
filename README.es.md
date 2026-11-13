@@ -119,7 +119,7 @@ Dos pistas × dos capas × clave por agente: una pista `user` (hechos sobre el u
 | Superficie | Tipo | Notas |
 |---|---|---|
 | `memory` | herramienta | add/replace/remove/consolidate/query con guía Save/Skip; las escrituras pasan por la puerta de aprobación |
-| `memory_recall` | herramienta | Coincidencias acotadas de memoria más coincidencias recientes del historial de sesión |
+| `memory_recall` | herramienta | Coincidencias acotadas de memoria más coincidencias recientes del historial de sesión (los fragmentos solo incluyen texto visible, nunca razonamiento) |
 | `/memory` | comando | `list` · `query` · `add` · `remove` · `consolidate` · `proposals` · `budgets` · `audit` · `export` · `import <path>` · `adapters` |
 | panel web | cajón del cliente | Solo lectura: explorar entradas, buscar, barras de presupuesto, cola de auditoría; el botón flotante puede ocultarse (`panel.enabled`) |
 | sección de ajustes | Barra lateral de ajustes de DSH → `dsh-memento` | Edita todos los campos de configuración (salvo `enabled`) sin tocar archivos (en la línea `0.1.7` el namespace es la entrada de perfil `memento`; antes era el namespace de ajustes `dsh-memento`); el momento de aplicación (en vivo o tras recarga) se indica en la página |

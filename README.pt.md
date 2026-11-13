@@ -119,7 +119,7 @@ Duas trilhas × duas camadas × chave por agente: uma trilha `user` (fatos sobre
 | Superfície | Tipo | Notas |
 |---|---|---|
 | `memory` | ferramenta | add/replace/remove/consolidate/query com orientação Save/Skip; escritas passam pela porta de aprovação |
-| `memory_recall` | ferramenta | Correspondências limitadas de memória mais correspondências recentes do histórico de sessão |
+| `memory_recall` | ferramenta | Correspondências limitadas de memória mais correspondências recentes do histórico de sessão (os trechos incluem apenas texto visível, nunca raciocínio) |
 | `/memory` | comando | `list` · `query` · `add` · `remove` · `consolidate` · `proposals` · `budgets` · `audit` · `export` · `import <path>` · `adapters` |
 | painel web | gaveta do cliente | Somente leitura: navegar entradas, buscar, barras de orçamento, cauda de auditoria; o botão flutuante pode ser ocultado (`panel.enabled`) |
 | seção de configurações | Barra lateral de configurações do DSH → `dsh-memento` | Edita todos os campos de configuração (exceto `enabled`) sem tocar em arquivos (na linha `0.1.7` o namespace é a entrada de perfil `memento`; antes era o namespace de configurações `dsh-memento`); o momento de aplicação (ao vivo ou após recarga) é indicado na página |

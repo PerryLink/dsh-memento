@@ -119,7 +119,7 @@ dsh plugin --profile <name> add dsh-memento
 | 表面 | 类型 | 说明 |
 |---|---|---|
 | `memory` | 工具 | 带 Save/Skip 指引的 add/replace/remove/consolidate/query；写入走审批门 |
-| `memory_recall` | 工具 | 有界的记忆匹配 + 近期会话历史匹配 |
+| `memory_recall` | 工具 | 有界的记忆匹配 + 近期会话历史匹配（片段只取可见文本，不含思维链） |
 | `/memory` | 命令 | `list` · `query` · `add` · `remove` · `consolidate` · `proposals` · `budgets` · `audit` · `export` · `import <path>` · `adapters` |
 | Web 面板 | 客户端抽屉 | 只读：浏览条目、搜索、预算条、审计尾部；悬浮入口按钮可隐藏（`panel.enabled`） |
 | 设置分区 | DSH 设置侧栏 → `dsh-memento` | 免改文件编辑除 `enabled` 外的全部配置字段（`0.1.7` 线上 namespace = `memento` profile entry，之前是 `dsh-memento` 设置 namespace）；即时/重载生效时机在页面内标注 |
