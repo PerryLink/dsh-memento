@@ -596,3 +596,20 @@ test('S3：enabled:false 时 V2 观察面一并消失', (t) => {
   assert.equal(mock.tools.some((tool) => tool.name === 'memory'), false)
   assert.equal(mock.services.get('memory'), undefined)
 })
+
+test('F10：/memory curate 输出只读整理计划（不落库）', async (t) => {
+  const mounted = mount()
+  t.after(() => teardown(mounted))
+  const { mock } = mounted
+  const service = mock.services.get('memory')
+  const agent = makeAgent(makeSession({ id: 's-curate' }))
+  await service.add({ track: 'agent', scope: 'workspace', text: '重复的记忆条目' }, { agent })
+  await service.add({ track: 'agent', scope: 'workspace', text: '重复的记忆条目' }, { agent })
+  const before = service.store.listEntries().length
+  const invocation = { agent, signal: new AbortController().signal }
+  const result = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'curate' })
+  assert.equal(result.kind, 'success')
+  assert.ok(result.text.includes('记忆整理计划'))
+  assert.ok(result.text.includes('需人工'), 'exact duplicate should be flagged manual')
+  assert.equal(service.store.listEntries().length, before, 'curate must not mutate the store')
+})
