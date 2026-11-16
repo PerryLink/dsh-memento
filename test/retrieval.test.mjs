@@ -43,6 +43,21 @@ test('SubstringRetriever：大小写不敏感子串过滤 + 召回频次排序�
   assert.deepEqual(retriever.retrieve('用户偏好', entries).length, 2)
 })
 
+test('SubstringRetriever：多词查询=全部词项(顺序无关)+词频打分排序', () => {
+  const retriever = new SubstringRetriever()
+  const entries = [
+    entry('a', 'dark mode enabled'),
+    entry('b', 'mode dark reversed'),
+    entry('c', 'light theme'),
+    entry('d', 'dark dark mode repeated'),
+  ]
+  const hits = retriever.retrieve('dark mode', entries)
+  assert.deepEqual(hits.map((e) => e.id).sort(), ['a', 'b', 'd'], '两词都出现即命中（b 为倒序也命中，证明顺序无关）')
+  assert.equal(hits[0].id, 'd', '词频最高排前')
+  assert.deepEqual(retriever.retrieve('dark light', entries), [], '缺词项不命中')
+  assert.deepEqual(retriever.retrieve('light', entries).map((e) => e.id), ['c'], '单词=子串')
+})
+
 test('VectorRetriever：按余弦相似度召回（伪嵌入 token 重叠）', () => {
   const embedding = new FakeEmbeddingProvider()
   const retriever = new VectorRetriever({ embedding })
@@ -150,7 +165,7 @@ test('memory_recall：vector=true 语义召回（无精确子串仍命中 token 
   assert.equal(result.memory.entries[0].text, 'favorite drink is lapsang souchong')
 })
 
-test('memory_recall：默认 substring 主路径保持子串语义（无子串则零命中）', async (t) => {
+test('memory_recall：默认主路径单词=子串、多词=全部词项（顺序无关）', async (t) => {
   const mounted = mount()
   t.after(() => teardown(mounted))
   const service = mounted.mock.services.get('memory')
@@ -159,6 +174,8 @@ test('memory_recall：默认 substring 主路径保持子串语义（无子串�
   const tool = mounted.mock.tools.find((t) => t.name === 'memory_recall')
   const hit = await tool.execute({ query: 'lapsang' }, makeExec({ agent: makeAgent(session) }))
   assert.equal(hit.memory.total, 1)
+  const multi = await tool.execute({ query: 'lapsang drink' }, makeExec({ agent: makeAgent(session) }))
+  assert.equal(multi.memory.total, 1, '多词顺序无关命中')
   const miss = await tool.execute({ query: 'tea lapsang' }, makeExec({ agent: makeAgent(session) }))
-  assert.equal(miss.memory.total, 0)
+  assert.equal(miss.memory.total, 0, '缺 tea 词项不命中')
 })

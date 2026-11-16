@@ -380,3 +380,18 @@ test('resolveDbPath：显式绝对/相对路径与 harness 主目录；DSH_HOME 
   assert.equal(resolveDbPath('rel/m.db', ''), path.resolve(fallbackHome, 'rel/m.db'))
   assert.equal(resolveDbPath('', undefined), path.join(fallbackHome, 'dsh-memento', 'memory.db'))
 })
+
+test('queryEntries：多词=全部词项出现（顺序无关），单词=子串，纯标点不退化', (t) => {
+  const { dir, store } = tempStore()
+  t.after(() => closeAndClean({ dir, store }))
+  store.insertEntry({ track: 'agent', scope: 'user-global', text: 'dark mode enabled for editor' })
+  store.insertEntry({ track: 'agent', scope: 'user-global', text: 'mode dark appears reversed' })
+  store.insertEntry({ track: 'agent', scope: 'user-global', text: 'dark dark mode repeated' })
+  store.insertEntry({ track: 'agent', scope: 'user-global', text: 'light theme default' })
+
+  assert.equal(store.queryEntries({ text: 'mode dark' }).total, 3, 'dark+mode 三条均含两词（顺序无关）')
+  assert.equal(store.queryEntries({ text: 'dark light' }).total, 0, '任一缺失即不命中')
+  assert.equal(store.queryEntries({ text: 'light' }).total, 1, '单词=子串')
+  assert.equal(store.queryEntries({ text: '!!!' }).total, 0, '纯标点保留整串子串语义，不退化成匹配全部')
+  const ranked = store.queryEntries({ text: 'dark mode' })
+  assert.equal(ranked.entries[0].text, 'dark dark mode repeated', '词频最高排第一')})
