@@ -186,7 +186,7 @@ test('可编辑面：Config 的 volatile 字段恰好是旧面板的用户面，
   assert.deepEqual(editable.sort(), [
     'auditRetentionDays', 'budgets', 'commandAuditLimit', 'commandListLimit', 'dbPath',
     'language', 'maxEntriesPerQuery', 'panel', 'panelAuditLimit', 'panelEntriesLimit',
-    'proposals', 'recall', 'retrieval', 'snapshotOrder', 'writePolicies', 'writePolicy',
+    'proposals', 'recall', 'retrieval', 'snapshotOrder', 'unattendedWrites', 'writePolicies', 'writePolicy',
   ])
   // enabled 是组合面开关：旧线同样不在设置面板里（false 时插件整体卸载）。
   assert.equal(fields.enabled.meta?.volatile, undefined)

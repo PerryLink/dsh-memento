@@ -49,6 +49,7 @@ function mount(opts = {}) {
     budgets: opts.budgets ?? DEFAULT_BUDGETS,
     writePolicy: opts.writePolicy ?? 'ask',
     writePolicies: opts.writePolicies ?? {},
+    unattendedWrites: opts.unattendedWrites ?? false,
     language: opts.language ?? 'en',
     snapshotOrder: opts.snapshotOrder ?? -50,
     maxEntriesPerQuery: opts.maxEntriesPerQuery ?? 20,
@@ -87,11 +88,44 @@ test('Config schema：默认值齐备，覆盖生效（F4）', () => {
   assert.equal(normalized.language, 'en')
   assert.equal(normalized.snapshotOrder, -50)
   assert.equal(normalized.maxEntriesPerQuery, 20)
+  assert.equal(normalized.unattendedWrites, false)
   assert.deepEqual(normalized.budgets, DEFAULT_BUDGETS)
   assert.deepEqual(normalized.panel, { enabled: true })
   const overridden = parseConfig({ writePolicy: 'off', budgets: { user: { userGlobal: 100, workspace: 100 }, agent: { userGlobal: 100, workspace: 100 } } })
   assert.equal(overridden.writePolicy, 'off')
   assert.equal(/** @type {any} */ (overridden.budgets).user.userGlobal, 100)
+})
+
+test('审批姿态友好度：会话 ApprovalPolicy=never 时写被拒并给出可执行诊断', async (t) => {
+  const mounted = mount()
+  t.after(() => teardown(mounted))
+  mounted.approval.overrideOf = () => 'never'
+  const service = /** @type {MemoryService} */ (mounted.mock.services.get('memory'))
+  await assert.rejects(
+    () => service.add({ track: 'user', scope: 'user-global', text: 'x' }, { agent: makeAgent() }),
+    (error) => error instanceof WriteDeniedError && /never/.test(error.message) && /unattendedWrites/.test(error.message),
+  )
+})
+
+test('unattendedWrites：审批不可用时插件层按 writePolicy 自决写入（无人值守）', async (t) => {
+  const mounted = mount({ unattendedWrites: true, writePolicy: 'auto' })
+  t.after(() => teardown(mounted))
+  // 模拟 ApprovalPolicy=never：审批服务一律拒绝，且 overrideOf 报 never。
+  mounted.approval.request = async () => 'rejected'
+  mounted.approval.overrideOf = () => 'never'
+  const service = /** @type {MemoryService} */ (mounted.mock.services.get('memory'))
+  const res = await service.add({ track: 'user', scope: 'user-global', text: '无人值守写入' }, { agent: makeAgent() })
+  assert.equal(res.entry.text, '无人值守写入')
+})
+
+test('unattendedWrites：writePolicy=off 时插件层仍拒绝（策略优先于无人值守）', async (t) => {
+  const mounted = mount({ unattendedWrites: true, writePolicy: 'off' })
+  t.after(() => teardown(mounted))
+  const service = /** @type {MemoryService} */ (mounted.mock.services.get('memory'))
+  await assert.rejects(
+    () => service.add({ track: 'user', scope: 'user-global', text: 'x' }, { agent: makeAgent() }),
+    (error) => error instanceof WriteDeniedError && (error.details.outcome === 'rejected'),
+  )
 })
 
 test('Config schema：language 仅 en/zh，非法值加载期响亮失败', () => {

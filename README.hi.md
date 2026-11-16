@@ -296,7 +296,7 @@ Claude Desktop (`claude_desktop_config.json`) उदाहरण:
 | `retrieval.vector` | `false` | सिमेंटिक रिकॉल स्विच: `true` से `memory_recall` वेक्टर रिकॉल (फ़ेक हैश एम्बेडिंग) सक्षम होता है जब कोई एम्बेडिंग प्रदाता उपलब्ध हो; अन्यथा सबस्ट्रिंग पर डिग्रेड होता है |
 
 <details>
-<summary>पूरी कॉन्फ़िगरेशन तालिका (25 कुंजियाँ)</summary>
+<summary>पूरी कॉन्फ़िगरेशन तालिका (26 कुंजियाँ)</summary>
 
 | कुंजी | डिफ़ॉल्ट | अर्थ |
 |---|---|---|
@@ -309,6 +309,7 @@ Claude Desktop (`claude_desktop_config.json`) उदाहरण:
 | `budgets.agent.workspace` | `4000` | agent ट्रैक की workspace परत का कठोर अक्षर बजट |
 | `writePolicy` | `'ask'` | डिफ़ॉल्ट लेखन नीति: `ask` / `auto` / `off` (मॉडल-अदृश्य) |
 | `writePolicies` | `{}` | प्रति-ट्रैक/स्कोप या प्रति-स्रोत ओवरराइड (जैसे `user/workspace`, `source:claude`) |
+| `unattendedWrites` | `false` | स्वीकृति सीम के बिना प्लगइन परत पर मेमोरी लेखन को स्वतः स्वीकृत करें (auto→अनुमति, off→अस्वीकार, ask→बंद रूप में विफल); ApprovalPolicy=never / हेडलेस परिनियोजन के लिए जहां स्वीकृति संकेत नहीं आ सकता |
 | `language` | `'en'` | मॉडल-दृश्य और कमांड आउटपुट भाषा: `en` / `zh` |
 | `snapshotOrder` | `-50` | स्नैपशॉट अनुभाग क्रम (harness पहचान के बाद, persona से पहले) |
 | `maxEntriesPerQuery` | `20` | डिफ़ॉल्ट प्रति-क्वेरी परिणाम सीमा (कठोर सीमा 1000) |

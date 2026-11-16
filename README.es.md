@@ -296,7 +296,7 @@ Claves más usadas:
 | `retrieval.vector` | `false` | Interruptor de recuperación semántica: `true` activa la recuperación vectorial de `memory_recall` (incrustación hash falsa) cuando hay un proveedor de incrustación; en caso contrario degrada a subcadena |
 
 <details>
-<summary>Tabla de configuración completa (25 claves)</summary>
+<summary>Tabla de configuración completa (26 claves)</summary>
 
 | Clave | Predeterminado | Significado |
 |---|---|---|
@@ -309,6 +309,7 @@ Claves más usadas:
 | `budgets.agent.workspace` | `4000` | Presupuesto estricto de caracteres de la capa workspace de la pista agent |
 | `writePolicy` | `'ask'` | Política de escritura por defecto: `ask` / `auto` / `off` (invisible para el modelo) |
 | `writePolicies` | `{}` | Sobrescrituras por pista/ámbito o por origen (p. ej. `user/workspace`, `source:claude`) |
+| `unattendedWrites` | `false` | Autoaprueba las escrituras de memoria en la capa del plugin (auto→permitir, off→rechazar, ask→fallar cerrado) sin el canal de aprobación; para despliegues ApprovalPolicy=never / sin supervisión donde no puede aparecer un aviso de aprobación |
 | `language` | `'en'` | Idioma del texto visible y la salida del comando: `en` / `zh` |
 | `snapshotOrder` | `-50` | Orden de la sección de instantánea (tras la identidad del harness, antes de persona) |
 | `maxEntriesPerQuery` | `20` | Tope de resultados por consulta por defecto (límite duro 1000) |

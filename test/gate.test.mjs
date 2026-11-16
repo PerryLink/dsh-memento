@@ -2,7 +2,7 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { isMemoryWriteRequest, buildWriteReason, parseWriteReason, applyWritePolicy, normalizeWritePolicy, resolveWritePolicy, validateWritePolicies } from '../lib/gate.mjs'
+import { isMemoryWriteRequest, buildWriteReason, parseWriteReason, applyWritePolicy, decideUnattendedWrite, normalizeWritePolicy, resolveWritePolicy, validateWritePolicies } from '../lib/gate.mjs'
 import { InvalidInputError } from '../lib/errors.mjs'
 
 test('isMemoryWriteRequest 只认领 toolName=memory 且带 [dsh-memento] 前缀的请求', () => {
@@ -86,4 +86,11 @@ test('validateWritePolicies：合法键值通过，非法键/值加载期响亮'
   assert.throws(() => validateWritePolicies({ 'bad/key': 'ask' }), InvalidInputError)
   assert.throws(() => validateWritePolicies({ 'user/workspace': 'always' }), InvalidInputError)
   assert.throws(() => validateWritePolicies(null), InvalidInputError)
+})
+
+test('decideUnattendedWrite：auto 放行 / off 拒绝 / ask 无人在场失败封闭 / 非法响亮失败', () => {
+  assert.equal(decideUnattendedWrite('auto'), 'allowed-once')
+  assert.equal(decideUnattendedWrite('off'), 'rejected')
+  assert.equal(decideUnattendedWrite('ask'), 'unavailable')
+  assert.throws(() => decideUnattendedWrite('maybe'), InvalidInputError)
 })

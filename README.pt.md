@@ -296,7 +296,7 @@ Chaves mais usadas:
 | `retrieval.vector` | `false` | Interruptor de recuperação semântica: `true` ativa a recuperação vetorial do `memory_recall` (embedding de hash falso) quando há um provedor de embedding; caso contrário degrada para substring |
 
 <details>
-<summary>Tabela de configuração completa (25 chaves)</summary>
+<summary>Tabela de configuração completa (26 chaves)</summary>
 
 | Chave | Padrão | Significado |
 |---|---|---|
@@ -309,6 +309,7 @@ Chaves mais usadas:
 | `budgets.agent.workspace` | `4000` | Orçamento rígido de caracteres da camada workspace da trilha agent |
 | `writePolicy` | `'ask'` | Política de escrita padrão: `ask` / `auto` / `off` (invisível para o modelo) |
 | `writePolicies` | `{}` | Sobrescritas por trilha/escopo ou por origem (ex.: `user/workspace`, `source:claude`) |
+| `unattendedWrites` | `false` | Autoaprova as gravações de memória na camada do plugin (auto→permitir, off→recusar, ask→falha fechada) sem o canal de aprovação; para implantações ApprovalPolicy=never / headless onde nenhum prompt de aprovação pode aparecer |
 | `language` | `'en'` | Idioma do texto visível e da saída do comando: `en` / `zh` |
 | `snapshotOrder` | `-50` | Ordem da seção de snapshot (após a identidade do harness, antes de persona) |
 | `maxEntriesPerQuery` | `20` | Limite de resultados por consulta (limite rígido 1000) |
