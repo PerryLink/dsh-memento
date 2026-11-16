@@ -84,6 +84,7 @@ import { RetrievalProviderRegistry, SubstringRetriever, VectorRetriever, detectV
  * @property {number} commandListLimit
  * @property {number} commandAuditLimit
  * @property {'en'|'zh'} language
+ * @property {{enabled: boolean, maxChars: number, maxPending: number}} proposals
  * @property {ApprovalLike} approval
  * @property {string} [sourceLabel]
  * @typedef {object} PluginConfig - apply 的宽松配置形状（cordis loader 已套 schema 默认值）。
@@ -115,6 +116,7 @@ import { RetrievalProviderRegistry, SubstringRetriever, VectorRetriever, detectV
  * @property {boolean} [truncated]
  * @property {number} [total]
  * @property {PublicEntry} [entry]
+ * @property {{id: string, kind: string, track: string, scope: string, status: string}} [proposal]
  * @property {Array<{id: string, text: string}>} [removed]
  * @property {{used: number, limit: number}} [usage]
  * @typedef {object} RecallToolValue - memory_recall 工具规范结果形状。
@@ -370,6 +372,7 @@ export class MemoryService extends MemoryProtocolCore {
     this.commandListLimit = deps.commandListLimit
     this.commandAuditLimit = deps.commandAuditLimit
     this.language = deps.language
+    this.proposals = deps.proposals
   }
 }
 
@@ -387,6 +390,59 @@ function toToolError(/** @type {unknown} */ error) {
     }
   }
   return { code: 'INTERNAL', message: error instanceof Error ? error.message : String(error) }
+}
+
+/**
+ * 手动/程序化捕获一条待审批提案（与原生压缩解耦——bili 等禁用原生压缩的环境也能用）。
+ * 与 compaction 自动捕获不同：disabled / 空文本 / 队列满都会**响亮抛错**，绝不静默丢弃。
+ * 提案不会直接写入记忆；需经 /memory proposals approve 或面板审批后才落盘。
+ * @param {StoreHandle} store - 存储句柄。
+ * @param {{enabled: boolean, maxChars: number, maxPending: number}} proposalsConfig - Config.proposals。
+ * @param {{track: string, scope: string, text: string, source?: string, workspaceKey?: string, agentKey?: string}} input - 提案内容。
+ * @returns {MemoryProposal} 新建的待审批提案。
+ */
+function capturePendingProposal(store, proposalsConfig, input) {
+  const config = proposalsConfig ?? { enabled: true, maxChars: 2000, maxPending: 8 }
+  if (config.enabled === false) {
+    throw new InvalidInputError('proposals are disabled (Config.proposals.enabled=false)')
+  }
+  const raw = typeof input.text === 'string' ? input.text : ''
+  if (raw.trim().length === 0) {
+    throw new InvalidInputError('proposal text must be a non-empty string')
+  }
+  const pending = /** @type {MemoryProposal[]} */ (store.proposalList('pending', config.maxPending))
+  if (pending.length >= config.maxPending) {
+    throw new InvalidInputError(`proposal queue is full (maxPending=${config.maxPending}); approve or dismiss existing proposals first`)
+  }
+  const text = raw.length > config.maxChars ? raw.slice(0, config.maxChars) : raw
+  const created = /** @type {MemoryProposal | null} */ (store.proposalUpsert({
+    kind: 'manual',
+    track: input.track,
+    scope: input.scope,
+    workspaceKey: input.workspaceKey,
+    agentKey: input.agentKey,
+    text,
+    source: input.source ?? 'manual',
+    sessionId: null,
+  }))
+  if (created === null) {
+    throw new InvalidInputError('proposal was not created (idempotency collision); retry')
+  }
+  try {
+    store.auditAppend({
+      action: 'proposal',
+      track: created.track,
+      scope: created.scope,
+      entryId: created.id,
+      text: created.text,
+      outcome: 'pending',
+      source: input.source ?? 'manual',
+      sessionId: null,
+    })
+  } catch {
+    // 审计失败不影响提案创建（与 compaction 路径一致：best-effort）。
+  }
+  return created
 }
 
 /** 记忆工具描述：内嵌 Save/Skip 行为指引（学 Hermes 官方 memory.md 清单）。en 为源文，zh 为对应译文。 */
@@ -420,7 +476,7 @@ const MEMORY_TOOL_DESCRIPTION = {
 /** 记忆工具参数描述（双语）。 */
 const MEMORY_TOOL_PARAMETERS = {
   en: {
-    action: 'add = insert a new entry; replace = rewrite one existing entry; remove = delete one existing entry; consolidate = merge 1..20 existing entries into one new entry (single approval, atomic); query = substring search over existing entries.',
+    action: 'add = insert a new entry; replace = rewrite one existing entry; remove = delete one existing entry; consolidate = merge 1..20 existing entries into one new entry (single approval, atomic); query = substring search over existing entries; propose = queue a pending memory proposal (kind "manual") to be approved/dismissed later — use where native auto-compaction is unavailable.',
     track: 'Memory track. Defaults to "user". user = facts about the user; agent = environment/project facts and conventions.',
     scope: 'Layer. Defaults to "workspace". user-global applies to every workspace; workspace applies only to this working directory.',
     text: 'add/replace: the exact entry text. query: case-insensitive substring filter.',
@@ -430,7 +486,7 @@ const MEMORY_TOOL_PARAMETERS = {
     tags: 'Optional short labels for the entry (e.g. ["project-x", "decision"]). At most 16 tags, each at most 32 characters; applies to add/replace/consolidate.',
   },
   zh: {
-    action: 'add = 新增一条；replace = 改写一条既有条目；remove = 删除一条既有条目；consolidate = 把 1..20 条既有条目整合为一条新条目（单次审批、原子执行）；query = 对既有条目的子串检索。',
+    action: 'add = 新增一条；replace = 改写一条既有条目；remove = 删除一条既有条目；consolidate = 把 1..20 条既有条目整合为一条新条目（单次审批、原子执行）；query = 对既有条目的子串检索；propose = 登记一条待审批提案（kind "manual"），稍后审批/驳回——用于原生自动压缩不可用的环境。',
     track: '记忆轨道。默认 "user"。user = 用户相关事实；agent = 环境/项目事实与约定。',
     scope: '层。默认 "workspace"。user-global 对所有工作区生效；workspace 只对当前工作目录生效。',
     text: 'add/replace：完整条目文本。query：大小写不敏感子串过滤。',
@@ -457,7 +513,7 @@ export function makeMemoryTool(service, language = 'en') {
       action: {
         type: 'string',
         required: true,
-        enum: ['add', 'replace', 'remove', 'consolidate', 'query'],
+        enum: ['add', 'replace', 'remove', 'consolidate', 'query', 'propose'],
         description: parameters.action,
       },
       track: {
@@ -498,7 +554,7 @@ export function makeMemoryTool(service, language = 'en') {
         type: 'object',
         additionalProperties: false,
         properties: {
-          action: { type: 'string', required: true, enum: ['add', 'replace', 'remove', 'consolidate', 'query'] },
+          action: { type: 'string', required: true, enum: ['add', 'replace', 'remove', 'consolidate', 'query', 'propose'] },
           ok: { type: 'boolean', required: true },
           entry: {
             type: 'object',
@@ -529,6 +585,17 @@ export function makeMemoryTool(service, language = 'en') {
             properties: {
               id: { type: 'string', required: true },
               text: { type: 'string', required: true },
+            },
+          },
+          proposal: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              id: { type: 'string', required: true },
+              kind: { type: 'string', required: true },
+              track: { type: 'string', required: true },
+              scope: { type: 'string', required: true },
+              status: { type: 'string', required: true },
             },
           },
           entries: {
@@ -679,6 +746,19 @@ export function makeMemoryTool(service, language = 'en') {
               usage: result.usage,
             }
           }
+          case 'propose': {
+            const created = capturePendingProposal(service.store, service.proposals, {
+              track: args.track ?? 'agent',
+              scope: args.scope ?? 'workspace',
+              text: args.text,
+              source: 'memory-tool',
+            })
+            return {
+              action: 'propose',
+              ok: true,
+              proposal: { id: created.id, kind: created.kind, track: created.track, scope: created.scope, status: created.status },
+            }
+          }
           default: {
             throw new InvalidInputError(`unknown memory action ${JSON.stringify(args.action)}`)
           }
@@ -731,6 +811,8 @@ export function renderMemoryResult(/** @type {object} */ _args, /** @type {Memor
       return [{ type: 'text', text: `memory entry removed (${value.entry.track}/${value.entry.scope}): ${value.entry.text}\nbudget: ${value.usage.used}/${value.usage.limit} chars used` }]
     case 'consolidate':
       return [{ type: 'text', text: `memory entries consolidated (${value.entry.track}/${value.entry.scope}): ${value.removed.length} removed → ${value.entry.text}\nbudget: ${value.usage.used}/${value.usage.limit} chars used` }]
+    case 'propose':
+      return [{ type: 'text', text: `memory proposal queued (${value.proposal.track}/${value.proposal.scope}) [${value.proposal.id}]: approve with /memory proposals approve ${value.proposal.id} or dismiss with /memory proposals dismiss ${value.proposal.id}` }]
     default:
       return [{ type: 'text', text: `memory ${value.action}: ok` }]
   }
@@ -1036,6 +1118,7 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
       service.commandListLimit = next.commandListLimit
       service.commandAuditLimit = next.commandAuditLimit
       service.language = next.language
+      service.proposals = next.proposals
     }
     if ((applied.length > 0 || reloadRequired.length > 0) && service !== undefined) {
       // 启动期字段变更：响亮留痕，绝不静默。
@@ -1101,6 +1184,7 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
     commandListLimit: live.commandListLimit,
     commandAuditLimit: live.commandAuditLimit,
     language: live.language,
+    proposals: live.proposals,
     approval: ctx.approval,
     sourceLabel: DEFAULT_SOURCE,
   })
@@ -1363,6 +1447,7 @@ function makeCommandGate(ctx, write) {
  * @property {(id: string) => string} proposalNotPending
  * @property {(track: string, scope: string, text: string, used: number, limit: number) => string} proposalApproved
  * @property {(id: string) => string} proposalDismissed
+ * @property {(track: string, scope: string, id: string) => string} proposalCaptured
  * @property {string} auditEmpty
  * @property {(n: number) => string} audit
  * @property {string} auditGapNotice
@@ -1397,7 +1482,7 @@ function makeCommandGate(ctx, write) {
  */
 const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} */ ({
   en: {
-    usage: 'Usage: /memory list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <path>',
+    usage: 'Usage: /memory list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>|capture <text>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <path>',
     memoryEmpty: 'Memory is empty.',
     entries: (total, shown) => `Memory entries (${total} total, showing first ${shown}):`,
     entriesFull: (total) => `Memory entries (${total}):`,
@@ -1408,10 +1493,11 @@ const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} 
     budgets: 'Budget usage:',
     proposalsNone: 'No pending memory proposals.',
     proposalsList: (n, rows) => `Pending proposals (${n}):\n${rows}\nApprove: /memory proposals approve <id>; dismiss: /memory proposals dismiss <id>`,
-    proposalsUsage: 'proposals usage: /memory proposals | proposals approve <id> | proposals dismiss <id>',
+    proposalsUsage: 'proposals usage: /memory proposals | proposals approve <id> | proposals dismiss <id> | proposals capture <text>',
     proposalNotPending: (id) => `proposal ${JSON.stringify(id)} is not a pending proposal (decided or missing)`,
     proposalApproved: (track, scope, text, used, limit) => `Proposal approved and written to memory (${track}/${scope}): ${text}\nLayer usage: ${used}/${limit}`,
     proposalDismissed: (id) => `Proposal ${id} dismissed.`,
+    proposalCaptured: (track, scope, id) => `Proposal captured (${track}/${scope}) [${id}]. Approve: /memory proposals approve ${id}; dismiss: /memory proposals dismiss ${id}`,
     auditEmpty: 'Audit is empty.',
     audit: (n) => `Recent audit (${n} rows):`,
     auditGapNotice: 'Note: the session-log side of the audit is NOT currently written — this harness does not know the memory/* session event types, so appending them would make the session unloadable. The audit chain here (approval seam + this ledger) is complete; the session log alone cannot rebuild memory writes.',
@@ -1441,11 +1527,11 @@ const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} 
     adapterUnknown: (id) => `no memory adapter "${id}" is registered; run /memory adapters`,
     adapterPayload: (id, message) => `adapter ${id} rejected the payload: ${message}`,
     adapterImported: (n, id) => `Imported ${n} entries via adapter ${id} (single approval; budgets re-checked). Entries get fresh ids and timestamps.`,
-    unknownVerb: (verb) => `Unknown subcommand "${verb}". Usage: /memory list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <path>`,
+    unknownVerb: (verb) => `Unknown subcommand "${verb}". Usage: /memory list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>|capture <text>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <path>`,
     commandFailed: (message) => `memory command failed: ${message}`,
   },
   zh: {
-    usage: '用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <路径>',
+    usage: '用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>|capture <text>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <路径>',
     memoryEmpty: '记忆为空。',
     entries: (total, shown) => `记忆条目（共 ${total} 条，显示前 ${shown} 条）：`,
     entriesFull: (total) => `记忆条目（${total} 条）：`,
@@ -1456,10 +1542,11 @@ const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} 
     budgets: '预算用量：',
     proposalsNone: '暂无待审批记忆提案。',
     proposalsList: (n, rows) => `待审批提案（${n} 条）：\n${rows}\n审批：/memory proposals approve <id>；驳回：/memory proposals dismiss <id>`,
-    proposalsUsage: 'proposals 用法：/memory proposals | proposals approve <id> | proposals dismiss <id>',
+    proposalsUsage: 'proposals 用法：/memory proposals | proposals approve <id> | proposals dismiss <id> | proposals capture <文本>',
     proposalNotPending: (id) => `proposal ${JSON.stringify(id)} 不是待审批提案（可能已裁决或不存在）`,
     proposalApproved: (track, scope, text, used, limit) => `已批准提案并写入记忆（${track}/${scope}）：${text}\n该层用量：${used}/${limit}`,
     proposalDismissed: (id) => `已驳回提案 ${id}。`,
+    proposalCaptured: (track, scope, id) => `已捕获提案（${track}/${scope}）[${id}]。审批：/memory proposals approve ${id}；驳回：/memory proposals dismiss ${id}`,
     auditEmpty: '审计为空。',
     audit: (n) => `最近审计（${n} 条）：`,
     auditGapNotice: '注意：审计的会话日志侧当前未落盘——本宿主不认识 memory/* 会话事件类型，强行 append 会让该会话无法再加载。此处的审计链（审批 seam + 本账本）是完整的；仅凭会话日志无法重建记忆写入。',
@@ -1489,7 +1576,7 @@ const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} 
     adapterUnknown: (id) => `没有注册记忆适配器「${id}」；请运行 /memory adapters`,
     adapterPayload: (id, message) => `适配器 ${id} 拒绝了载荷：${message}`,
     adapterImported: (n, id) => `已通过适配器 ${id} 导入 ${n} 条记忆（单次审批；预算已复检）。条目获得新 id 与新时间戳。`,
-    unknownVerb: (verb) => `未知子命令「${verb}」。用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <路径>`,
+    unknownVerb: (verb) => `未知子命令「${verb}」。用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>|capture <text>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <路径>`,
     commandFailed: (message) => `memory 命令失败：${message}`,
   },
 })
@@ -1497,12 +1584,12 @@ const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} 
 /** 命令注册描述与输入提示（双语）。 */
 const COMMAND_DESCRIPTION = /** @type {{en: {description: string, hint: string}, zh: {description: string, hint: string}}} */ ({
   en: {
-    description: 'View/manage dsh-memento memory: list | query <word> | add [--track=user|agent] [--scope=user-global|workspace] <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <path>',
-    hint: 'list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <path>',
+    description: 'View/manage dsh-memento memory: list | query <word> | add [--track=user|agent] [--scope=user-global|workspace] <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>|capture <text>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <path>',
+    hint: 'list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>|capture <text>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <path>',
   },
   zh: {
-    description: '查看/管理 dsh-memento 记忆：list | query <词> | add [--track=user|agent] [--scope=user-global|workspace] <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <路径>',
-    hint: 'list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <路径>',
+    description: '查看/管理 dsh-memento 记忆：list | query <词> | add [--track=user|agent] [--scope=user-global|workspace] <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>|capture <text>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <路径>',
+    hint: 'list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>|capture <text>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <路径>',
   },
 })
 
@@ -1585,6 +1672,21 @@ async function runMemoryCommand(ctx, service, invocation) {
     }
     case 'proposals': {
       const [sub, id] = rest
+      if (sub === 'capture') {
+        const proposalText = rest.slice(1).join(' ').trim()
+        try {
+          const created = capturePendingProposal(service.store, service.proposals, {
+            track: 'agent',
+            scope: 'workspace',
+            text: proposalText,
+            source: 'manual',
+          })
+          return { kind: 'success', text: text.proposalCaptured(created.track, created.scope, created.id) }
+        } catch (error) {
+          if (error instanceof MemoryError) return { kind: 'error', text: error.message }
+          throw error
+        }
+      }
       if (sub === undefined) {
         const rows = /** @type {MemoryProposal[]} */ (service.store.proposalList('pending', 50))
         if (rows.length === 0) return { kind: 'success', text: text.proposalsNone }

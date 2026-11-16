@@ -11,7 +11,7 @@ import {
   handleMemoryCommand,
   DEFAULT_BUDGETS,
 } from '../index.mjs'
-import { createMockCtx, makeSession, makeAgent } from './helpers/mock-ctx.mjs'
+import { createMockCtx, makeSession, makeAgent, makeExec } from './helpers/mock-ctx.mjs'
 
 /** 经 mock 事件总线裁决的审批服务（与 v2 集成测试同款）。 */
 function makeBusApproval(ctx) {
@@ -178,4 +178,84 @@ test('面板 proposals 路由只读返回 pending 列表', async (t) => {
   const data = JSON.parse(captured)
   assert.equal(data.proposals.length, 1)
   assert.equal(data.proposals[0].text, '面板可见提案')
+})
+
+// ——— PR3：手动/程序化捕获（与原生压缩解耦，bili 下可用） ———
+
+test('manual capture via memory tool：不依赖任何 compaction 事件，登记 kind=manual 的 pending 提案且不写记忆', async (t) => {
+  const mounted = mount({ writePolicy: 'auto' })
+  t.after(() => teardown(mounted))
+  const { mock } = mounted
+  const service = mock.services.get('memory')
+  const tool = mock.tools.find((candidate) => candidate.name === 'memory')
+  const exec = makeExec({ agent: makeAgent(makeSession({ id: 's-tool' })) })
+
+  const result = await tool.execute({ action: 'propose', track: 'agent', scope: 'workspace', text: '无压缩环境下的手动建议' }, exec)
+  assert.equal(result.ok, true)
+  assert.equal(result.action, 'propose')
+  assert.equal(result.proposal.kind, 'manual')
+  assert.equal(result.proposal.status, 'pending')
+  assert.equal(result.proposal.track, 'agent')
+  assert.equal(result.proposal.scope, 'workspace')
+
+  const pending = service.store.proposalList('pending')
+  assert.equal(pending.length, 1)
+  assert.equal(pending[0].sessionId, null, '手动提案无会话归属 → 同 kind 可多条')
+  assert.equal(service.query({}).total, 0, 'propose 不直接写记忆')
+
+  // 再来一条同 kind=manual：因 session NULL 在唯一索引里互不相等，仍可多条
+  const second = await tool.execute({ action: 'propose', text: '第二条手动建议' }, exec)
+  assert.equal(second.ok, true)
+  assert.equal(service.store.proposalList('pending').length, 2)
+
+  const audit = service.store.auditList().filter((row) => row.action === 'proposal')
+  assert.equal(audit.length, 2)
+  assert.equal(audit.every((row) => row.outcome === 'pending'), true)
+})
+
+test('manual capture：空文本 / 队列满 / enabled=false 都响亮失败（不静默丢弃）', async (t) => {
+  const capped = mount({ proposals: { enabled: true, maxChars: 2000, maxPending: 1 } })
+  t.after(() => teardown(capped))
+  const tool = capped.mock.tools.find((candidate) => candidate.name === 'memory')
+  const exec = makeExec({ agent: makeAgent(makeSession()) })
+
+  const empty = await tool.execute({ action: 'propose', text: '   ' }, exec)
+  assert.equal(empty.ok, false)
+  assert.ok(empty.error.message.includes('non-empty'))
+
+  assert.equal((await tool.execute({ action: 'propose', text: '甲' }, exec)).ok, true)
+  const full = await tool.execute({ action: 'propose', text: '乙' }, exec)
+  assert.equal(full.ok, false)
+  assert.ok(full.error.message.includes('full'))
+
+  const off = mount({ proposals: { enabled: false, maxChars: 2000, maxPending: 8 } })
+  t.after(() => teardown(off))
+  const offTool = off.mock.tools.find((candidate) => candidate.name === 'memory')
+  const disabled = await offTool.execute({ action: 'propose', text: '丙' }, makeExec({ agent: makeAgent(makeSession()) }))
+  assert.equal(disabled.ok, false)
+  assert.ok(disabled.error.message.includes('disabled'))
+})
+
+test('/memory proposals capture <text>：人工捕获 → approve 经审批门写入（source=proposal）', async (t) => {
+  const mounted = mount({ writePolicy: 'auto' })
+  t.after(() => teardown(mounted))
+  const { mock } = mounted
+  const service = mock.services.get('memory')
+  const invocation = { agent: makeAgent(makeSession()), signal: new AbortController().signal }
+
+  const captured = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: 'proposals capture 人工捕获的整理建议' })
+  assert.equal(captured.kind, 'success')
+  assert.ok(captured.text.includes('已捕获提案'))
+  const pending = service.store.proposalList('pending')
+  assert.equal(pending.length, 1)
+  assert.equal(pending[0].kind, 'manual')
+  assert.equal(pending[0].text, '人工捕获的整理建议')
+  assert.equal(pending[0].sessionId, null)
+
+  const approved = await handleMemoryCommand(mock.ctx, service, { ...invocation, rawInput: `proposals approve ${pending[0].id}` })
+  assert.ok(approved.text.includes('已批准提案'))
+  const entries = service.query({ track: 'agent', scope: 'workspace' })
+  assert.equal(entries.total, 1)
+  assert.equal(entries.entries[0].text, '人工捕获的整理建议')
+  assert.equal(entries.entries[0].source, 'proposal')
 })

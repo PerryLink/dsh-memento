@@ -199,3 +199,20 @@ gate → 预算复审 → 落盘 → 审计的完整流水线、唯一子串定�
 - **探测 → 使用 → 优雅降级**：`detectVectorBackend` 只要求 embedding provider 可用；sqlite-vec 是
   可选 loadable 扩展、恒不在本仓库打包（`sqliteVec: false`），P0 向量召回走内存内暴力余弦。
   缺 embedding / vector 关闭时优雅降级回 substring，绝不响亮失败（可选后端缺失不是配置错误）。
+
+## P1：提案捕获与原生压缩解耦（PR3）
+
+### 20. 手动/程序化提案捕获（memory propose + /memory proposals capture）
+
+原生 auto-capture 只从 `compaction/summary` + `compaction/end` 会话事件产生 `compaction-summary`
+提案；在 billion-context 等**禁用原生压缩**的环境里这条路径永不触发，提案机制形同虚设。PR3 增加
+与压缩解耦的手动/程序化入口：
+
+- **模块级 `capturePendingProposal(store, proposalsConfig, input)`**：`kind: "manual"`、`sessionId: null`
+  （NULL 在 `UNIQUE(session_id,kind)` 里互不相等 → 同 kind 可多条），按 `maxChars` 截断，落审计
+  `action:"proposal" outcome:"pending"`。与 auto-capture 的静默丢弃相反：`enabled:false` / 空文本 /
+  队列满都**响亮抛 `InvalidInputError`**（失败要大声）。
+- **两个消费面**：(a) `memory` 工具新增 `propose` 动作（track 默认 `agent`、scope 默认 `workspace`）——
+  agent 或定时任务在 bili 下可直接排队提案；(b) `/memory proposals capture <text>` 人工入口。
+- **审批门不变**：提案不是写；仍须 `/memory proposals approve <id>` 或面板审批，经既有审批 seam 才落盘。
+- **解耦而非替换**：原生压缩存在时 auto-capture 照旧；PR3 只是补上不依赖它的路径。
