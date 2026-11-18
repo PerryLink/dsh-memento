@@ -41,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.32] - 2026-11-18
+
 ### Added
 
 - **The README now carries the video walkthrough.** `docs/assets/dsh-memento-demo.mp4` — a 2 min 23 s narrated run, H.264 (Main @ 4.2) + AAC-LC stereo, 960×544, 1.87 MB — sits behind a click-to-open thumbnail (`docs/assets/dsh-memento-demo-video.png`: the documented terminal still with a play affordance, carrying no language-specific copy so all five READMEs share one asset). All five READMEs carry the block. Neither asset joins the published `files` list: the poster is referenced by absolute `raw.githubusercontent.com` URL, as the PNG and the GIF already were, and the MP4 by both a `github.com/blob` link and a raw direct-download link.

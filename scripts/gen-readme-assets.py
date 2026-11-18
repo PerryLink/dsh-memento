@@ -265,7 +265,7 @@ HERO = {
         audit_label="审计", audit_label_kind="cjk_bold",
         audit="asked + decided · audit table (*-denied) · snapshot row",
         side="dsh-memento-mcp · readOnly",
-        foot="Apache-2.0 · v0.5.30 · PerryLink DSH plugin family",
+        foot="Apache-2.0 · v0.5.32 · PerryLink DSH plugin family",
     ),
     "en": dict(
         kicker=[("DSH PLUGIN · MEMORY SEAM", "mono_bold")],
@@ -299,7 +299,7 @@ HERO = {
         audit_label="audit", audit_label_kind="en_bold",
         audit="asked + decided · audit table (*-denied) · snapshot row",
         side="dsh-memento-mcp · readOnly",
-        foot="Apache-2.0 · v0.5.30 · PerryLink DSH plugin family",
+        foot="Apache-2.0 · v0.5.32 · PerryLink DSH plugin family",
     ),
 }
 
@@ -570,7 +570,7 @@ def flow_svg(skin: str) -> str:
     add(T(44, 58, "dsh-memento", 32, s["text"], 700))
     add(T(44, 88, "one store, one gate, one frozen read — the loop between "
                   "two sessions", 15, s["sub"], family=SANS))
-    add(T(1056, 56, "v0.5.30 · ctx.memory · node:sqlite · read-only MCP", 13,
+    add(T(1056, 56, "v0.5.32 · ctx.memory · node:sqlite · read-only MCP", 13,
           s["faint"], anchor="end"))
     add(f'<line x1="40" y1="104" x2="1060" y2="104" stroke="{s["edge"]}" '
         f'stroke-width="2"/>')
