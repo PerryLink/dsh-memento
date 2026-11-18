@@ -1,3 +1,5 @@
+> Host compatibility: DeepSeek Harness `dsh-v0.2.2-rc.4` (verified 2026-11-18).
+
 <div align="center">
 
 <picture>

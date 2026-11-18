@@ -1,3 +1,5 @@
+> 宿主兼容性：DeepSeek Harness `dsh-v0.2.2-rc.4`（2026-11-18 核验）。
+
 <div align="center">
 
 <picture>
