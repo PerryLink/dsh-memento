@@ -22,7 +22,7 @@ jobs:
           cache: npm
           # 不加 registry-url：它会写 //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}，
           # secret 退役后那行就成了空 Bearer，注册表对 PUT 回 404，npm 便不会走 OIDC 交换。
-      - run: npm ci
+      - run: npm ci --legacy-peer-deps
       - run: npm test
       - run: npm run typecheck
       - run: npm run check:coverage
