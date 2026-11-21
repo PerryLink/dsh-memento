@@ -36,7 +36,7 @@ import {
   AdapterPayloadError,
 } from './lib/errors.mjs'
 import { validateBudgets, budgetReport, budgetLimits, checkBudget } from './lib/budget.mjs'
-import { buildWriteReason, isMemoryWriteRequest, applyWritePolicy, normalizeWritePolicy, resolveWritePolicy, validateWritePolicies, parseWriteReason } from './lib/gate.mjs'
+import { buildWriteReason, isMemoryWriteRequest, applyWritePolicy, decideUnattendedWrite, normalizeWritePolicy, resolveWritePolicy, validateWritePolicies, parseWriteReason } from './lib/gate.mjs'
 import { MemoryProtocolCore, PROTOCOL_ID, PROTOCOL_VERSION, PROTOCOL_URI, normalizeTags, validateMemoryEntry, validateExportEnvelope, validateAuditRow, MAX_TAGS_PER_ENTRY, MAX_TAG_LENGTH } from './lib/protocol.mjs'
 import { MemoryAdapterRegistry } from './lib/registry.mjs'
 import { REFERENCE_ADAPTERS } from './lib/adapters.mjs'
@@ -80,6 +80,8 @@ import { RetrievalProviderRegistry, SubstringRetriever, VectorRetriever, detectV
  * @property {StoreHandle} store
  * @property {BudgetsConfig} budgets
  * @property {string} writePolicy
+ * @property {Record<string, 'ask'|'auto'|'off'>} [writePolicies]
+ * @property {boolean} [unattendedWrites]
  * @property {number} maxEntriesPerQuery
  * @property {number} commandListLimit
  * @property {number} commandAuditLimit
@@ -92,6 +94,7 @@ import { RetrievalProviderRegistry, SubstringRetriever, VectorRetriever, detectV
  * @property {{user?: {userGlobal?: number, workspace?: number}, agent?: {userGlobal?: number, workspace?: number}}} [budgets]
  * @property {string} [writePolicy]
  * @property {Record<string, string>} [writePolicies]
+ * @property {boolean} [unattendedWrites]
  * @property {'en'|'zh'} [language]
  * @property {number} [snapshotOrder]
  * @property {number} [maxEntriesPerQuery]
@@ -180,6 +183,7 @@ function liveField(schema) {
  *   每轨每层硬字符预算（热生效）。
  * @property {'ask'|'auto'|'off'} [writePolicy] 写审批策略；模型不可见、不可改（热生效）。
  * @property {Record<string, 'ask'|'auto'|'off'>} [writePolicies] 粒度写策略（键 `track/scope` 或 `source:<name>`；未命中回退 writePolicy；热生效）。
+ * @property {boolean} [unattendedWrites] 无人值守写模式（默认 false；热生效）：true 时记忆写在插件层按 writePolicy 自决（auto→放行、off→拒绝、ask→失败封闭），不经审批 seam，面向 ApprovalPolicy=never（完全权限/headless）部署；模型不可见、不可改。
  * @property {'en'|'zh'} [language] 模型可见文案与命令输出语言（默认 en；命令/快照/面板热生效，工具描述注册期固定）。
  * @property {number} [snapshotOrder] 快照段注入顺序（默认 -50，靠前负值；重载 DSH 后生效）。
  * @property {number} [maxEntriesPerQuery] query 默认返回条目上限（显式 limit 可超出，Provider 硬钳 1000；热生效）。
@@ -209,6 +213,7 @@ const SHARED_CONFIG_FIELDS = {
   })),
   writePolicy: liveField(Schema.union(['ask', 'auto', 'off']).default('ask')),
   writePolicies: liveField(Schema.dict(Schema.union(['ask', 'auto', 'off'])).default({})),
+  unattendedWrites: liveField(Schema.boolean().default(false)),
   language: liveField(Schema.union(['en', 'zh']).default('en')),
   snapshotOrder: liveField(Schema.number().default(DEFAULT_SNAPSHOT_ORDER)),
   maxEntriesPerQuery: liveField(Schema.number().step(1).min(1).default(20)),
@@ -282,6 +287,19 @@ export const SettingsSchema = Schema.object({
  * @returns {Promise<string>} ApprovalOutcome。
  */
 async function askApproval(approval, payload, write) {
+  // 会话级 ApprovalPolicy='never'（完全权限预设）在审批服务内部、answerer 之前就拒写，
+  // 任何 answerer 都无法绕过（见 lib/gate.mjs 硬不变量）。此处提前探测，给出可执行的
+  // 诊断（而非笼统的 rejected）——这是审批姿态友好度的第一层：把"为什么写不进"讲清楚。
+  const session = write.agent?.session
+  const sessionPolicy = typeof approval?.overrideOf === 'function' && session !== undefined && session !== null
+    ? approval.overrideOf(session)
+    : undefined
+  const effectivePolicy = sessionPolicy ?? approval?.config?.policy
+  if (effectivePolicy === 'never') {
+    throw new WriteDeniedError('rejected',
+      "session approval policy is 'never' (approval prompts disabled); DSH refuses memory writes before any plugin answerer can run. "
+      + "Set Config.unattendedWrites:true for headless/never deployments, or switch to the 'auto' permission preset (danger-full-access + approval ask).")
+  }
   const request = {
     agent: write.agent,
     toolName: TOOL_NAME,
@@ -355,21 +373,36 @@ function sessionAuditGateOpen() {
  */
 export class MemoryService extends MemoryProtocolCore {
   /**
-   * @param {ServiceDeps} deps - {store, budgets, writePolicy, maxEntriesPerQuery, commandListLimit, commandAuditLimit, language, approval, sourceLabel}。
+   * @param {ServiceDeps} deps - {store, budgets, writePolicy, writePolicies, unattendedWrites, maxEntriesPerQuery, commandListLimit, commandAuditLimit, language, approval, sourceLabel}。
    */
   constructor(deps) {
+    // 无人值守开关与粒度写策略的实时引用：热更新由 onChange 就地对账（见 apply）。
+    const unattended = {
+      on: deps.unattendedWrites === true,
+      writePolicy: deps.writePolicy,
+      writePolicies: deps.writePolicies ?? {},
+      approval: deps.approval,
+    }
     super({
       store: deps.store,
       budgets: deps.budgets,
       writePolicy: deps.writePolicy,
       defaultQueryLimit: deps.maxEntriesPerQuery,
       sourceLabel: deps.sourceLabel,
-      gate: (payload, write) => askApproval(deps.approval, /** @type {WritePayload} */ (payload), write),
+      // unattendedWrites=true：插件层按 writePolicy 自决（不经审批 seam，面向 never/headless）；
+      // 否则沿用审批门（ctx.approval.request，waterfall answerer 按 writePolicy 裁决）。
+      gate: (payload, write) => {
+        if (!unattended.on) return askApproval(unattended.approval, /** @type {WritePayload} */ (payload), write)
+        const p = /** @type {WritePayload} */ (payload)
+        const effective = resolveWritePolicy(unattended.writePolicies, unattended.writePolicy, p.track, p.scope, p.source)
+        return Promise.resolve(decideUnattendedWrite(effective))
+      },
       emit: (session, type, data) => maybeAppendSessionEvent(session, type, data),
     })
     this.commandListLimit = deps.commandListLimit
     this.commandAuditLimit = deps.commandAuditLimit
     this.language = deps.language
+    this.unattendedState = unattended
   }
 }
 
@@ -751,6 +784,7 @@ export function renderMemoryResult(/** @type {object} */ _args, /** @type {Memor
  * @property {{user: {userGlobal: number, workspace: number}, agent: {userGlobal: number, workspace: number}}} budgets
  * @property {'ask'|'auto'|'off'} writePolicy
  * @property {Record<string, 'ask'|'auto'|'off'>} writePolicies
+ * @property {boolean} unattendedWrites
  * @property {'en'|'zh'} language
  * @property {number} snapshotOrder
  * @property {number} maxEntriesPerQuery
@@ -786,6 +820,7 @@ function resolveComposed(config) {
     },
     writePolicy: /** @type {'ask'|'auto'|'off'} */ (config.writePolicy ?? 'ask'),
     writePolicies: /** @type {Record<string, 'ask'|'auto'|'off'>} */ (config.writePolicies ?? {}),
+    unattendedWrites: config.unattendedWrites ?? false,
     language: config.language ?? 'en',
     snapshotOrder: config.snapshotOrder ?? DEFAULT_SNAPSHOT_ORDER,
     maxEntriesPerQuery: config.maxEntriesPerQuery ?? 20,
@@ -1022,6 +1057,19 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
         reloadRequired.push('snapshotOrder')
       }
     }
+    if (next.unattendedWrites === true && live.unattendedWrites === false && service !== undefined) {
+      // 无人值守写模式开启：这是"关掉审批 seam"的显式 opt-in，必须响亮留痕（审计 + 一次告警）。
+      service.store.auditAppend({
+        action: 'unattended-writes-enabled',
+        track: null,
+        scope: null,
+        entryId: null,
+        text: 'runtime: Config.unattendedWrites=true（插件层按 writePolicy 自决写，不经审批 seam）',
+        outcome: 'ok',
+        source: DEFAULT_SOURCE,
+        sessionId: null,
+      })
+    }
     Object.assign(live, next)
     if (rejectedVector !== null) {
       // 上一次 vector 热切换失败：把该字段退回上一次生效值（live 不报告未生效的配置），
@@ -1036,6 +1084,11 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
       service.commandListLimit = next.commandListLimit
       service.commandAuditLimit = next.commandAuditLimit
       service.language = next.language
+      if (service.unattendedState !== undefined) {
+        service.unattendedState.on = next.unattendedWrites === true
+        service.unattendedState.writePolicy = next.writePolicy
+        service.unattendedState.writePolicies = next.writePolicies
+      }
     }
     if ((applied.length > 0 || reloadRequired.length > 0) && service !== undefined) {
       // 启动期字段变更：响亮留痕，绝不静默。
@@ -1097,6 +1150,8 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
     store,
     budgets: live.budgets,
     writePolicy: live.writePolicy,
+    writePolicies: live.writePolicies,
+    unattendedWrites: live.unattendedWrites,
     maxEntriesPerQuery: live.maxEntriesPerQuery,
     commandListLimit: live.commandListLimit,
     commandAuditLimit: live.commandAuditLimit,
@@ -1104,6 +1159,19 @@ export function apply(ctx, /** @type {PluginConfig} */ config = {}) {
     approval: ctx.approval,
     sourceLabel: DEFAULT_SOURCE,
   })
+  if (service.unattendedState.on) {
+    console.warn('dsh-memento: unattendedWrites is enabled — memory writes are self-approved without the approval seam (recorded in the plugin audit table); intended for ApprovalPolicy=never / headless deployments.')
+    service.store.auditAppend({
+      action: 'unattended-writes-enabled',
+      track: null,
+      scope: null,
+      entryId: null,
+      text: 'boot: Config.unattendedWrites=true（插件层按 writePolicy 自决写，不经审批 seam）',
+      outcome: 'ok',
+      source: DEFAULT_SOURCE,
+      sessionId: null,
+    })
+  }
 
   ctx.provide('memory', service)
   ctx.effect(() => () => store.close(), 'dsh-memento.store.close')

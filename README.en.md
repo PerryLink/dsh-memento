@@ -304,7 +304,7 @@ Most-used keys:
 | `retrieval.vector` | `false` | Semantic recall switch: `true` enables `memory_recall` vector recall (fake hash embedding) when an embedding provider is available; otherwise degrades to substring |
 
 <details>
-<summary>Full configuration table (25 keys)</summary>
+<summary>Full configuration table (26 keys)</summary>
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -317,6 +317,7 @@ Most-used keys:
 | `budgets.agent.workspace` | `4000` | Hard character budget for the agent track's workspace layer |
 | `writePolicy` | `'ask'` | Default write policy: `ask` / `auto` / `off` (model-invisible) |
 | `writePolicies` | `{}` | Per-track/scope or per-source overrides (e.g. `user/workspace`, `source:claude`) |
+| `unattendedWrites` | `false` | Self-approve memory writes at the plugin layer (auto→allow, off→reject, ask→fail closed) without the approval seam; for ApprovalPolicy=never / headless deployments where no approval prompt can appear |
 | `language` | `'en'` | Model-visible and command output language: `en` / `zh` |
 | `snapshotOrder` | `-50` | Snapshot section order (after harness identity, before persona) |
 | `maxEntriesPerQuery` | `20` | Default per-query result cap (hard-capped at 1000) |

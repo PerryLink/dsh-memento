@@ -302,7 +302,7 @@ Claude Desktop（`claude_desktop_config.json`）配置示例：
 | `retrieval.vector` | `false` | 语义召回开关：`true` 且探测到嵌入 provider 时 `memory_recall` 走向量召回（伪嵌入），否则优雅降级回 substring |
 
 <details>
-<summary>完整配置表（25 个键）</summary>
+<summary>完整配置表（26 个键）</summary>
 
 | 键 | 默认值 | 含义 |
 |---|---|---|
@@ -315,6 +315,7 @@ Claude Desktop（`claude_desktop_config.json`）配置示例：
 | `budgets.agent.workspace` | `4000` | agent 轨 workspace 层的硬字符预算 |
 | `writePolicy` | `'ask'` | 默认写策略：`ask` / `auto` / `off`（模型不可见） |
 | `writePolicies` | `{}` | 按轨/作用域或按来源的覆盖（如 `user/workspace`、`source:claude`） |
+| `unattendedWrites` | `false` | 无人值守写：在插件层按 writePolicy 自决（auto→放行、off→拒绝、ask→失败封闭），不经审批 seam；面向 ApprovalPolicy=never（完全权限/无人值守）、无法弹出审批的场景 |
 | `language` | `'en'` | 模型可见文本与命令输出语言：`en` / `zh` |
 | `snapshotOrder` | `-50` | 快照段顺序（在 harness 身份之后、persona 之前） |
 | `maxEntriesPerQuery` | `20` | 每次查询默认结果上限（硬上限 1000） |

@@ -199,3 +199,21 @@ gate → 预算复审 → 落盘 → 审计的完整流水线、唯一子串定�
 - **探测 → 使用 → 优雅降级**：`detectVectorBackend` 只要求 embedding provider 可用；sqlite-vec 是
   可选 loadable 扩展、恒不在本仓库打包（`sqliteVec: false`），P0 向量召回走内存内暴力余弦。
   缺 embedding / vector 关闭时优雅降级回 substring，绝不响亮失败（可选后端缺失不是配置错误）。
+
+## P1：审批姿态友好（无人值守写，opt-in）
+
+### 17. unattendedWrites：never 下的插件层自决写，与可诊断拒绝
+
+会话级审批姿态 `ApprovalPolicy='never'`（完全权限 / 无人值守）由审批服务在 answerer 之前裁决，
+任何 answerer（含本插件 prepend 的）都无法绕过——这是审批 seam 的硬不变量，本插件不尝试绕开它。
+但"无人值守时希望记忆照常写入"是真实需求，因此引入**显式 opt-in** `Config.unattendedWrites`（默认 `false`）：
+
+- **语义**：开启后，写路径不再走 `ctx.approval.request`，而是由 `MemoryService` 在插件层用
+  `resolveWritePolicy(...) + decideUnattendedWrite(policy)` 自决：`auto→allowed-once`、`off→rejected`、
+  `ask→unavailable`（无人在场即失败封闭）。裁决点仍在 `MemoryProtocolCore`（`lib/protocol.mjs`）写方法
+  内部，`writePolicy` 优先于无人值守，开启时启动期 `console.warn` + 审计行 `unattended-writes-enabled`。
+- **为何不破坏"审批门不可绕过"**：默认关闭时不改变任何现有行为；开启是用户对自身无人值守部署的
+  显式授权（Config 由用户持有，模型不可见不可改），且每次自决写入都落审计。这条与决策 2 的张力
+  在 PR 里如实交代，最终取舍交维护者定夺。
+- **诊断层单独可合**：姿态为 `never` 且未开启无人值守时，拒绝消息从笼统的 `rejected` 升级为
+  点名成因与精确修复（`unattendedWrites: true` 或切到 `auto` 权限预设），该诊断无行为风险、可独立合入。
