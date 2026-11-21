@@ -43,6 +43,7 @@ import { REFERENCE_ADAPTERS } from './lib/adapters.mjs'
 import { renderSnapshot, visibleEntries, visibleProposals } from './lib/snapshot.mjs'
 import { openMemoryStore, resolveDbPath } from './lib/store.mjs'
 import { workspaceKeyOf, agentKeyOf } from './lib/workspace.mjs'
+import { analyzeCuration } from './lib/curator.mjs'
 import { extractEventText } from './lib/extract.mjs'
 import { EmbeddingProviderRegistry, FakeEmbeddingProvider } from './lib/embedding.mjs'
 import { RetrievalProviderRegistry, SubstringRetriever, VectorRetriever, detectVectorBackend } from './lib/retrieval.mjs'
@@ -1397,7 +1398,7 @@ function makeCommandGate(ctx, write) {
  */
 const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} */ ({
   en: {
-    usage: 'Usage: /memory list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <path>',
+    usage: 'Usage: /memory list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | curate | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <path>',
     memoryEmpty: 'Memory is empty.',
     entries: (total, shown) => `Memory entries (${total} total, showing first ${shown}):`,
     entriesFull: (total) => `Memory entries (${total}):`,
@@ -1441,11 +1442,11 @@ const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} 
     adapterUnknown: (id) => `no memory adapter "${id}" is registered; run /memory adapters`,
     adapterPayload: (id, message) => `adapter ${id} rejected the payload: ${message}`,
     adapterImported: (n, id) => `Imported ${n} entries via adapter ${id} (single approval; budgets re-checked). Entries get fresh ids and timestamps.`,
-    unknownVerb: (verb) => `Unknown subcommand "${verb}". Usage: /memory list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <path>`,
+    unknownVerb: (verb) => `Unknown subcommand "${verb}". Usage: /memory list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | curate | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <path>`,
     commandFailed: (message) => `memory command failed: ${message}`,
   },
   zh: {
-    usage: '用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <路径>',
+    usage: '用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | curate | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <路径>',
     memoryEmpty: '记忆为空。',
     entries: (total, shown) => `记忆条目（共 ${total} 条，显示前 ${shown} 条）：`,
     entriesFull: (total) => `记忆条目（${total} 条）：`,
@@ -1489,7 +1490,7 @@ const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} 
     adapterUnknown: (id) => `没有注册记忆适配器「${id}」；请运行 /memory adapters`,
     adapterPayload: (id, message) => `适配器 ${id} 拒绝了载荷：${message}`,
     adapterImported: (n, id) => `已通过适配器 ${id} 导入 ${n} 条记忆（单次审批；预算已复检）。条目获得新 id 与新时间戳。`,
-    unknownVerb: (verb) => `未知子命令「${verb}」。用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <路径>`,
+    unknownVerb: (verb) => `未知子命令「${verb}」。用法：/memory list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | curate | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <路径>`,
     commandFailed: (message) => `memory 命令失败：${message}`,
   },
 })
@@ -1497,12 +1498,12 @@ const COMMAND_TEXT = /** @type {{en: CommandTextBundle, zh: CommandTextBundle}} 
 /** 命令注册描述与输入提示（双语）。 */
 const COMMAND_DESCRIPTION = /** @type {{en: {description: string, hint: string}, zh: {description: string, hint: string}}} */ ({
   en: {
-    description: 'View/manage dsh-memento memory: list | query <word> | add [--track=user|agent] [--scope=user-global|workspace] <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <path>',
-    hint: 'list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <path>',
+    description: 'View/manage dsh-memento memory: list | query <word> | add [--track=user|agent] [--scope=user-global|workspace] <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | curate | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <path>',
+    hint: 'list | query <word> | add <text> | remove <substring> | consolidate <substring...> => <new text> | proposals [approve|dismiss <id>] | budgets | curate | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <path>',
   },
   zh: {
-    description: '查看/管理 dsh-memento 记忆：list | query <词> | add [--track=user|agent] [--scope=user-global|workspace] <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <路径>',
-    hint: 'list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <路径>',
+    description: '查看/管理 dsh-memento 记忆：list | query <词> | add [--track=user|agent] [--scope=user-global|workspace] <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | curate | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <路径>',
+    hint: 'list | query <词> | add <文本> | remove <唯一子串> | consolidate <唯一子串...> => <新文本> | proposals [approve|dismiss <id>] | budgets | curate | audit | adapters | export [--adapter=<id>] | import [--adapter=<id>] <路径>',
   },
 })
 
@@ -1545,6 +1546,47 @@ export async function handleMemoryCommand(ctx, service, /** @type {{rawInput?: u
 }
 
 /**
+ * 渲染整理计划为可读文本（双语），纯函数，不改库。
+ * @param {{generatedAt: number, actions: Array<any>, counts: {mergeDuplicates: number, supersede: number, decay: number, budget: number, manual: number}}} plan - analyzeCuration 结果。
+ * @param {'en'|'zh'} language - 当前语言。
+ * @returns {string} 多行计划文本。
+ */
+function formatCuration(plan, language) {
+  const zh = language === 'zh'
+  const clip = (/** @type {string} */ value) => (value.length > 80 ? `${value.slice(0, 80)}…` : value)
+  const lines = []
+  lines.push(zh
+    ? `记忆整理计划（dry-run，未改动；生成于 ${new Date(plan.generatedAt).toISOString()}）`
+    : `Memory curation plan (dry-run, no changes; generated ${new Date(plan.generatedAt).toISOString()})`)
+  const { counts } = plan
+  lines.push(zh
+    ? `发现：重复合并 ${counts.mergeDuplicates}｜冲突取代 ${counts.supersede}｜陈旧 ${counts.decay}｜预算压力 ${counts.budget}${counts.manual > 0 ? `｜需人工 ${counts.manual}` : ''}`
+    : `Found: merge ${counts.mergeDuplicates} | supersede ${counts.supersede} | stale ${counts.decay} | budget ${counts.budget}${counts.manual > 0 ? ` | manual ${counts.manual}` : ''}`)
+  if (plan.actions.length === 0) {
+    lines.push(zh ? '没有可整理的条目。' : 'Nothing to curate.')
+    return lines.join('\n')
+  }
+  for (const action of plan.actions) {
+    if (action.type === 'merge-duplicates') {
+      lines.push(`- ${zh ? '合并重复' : 'merge'} [${action.track}/${action.scope}] ×${action.matches.length} → "${clip(action.keep)}"`)
+    } else if (action.type === 'supersede') {
+      lines.push(`- ${zh ? '冲突取代' : 'supersede'} [${action.track}/${action.scope}] ×${action.matches.length} → ${zh ? '保留' : 'keep'} "${clip(action.keep)}"`)
+    } else if (action.type === 'decay') {
+      lines.push(`- ${zh ? '陈旧' : 'stale'} [${action.track}/${action.scope}] ${action.staleDays}d: "${clip(action.match)}"`)
+    } else if (action.type === 'budget') {
+      lines.push(`- ${zh ? '预算压力' : 'budget'} [${action.track}/${action.scope}] ${action.used}/${action.limit} → ${zh ? '建议并入' : 'merge'} ${action.picks.length} ${zh ? '条' : 'entries'}`)
+    }
+    if (action.applyable === false) {
+      lines.push(zh ? '  ⚠ 需人工（文本重复/无法唯一子串定位）' : '  ⚠ manual (duplicate/ambiguous substring)')
+    }
+  }
+  lines.push(zh
+    ? '执行：用 /memory consolidate "<唯一子串>" ... => "<新文本>" 或 /memory remove "<唯一子串>"（走审批门）。本命令不改库。'
+    : 'Apply via /memory consolidate "<substring>" ... => "<new text>" or /memory remove "<substring>" (approval-gated). This command never writes.')
+  return lines.join('\n')
+}
+
+/**
  * handleMemoryCommand 的裸实现（错误由外层包装）。
  * @param {import('@deepseek-ai/cordis').Context} ctx - Cordis 上下文。
  * @param {MemoryService} service - ctx.memory。
@@ -1582,6 +1624,17 @@ async function runMemoryCommand(ctx, service, invocation) {
     case 'budgets': {
       const rows = service.budgets()
       return { kind: 'success', text: `${text.budgets}\n${rows.map((/** @type {{track: string, scope: string, used: number, limit: number}} */ row) => `- ${row.track}/${row.scope}: ${row.used}/${row.limit}`).join('\n')}` }
+    }
+    case 'curate': {
+      const rows = service.budgets()
+      /** @type {Record<string, Record<string, number>>} */
+      const limits = {}
+      for (const row of rows) {
+        if (limits[row.track] === undefined) limits[row.track] = {}
+        limits[row.track][row.scope] = row.limit
+      }
+      const plan = analyzeCuration(service.store.listEntries(), { limits })
+      return { kind: 'success', text: formatCuration(plan, service.language) }
     }
     case 'proposals': {
       const [sub, id] = rest

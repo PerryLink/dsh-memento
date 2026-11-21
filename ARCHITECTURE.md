@@ -199,3 +199,23 @@ gate → 预算复审 → 落盘 → 审计的完整流水线、唯一子串定�
 - **探测 → 使用 → 优雅降级**：`detectVectorBackend` 只要求 embedding provider 可用；sqlite-vec 是
   可选 loadable 扩展、恒不在本仓库打包（`sqliteVec: false`），P0 向量召回走内存内暴力余弦。
   缺 embedding / vector 关闭时优雅降级回 substring，绝不响亮失败（可选后端缺失不是配置错误）。
+
+### 19. 记忆整理器（curator）：只读分析，不自动压缩（PR2）
+
+「自动记忆卫生」（抗膨胀 / 去重 / 冲突取代 / 时间衰减）与「绝不自动压缩」的预算不变量
+存在张力。本决策选择**分析只读、执行受控**的切法：`lib/curator.mjs` 的 `analyzeCuration`
+是纯函数，输入条目集合与可选预算上限，输出一个可审阅的整理计划（`actions` + `counts`），
+**绝不改写存储**。四类信号：
+
+- `merge-duplicates` / `supersede`：按 track/scope/agentKey 分组，用字符 bigram Jaccard
+  （阈值默认 0.85）聚出（近）重复簇；价值最高者（`recallCount` → `updatedAt` → 长度）为
+  正文，其余并入。归一化后完全相同者记 `exactDuplicate`，因 `consolidate` 靠唯一子串定位、
+  文本相同会歧义，标 `applyable:false` 需人工。
+- `decay`：`recallCount===0` 且距 `lastRecalled`/`updatedAt` 超过 `decayDays`（默认 90 天）。
+- `budget`：某层字符用量 ≥ 预算 × `budgetRatio`（默认 0.9）时，按价值从低到高选出候选。
+
+消费方 `/memory curate` 只打印计划（dry-run），真正落盘仍由用户/模型显式调用
+`/memory consolidate` 或 `/memory remove`（走审批门）。这样既把「整理什么」的洞察交给
+curator，又让「改什么」永远过审批与预算门——不引入任何静默/自动改写，符合 `lib/budget.mjs`
+「写满必须报错、绝不静默截断、绝不自动压缩」。自动/定时触发留给 PR3（proposals 与原生压缩
+解耦）的作业调度，且同样只产出计划、执行仍受控。

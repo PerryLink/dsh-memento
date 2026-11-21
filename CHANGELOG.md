@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **记忆整理器（curator，只读分析）。** 新增零依赖 `lib/curator.mjs`（`analyzeCuration` / `normalizeText` / `similarity`）：按层分组用字符 bigram Jaccard 识别（近）重复与疑似冲突簇（保留价值最高者为正文、其余取代），标记 `recallCount=0` 且超过 90 天的陈旧条目，并在某层字符用量达预算 90% 时给出预算压力整理建议。新增 `/memory curate` 命令输出**只读**整理计划（dry-run，绝不改库）；真正落盘仍走既有 `/memory consolidate` / `/memory remove`（审批门）。遵守预算不变量「写满必须报错、绝不静默截断、绝不自动压缩」；文本完全相同的重复条目无法用唯一子串定位，标为需人工。见 ARCHITECTURE 决策 19。
+
+### Changed
+
+- `/memory` 命令用法文案新增 `curate` 子命令（中英）；`unknownVerb` 提示同步。
+
 ## [0.5.30] - 2026-11-05
 
 ### Changed
