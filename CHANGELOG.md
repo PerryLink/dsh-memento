@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **Manual/programmatic proposal capture, decoupled from native auto-compaction.** The `memory` tool gains a `propose` action and `/memory proposals capture <text>` adds a command path, both queuing a `kind: "manual"` pending proposal that is approved/dismissed through the existing approval gate — usable where native auto-compaction is unavailable (e.g. behind billion-context, which disables it). Unlike the compaction auto-capture path (silent drop when the queue is full), manual capture fails loudly on disabled / empty / full. Proposals are not written to memory until approved.
+
 ## [0.5.30] - 2026-11-05
 
 ### Changed
