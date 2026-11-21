@@ -267,6 +267,10 @@ O nome é **`dsh-memento`** (publicado no npm e no GitHub). Não `dsh-recall` (c
 
 ### O que aprendemos com as memórias de terminal
 
+![dsh-memento: execução real de terminal](docs/assets/dsh-memento-demo.gif)
+
+*Repetição animada de uma execução real registrada neste repositório.*
+
 O `dsh-memento` não é um port do Claude Code, Codex ou Hermes — mas seu design absorveu deliberadamente as partes que cada um acertou, e recusou as que causavam dano:
 
 | Memória de terminal | O que acertou | O que o dsh-memento adotou |

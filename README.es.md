@@ -47,6 +47,11 @@ Escribe algo que merezca recordarse y estará esperando al modelo al inicio de l
   <img src="docs/assets/dsh-memento-flow-v5-light.svg" width="100%" alt="Estructura de dsh-memento (un bucle entre dos sesiones): en la sesión S1 la herramienta memory, el comando /memory y el seed de adaptadores hacen la comprobación de presupuesto y la coincidencia única de subcadena, y luego pasan la puerta de aprobación interna (writePolicy ask/auto/off, approval/asked + approval/decided, con el texto completo como carga) antes de llegar a memory.db (entries / audit / proposals / meta, WAL, 0600); la auditoría es el par de aprobación, la tabla de auditoría del plugin y la fila de la instantánea; el primer assemble de la sesión siguiente lee el almacén de forma síncrona y congela una instantánea en el segmento systemPrompt (orden -50); la recuperación es subcadena sin distinguir mayúsculas, con vector opcional; la entrada MCP es de solo lectura">
 </picture>
 
+![dsh-memento: ejecución real de terminal](docs/assets/dsh-memento-demo.gif)
+
+*Repetición animada de una ejecución real registrada en este repositorio.*
+
+
 ## Instalación en tres pasos
 
 1. **Instalar** (elige un canal):

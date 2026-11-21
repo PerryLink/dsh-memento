@@ -47,6 +47,11 @@ dsh plugin --profile <name> add dsh-memento
   <img src="docs/assets/dsh-memento-flow-v5-light.svg" width="100%" alt="dsh-memento संरचना (दो सत्रों के बीच एक चक्र): सत्र S1 में memory टूल, /memory कमांड और adapter seed बजट प्रीचेक तथा अद्वितीय सबस्ट्रिंग मिलान करते हैं, फिर सेवा के भीतर के अनुमोदन द्वार (writePolicy ask/auto/off, approval/asked + approval/decided, पूरा बदला हुआ पाठ payload) से गुज़रकर memory.db (entries / audit / proposals / meta, WAL, 0600) में लिखते हैं; ऑडिट अनुमोदन जोड़ी, प्लगइन ऑडिट तालिका और स्नैपशॉट पंक्ति से बनता है; अगले सत्र का पहला assemble स्टोर को सिंक्रोनस रूप से पढ़कर systemPrompt खंड (order -50) में एक फ़्रोज़न स्नैपशॉट डालता है; पुनर्प्राप्ति केस-असंवेदी सबस्ट्रिंग है, vector वैकल्पिक; MCP प्रवेश केवल-पढ़ने वाला है">
 </picture>
 
+![dsh-memento का असली टर्मिनल रन](docs/assets/dsh-memento-demo.gif)
+
+*इस रिपॉज़िटरी में दर्ज असली रन का एनिमेटेड रीप्ले।*
+
+
 ## तीन चरणों में शुरुआत
 
 1. **इंस्टॉल** (कोई एक चैनल चुनें):

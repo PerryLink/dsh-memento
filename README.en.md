@@ -130,6 +130,10 @@ Two tracks × two layers × per-agent key: a `user` track (facts about the user)
 
 ### Examples
 
+![dsh-memento: real terminal run](docs/assets/dsh-memento-demo.gif)
+
+*Animated replay of a real run recorded in this repository.*
+
 #### Detailed example
 
 **Command**
