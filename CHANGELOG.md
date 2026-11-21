@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **多词查询匹配（检索升级）。** 新增零依赖 `lib/query.mjs`（`tokenizeQuery` / `countOccurrences` / `matchQuery` / `scoreEntry`）。`store.queryEntries` 与 `SubstringRetriever` 对多词查询改为「全部词项出现（AND，顺序无关）+ 词频/短语相关性排序」，修多词短语词序不同或词不紧邻时的失手；单词/空/纯标点查询仍走原大小写不敏感子串语义（零回归）。CJK 连续段整体作一个词项（避免逐字切分噪声）。不用 FTS5 的理由见 ARCHITECTURE 决策 10 / 18。
+
+### Changed
+
+- `memory` 工具与 `memory_recall` 的 `query` 语义文案（中英）更新：单词=子串；多词=全部出现、顺序无关。
+
 ## [0.5.30] - 2026-11-05
 
 ### Changed

@@ -420,20 +420,20 @@ const MEMORY_TOOL_DESCRIPTION = {
 /** 记忆工具参数描述（双语）。 */
 const MEMORY_TOOL_PARAMETERS = {
   en: {
-    action: 'add = insert a new entry; replace = rewrite one existing entry; remove = delete one existing entry; consolidate = merge 1..20 existing entries into one new entry (single approval, atomic); query = substring search over existing entries.',
+    action: 'add = insert a new entry; replace = rewrite one existing entry; remove = delete one existing entry; consolidate = merge 1..20 existing entries into one new entry (single approval, atomic); query = case-insensitive search: a single term matches as a substring, multiple (whitespace/CJK-separated) terms must ALL appear in any order.',
     track: 'Memory track. Defaults to "user". user = facts about the user; agent = environment/project facts and conventions.',
     scope: 'Layer. Defaults to "workspace". user-global applies to every workspace; workspace applies only to this working directory.',
-    text: 'add/replace: the exact entry text. query: case-insensitive substring filter.',
+    text: 'add/replace: the exact entry text. query: single term = case-insensitive substring; multiple terms = all must appear (order-independent).',
     match: 'replace/remove: a UNIQUE case-insensitive substring of the existing entry to target.',
     matches: 'consolidate: 1..20 UNIQUE case-insensitive substrings of the entries to merge into the new text.',
     limit: 'query: maximum entries to return (default 20; hard-capped at 1000).',
     tags: 'Optional short labels for the entry (e.g. ["project-x", "decision"]). At most 16 tags, each at most 32 characters; applies to add/replace/consolidate.',
   },
   zh: {
-    action: 'add = 新增一条；replace = 改写一条既有条目；remove = 删除一条既有条目；consolidate = 把 1..20 条既有条目整合为一条新条目（单次审批、原子执行）；query = 对既有条目的子串检索。',
+    action: 'add = 新增一条；replace = 改写一条既有条目；remove = 删除一条既有条目；consolidate = 把 1..20 条既有条目整合为一条新条目（单次审批、原子执行）；query = 对既有条目的检索：单词按子串匹配，多词（空格/CJK 分隔）要求全部出现、顺序无关。',
     track: '记忆轨道。默认 "user"。user = 用户相关事实；agent = 环境/项目事实与约定。',
     scope: '层。默认 "workspace"。user-global 对所有工作区生效；workspace 只对当前工作目录生效。',
-    text: 'add/replace：完整条目文本。query：大小写不敏感子串过滤。',
+    text: 'add/replace：完整条目文本。query：单词按子串；多词要求全部出现（顺序无关）、大小写不敏感。',
     match: 'replace/remove：目标条目的唯一大小写不敏感子串。',
     matches: 'consolidate：要并入新文本的 1..20 个唯一大小写不敏感子串。',
     limit: 'query：最多返回条数（默认 20；硬钳 1000）。',
@@ -1885,12 +1885,12 @@ export function makeMemoryRecallTool(service, ctx, live) {
     ? [
       '对记忆与会话历史的两段式召回：返回 (1) dsh-memento 库中与查询匹配的有界记忆条目，以及 (2) 经 session-query 服务的近期会话历史匹配。',
       '当仅凭记忆查询有歧义、或答案可能在更早的对话而非记忆中时使用。普通记忆查询请优先用 memory 工具的 action=query。',
-      '查询对记忆条目是大小写不敏感子串（与 memory 工具一致），对会话历史是大小写不敏感语义文本扫描。',
+      '查询对记忆条目：单词按子串、多词要求全部出现（顺序无关）的大小写不敏感匹配；对会话历史是大小写不敏感语义文本扫描。',
     ].join('\n')
     : [
       'Two-part recall over memory and session history: returns (1) bounded memory entries matching the query from the dsh-memento store, and (2) recent session-history matches via the session-query service.',
       'Use when a memory query alone is ambiguous or when the answer may live in an earlier conversation rather than in memory. For plain memory lookup prefer the memory tool with action=query.',
-      'The query is a case-insensitive substring for memory entries (same as the memory tool) and a case-insensitive semantic-text scan for session history.',
+      'The query matches memory entries case-insensitively: a single term as a substring, multiple terms when ALL appear in any order; and is a case-insensitive semantic-text scan for session history.',
     ].join('\n')
   const parameters = language === 'zh'
     ? {

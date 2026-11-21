@@ -199,3 +199,14 @@ gate → 预算复审 → 落盘 → 审计的完整流水线、唯一子串定�
 - **探测 → 使用 → 优雅降级**：`detectVectorBackend` 只要求 embedding provider 可用；sqlite-vec 是
   可选 loadable 扩展、恒不在本仓库打包（`sqliteVec: false`），P0 向量召回走内存内暴力余弦。
   缺 embedding / vector 关闭时优雅降级回 substring，绝不响亮失败（可选后端缺失不是配置错误）。
+
+### 18. 多词查询匹配（tokenized AND + 词频/短语打分，仍不用 FTS5）
+
+默认检索路径原先用 `instr(lower(text), lower(?))` 做整串子串匹配，多词短语词序不同
+（"mode dark" vs "dark mode"）或词不紧邻时失手。本决策引入零依赖 `lib/query.mjs`：
+`tokenizeQuery` 把查询切成去重词项（CJK 连续段整体一个词项，非 CJK 按空白/标点切，
+NFKC+lower），`scoreEntry` 要求所有词项出现（AND，顺序无关）并按 Σ(词频×长度权重) +
+短语连续奖励打分。`store.queryEntries` 与 `SubstringRetriever` 在 ≥2 词项时走此路径；
+单词/空/纯标点查询保持原 instr 子串语义，零回归。仍不使用 FTS5——理由同决策 10
+（trigram 无法索引单字 CJK、unicode61 把 CJK 连段当一个 token）。相关度排序置于
+`recall_count`/`updated_at`/`id` 之前：相关性优先，其余仅作稳定回退。
