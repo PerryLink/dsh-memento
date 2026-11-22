@@ -1,5 +1,3 @@
-> Host compatibility: DeepSeek Harness `dsh-v0.2.2-rc.4` (verified 2026-11-18).
-
 <div align="center">
 
 <picture>
@@ -12,6 +10,8 @@
 **सत्रों के पार याद रखें, और हर लिखावट एक अनुमोदन द्वार व ऑडिट रास्ते के पीछे।**
 
 एक टाइप्ड `ctx.memory` सीम, स्थानीय SQLite प्रोवाइडर, `memory` टूल और फ़्रोज़न स्नैपशॉट इंजेक्शन: बाकी मेमोरी प्लगइन गोदाम बेचते हैं, यह प्लगइन सीम, लेखन-अनुमोदन द्वार और सत्र लॉग से पुनर्निर्मेय ऑडिट बेचता है।
+
+अंतिम सत्यापन: DeepSeek Harness `dsh-v0.2.3-alpha.1` (2026-11-22).
 
 [इंस्टॉल](#तीन-चरणों-में-शुरुआत) · [कॉन्फ़िगरेशन](#कॉन्फ़िगरेशन) · [FAQ](#faq) · [简体中文](README.md) · [English](README.en.md) · [Español](README.es.md) · [Português](README.pt.md) · [हिन्दी](README.hi.md)
 
@@ -38,7 +38,7 @@ dsh plugin --profile <name> add dsh-memento
 
 ## यह क्या है
 
-कोई याद रखने योग्य बात लिखिए और वह अगले सत्र की शुरुआत में मॉडल का इंतज़ार करती मिलेगी — और वह लिखावट एक अनुमोदन द्वार से गुज़री और एक ऑडिट पंक्ति छोड़ गई। `dsh-v0.2.2-rc.4`（2026-11-18）；`dsh-memento` DeepSeek Harness को **क्षमता सीम** देता है, कोई दूसरा मेमोरी गोदाम नहीं: एक टाइप्ड `ctx.memory` सेवा, स्थानीय SQLite प्रोवाइडर (`node:sqlite`, WAL, `0600`, डिफ़ॉल्ट `$DSH_HOME/dsh-memento/memory.db`) और उसके दो उपभोक्ता — `memory` टूल और सिस्टम प्रॉम्प्ट में इंजेक्ट होने वाला फ़्रोज़न स्नैपशॉट। दो ट्रैक (`user` / `agent`) × दो परतें (`user-global` / `workspace`) × प्रति `agentPreset` कुंजी, प्रति ट्रैक-परत कठोर वर्ण बजट के साथ; `dsh-memento-mcp` एक केवल-पढ़ने वाला stdio MCP प्रवेश भी देता है।
+कोई याद रखने योग्य बात लिखिए और वह अगले सत्र की शुरुआत में मॉडल का इंतज़ार करती मिलेगी — और वह लिखावट एक अनुमोदन द्वार से गुज़री और एक ऑडिट पंक्ति छोड़ गई।, `dsh-memento` DeepSeek Harness को **क्षमता सीम** देता है, कोई दूसरा मेमोरी गोदाम नहीं: एक टाइप्ड `ctx.memory` सेवा, स्थानीय SQLite प्रोवाइडर (`node:sqlite`, WAL, `0600`, डिफ़ॉल्ट `$DSH_HOME/dsh-memento/memory.db`) और उसके दो उपभोक्ता — `memory` टूल और सिस्टम प्रॉम्प्ट में इंजेक्ट होने वाला फ़्रोज़न स्नैपशॉट। दो ट्रैक (`user` / `agent`) × दो परतें (`user-global` / `workspace`) × प्रति `agentPreset` कुंजी, प्रति ट्रैक-परत कठोर वर्ण बजट के साथ; `dsh-memento-mcp` एक केवल-पढ़ने वाला stdio MCP प्रवेश भी देता है।
 
 **यह भी देखें।** `dsh-mnemon` mem0/Honcho होस्टेड प्रोवाइडर वाला framework है, 0.2.1 लाइन पर पिन; `@openviking/dsh-memory-plugin` Volcengine का उदाहरण है जिसमें dsh engine घोषित नहीं; `dsh-plugin-memory` प्रकार में सबसे निकट है और उसकी कोई provenance नहीं। `dsh-memento` स्थानीय SQLite + अनुमोदन द्वार + ऑडिट श्रृंखला है, होस्टेड प्रोवाइडर का drop-in नहीं।
 
@@ -50,7 +50,6 @@ dsh plugin --profile <name> add dsh-memento
 ![dsh-memento का असली टर्मिनल रन](docs/assets/dsh-memento-demo.gif)
 
 *इस रिपॉज़िटरी में दर्ज असली रन का एनिमेटेड रीप्ले।*
-
 
 ## तीन चरणों में शुरुआत
 

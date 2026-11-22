@@ -1,5 +1,3 @@
-> Host compatibility: DeepSeek Harness `dsh-v0.2.2-rc.4` (verified 2026-11-18).
-
 <div align="center">
 
 <picture>
@@ -12,6 +10,8 @@
 **Remember across sessions — with every write behind an approval gate and an audit trail.**
 
 A typed `ctx.memory` seam plus a local SQLite provider, a `memory` tool and a frozen snapshot injection: other memory plugins sell a warehouse, this one sells the seam, the write approval gate and an audit chain rebuildable from the session log.
+
+Last verified on DeepSeek Harness `dsh-v0.2.3-alpha.1` (2026-11-22).
 
 [Install](#three-step-setup) · [Configuration](#configuration) · [FAQ](#faq) · [简体中文](README.md) · [English](README.en.md) · [Español](README.es.md) · [Português](README.pt.md) · [हिन्दी](README.hi.md)
 
@@ -38,7 +38,7 @@ dsh plugin --profile <name> add dsh-memento
 
 ## What it is
 
-Write down something worth remembering and it is waiting for the model at the start of the next session — and that write went through an approval gate and left an audit row. `dsh-v0.2.2-rc.4`（2026-11-18）；`dsh-memento` adds a **capability seam** to DeepSeek Harness rather than another memory warehouse: a typed `ctx.memory` service, a local SQLite provider (`node:sqlite`, WAL, `0600`, default `$DSH_HOME/dsh-memento/memory.db`), and its two consumers — the `memory` tool and a frozen snapshot injected into the system prompt. Two tracks (`user` / `agent`) × two layers (`user-global` / `workspace`) × a per-`agentPreset` key, with hard per-track/per-layer character budgets; `dsh-memento-mcp` adds a read-only stdio MCP entry point.
+Write down something worth remembering and it is waiting for the model at the start of the next session — and that write went through an approval gate and left an audit row., `dsh-memento` adds a **capability seam** to DeepSeek Harness rather than another memory warehouse: a typed `ctx.memory` service, a local SQLite provider (`node:sqlite`, WAL, `0600`, default `$DSH_HOME/dsh-memento/memory.db`), and its two consumers — the `memory` tool and a frozen snapshot injected into the system prompt. Two tracks (`user` / `agent`) × two layers (`user-global` / `workspace`) × a per-`agentPreset` key, with hard per-track/per-layer character budgets; `dsh-memento-mcp` adds a read-only stdio MCP entry point.
 
 **See also.** `dsh-mnemon` is a framework with mem0/Honcho hosted providers, pinned to the 0.2.1 line; `@openviking/dsh-memory-plugin` is a Volcengine example with no declared dsh engine; `dsh-plugin-memory` is the closest in kind and has no provenance. `dsh-memento` is the local SQLite seam with an approval gate and audit trail, not a drop-in for the hosted providers.
 
@@ -100,8 +100,6 @@ Every PerryLink plugin is listed in the built-in DSH Desktop market: **Market �
 </details>
 
 *Workflow overview: install → open panel → act. The examples below use the real command surface.*
-
-
 
 [![dsh-memento video walkthrough — opens the MP4 file](https://raw.githubusercontent.com/PerryLink/dsh-memento/main/docs/assets/dsh-memento-demo-video.png)](https://github.com/PerryLink/dsh-memento/blob/main/docs/assets/dsh-memento-demo.mp4)
 

@@ -1,5 +1,3 @@
-> 宿主兼容性：DeepSeek Harness `dsh-v0.2.2-rc.4`（2026-11-18 核验）。
-
 <div align="center">
 
 <picture>
@@ -12,6 +10,8 @@
 **让模型跨会话记住该记的事，同时每一次写入都过审批门、留审计痕。**
 
 一个类型安全的 `ctx.memory` 接缝 + 本地 SQLite 提供方 + `memory` 工具 + 冻结快照注入：别的记忆插件卖仓库，这个插件卖接缝、写审批门与会话可重建的审计。
+
+最近一次核验：DeepSeek Harness `dsh-v0.2.3-alpha.1`（2026-11-22）。
 
 [安装](#三步上手) · [配置](#配置) · [FAQ](#faq) · [简体中文](README.md) · [English](README.en.md) · [Español](README.es.md) · [Português](README.pt.md) · [हिन्दी](README.hi.md)
 
@@ -42,7 +42,7 @@ dsh plugin --profile <name> add dsh-memento
 
 *本仓库一次真实运行的动图回放。*
 
-写下一条值得记住的事，它就在下一次会话开头等着模型——而那次写入过了审批门、留了审计行。`dsh-v0.2.2-rc.4`（2026-11-18）；`dsh-memento` 给 DeepSeek Harness 补的是**能力接缝**，不是又一个记忆仓库：一个类型安全的 `ctx.memory` 服务、一个本地 SQLite 提供方（`node:sqlite`，WAL，权限 `0600`，默认 `$DSH_HOME/dsh-memento/memory.db`），以及它的两个消费方——`memory` 工具与注入系统提示的冻结快照。两条轨道（`user` / `agent`）× 两个层级（`user-global` / `workspace`）× 按 `agentPreset` 隔离，每轨每层都有硬字符预算；`dsh-memento-mcp` 另提供一个只读 stdio MCP 入口。
+写下一条值得记住的事，它就在下一次会话开头等着模型——而那次写入过了审批门、留了审计行。、`dsh-memento` 给 DeepSeek Harness 补的是**能力接缝**，不是又一个记忆仓库：一个类型安全的 `ctx.memory` 服务、一个本地 SQLite 提供方（`node:sqlite`，WAL，权限 `0600`，默认 `$DSH_HOME/dsh-memento/memory.db`），以及它的两个消费方——`memory` 工具与注入系统提示的冻结快照。两条轨道（`user` / `agent`）× 两个层级（`user-global` / `workspace`）× 按 `agentPreset` 隔离，每轨每层都有硬字符预算；`dsh-memento-mcp` 另提供一个只读 stdio MCP 入口。
 
 **参见同类。** `dsh-mnemon` 是带 mem0/Honcho 托管 provider 的 framework，锁在 0.2.1 线；`@openviking/dsh-memory-plugin` 是 Volcengine 示例，未声明 dsh engine；`dsh-plugin-memory` 是最接近的同类，无 provenance。`dsh-memento` 是本地 SQLite + 审批门 + 审计链，不是托管 provider 的 drop-in。
 

@@ -1,5 +1,3 @@
-> Host compatibility: DeepSeek Harness `dsh-v0.2.2-rc.4` (verified 2026-11-18).
-
 <div align="center">
 
 <picture>
@@ -12,6 +10,8 @@
 **Lembre-se entre sessões — com cada escrita atrás de uma porta de aprovação e de um rastro de auditoria.**
 
 Uma costura tipada `ctx.memory` mais um provedor SQLite local, a ferramenta `memory` e a injeção de um instantâneo congelado: outros plugins de memória vendem um armazém; este vende a costura, a porta de aprovação de escrita e uma auditoria reconstruível a partir do registro de sessão.
+
+Última verificação: DeepSeek Harness `dsh-v0.2.3-alpha.1` (2026-11-22).
 
 [Instalar](#instalação-em-três-passos) · [Configuração](#configuração) · [FAQ](#faq) · [简体中文](README.md) · [English](README.en.md) · [Español](README.es.md) · [Português](README.pt.md) · [हिन्दी](README.hi.md)
 
@@ -38,7 +38,7 @@ dsh plugin --profile <name> add dsh-memento
 
 ## O que é
 
-Anote algo que valha a pena lembrar e ele estará esperando o modelo no início da sessão seguinte — e essa escrita passou por uma porta de aprovação e deixou uma linha de auditoria. O `dsh-v0.2.2-rc.4`（2026-11-18）；`dsh-memento` acrescenta ao DeepSeek Harness uma **costura de capacidade**, não outro armazém de memória: um serviço tipado `ctx.memory`, um provedor SQLite local (`node:sqlite`, WAL, `0600`, por padrão `$DSH_HOME/dsh-memento/memory.db`) e seus dois consumidores — a ferramenta `memory` e um instantâneo congelado injetado no prompt do sistema. Duas trilhas (`user` / `agent`) × duas camadas (`user-global` / `workspace`) × chave por `agentPreset`, com orçamentos rígidos de caracteres por trilha e por camada; o `dsh-memento-mcp` acrescenta uma entrada MCP stdio somente leitura.
+Anote algo que valha a pena lembrar e ele estará esperando o modelo no início da sessão seguinte — e essa escrita passou por uma porta de aprovação e deixou uma linha de auditoria. O, `dsh-memento` acrescenta ao DeepSeek Harness uma **costura de capacidade**, não outro armazém de memória: um serviço tipado `ctx.memory`, um provedor SQLite local (`node:sqlite`, WAL, `0600`, por padrão `$DSH_HOME/dsh-memento/memory.db`) e seus dois consumidores — a ferramenta `memory` e um instantâneo congelado injetado no prompt do sistema. Duas trilhas (`user` / `agent`) × duas camadas (`user-global` / `workspace`) × chave por `agentPreset`, com orçamentos rígidos de caracteres por trilha e por camada; o `dsh-memento-mcp` acrescenta uma entrada MCP stdio somente leitura.
 
 **Veja também.** `dsh-mnemon` é um framework com provedores hospedados mem0/Honcho, fixado na linha 0.2.1; `@openviking/dsh-memory-plugin` é um exemplo da Volcengine sem `dsh` engine declarado; `dsh-plugin-memory` é o mais próximo em espécie e não tem procedência. O `dsh-memento` é a costura SQLite local com porta de aprovação e auditoria, não um substituto direto dos provedores hospedados.
 
