@@ -7,6 +7,8 @@
 
 # dsh-memento
 
+Current version `0.5.34`.
+
 **Remember across sessions — with every write behind an approval gate and an audit trail.**
 
 A typed `ctx.memory` seam plus a local SQLite provider, a `memory` tool and a frozen snapshot injection: other memory plugins sell a warehouse, this one sells the seam, the write approval gate and an audit chain rebuildable from the session log.

@@ -1,7 +1,7 @@
 {
   "name": "dsh-memento",
   "description": "Bounded, layered, approval-gated, auditable cross-session memory for DeepSeek Harness — a capability seam (ctx.memory service + local SQLite provider + memory tool + frozen snapshot injection), not another memory warehouse",
-  "version": "0.5.33",
+  "version": "0.5.34",
   "contributors": [
     {
       "name": "Niuniu-Sir",
@@ -28,7 +28,8 @@
       "default": "./client/client.js"
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
     "index.mjs",
@@ -55,7 +56,8 @@
     "docs/schemas",
     "test/protocol-conformance",
     "PRIVACY.md",
-    "icon.svg"
+    "icon.svg",
+    "locale/*.json"
   ],
   "repository": {
     "type": "git",
@@ -198,5 +200,9 @@
     "type": "individual",
     "url": "https://github.com/sponsors/PerryLink"
   },
-  "icon": "icon.svg"
+  "icon": "icon.svg",
+  "author": {
+    "name": "PerryLink",
+    "url": "https://github.com/PerryLink"
+  }
 }
